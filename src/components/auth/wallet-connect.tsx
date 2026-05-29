@@ -22,6 +22,10 @@ type SessionResponse = {
   permissions: AuthPermissions | null;
 };
 
+type WalletConnectProps = {
+  initialSession?: SessionResponse;
+};
+
 const emptySession: SessionResponse = {
   address: null,
   authenticated: false,
@@ -58,6 +62,18 @@ function getFriendlyError(error: unknown) {
     return "Session setup is missing.";
   }
 
+  if (lowerMessage.includes("session lookup")) {
+    return "Session lookup failed.";
+  }
+
+  if (lowerMessage.includes("nonce generation")) {
+    return "Could not start wallet sign-in.";
+  }
+
+  if (lowerMessage.includes("logout")) {
+    return "Sign out failed.";
+  }
+
   if (lowerMessage.includes("gnosis_rpc_url")) {
     return "Gnosis RPC URL is missing.";
   }
@@ -68,6 +84,10 @@ function getFriendlyError(error: unknown) {
 
   if (lowerMessage.includes("dao_share_token_address")) {
     return "DAO shares token address is missing.";
+  }
+
+  if (lowerMessage.includes("dao_share_threshold")) {
+    return "DAO share threshold is missing.";
   }
 
   if (lowerMessage.includes("hats_contract_address")) {
@@ -89,15 +109,17 @@ function getFriendlyError(error: unknown) {
   return "Wallet sign-in failed.";
 }
 
-export function WalletConnect() {
+export function WalletConnect({ initialSession }: WalletConnectProps) {
   const account = useAccount();
   const router = useRouter();
   const { connectAsync, connectors, isPending: isConnecting } = useConnect();
   const { disconnectAsync } = useDisconnect();
   const { signMessageAsync, isPending: isSigning } = useSignMessage();
   const { showToast } = useToast();
-  const [session, setSession] = useState<SessionResponse>(emptySession);
-  const [isLoadingSession, setIsLoadingSession] = useState(true);
+  const [session, setSession] = useState<SessionResponse>(
+    initialSession ?? emptySession,
+  );
+  const [isLoadingSession, setIsLoadingSession] = useState(!initialSession);
   const [isVerifying, setIsVerifying] = useState(false);
 
   const primaryConnector = useMemo(
@@ -108,6 +130,10 @@ export function WalletConnect() {
   );
 
   useEffect(() => {
+    if (initialSession) {
+      return;
+    }
+
     let isMounted = true;
 
     fetch("/api/auth/session")
@@ -143,7 +169,7 @@ export function WalletConnect() {
     return () => {
       isMounted = false;
     };
-  }, [showToast]);
+  }, [initialSession, showToast]);
 
   async function signIn() {
     setIsVerifying(true);
@@ -230,10 +256,24 @@ export function WalletConnect() {
   }
 
   async function signOut() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    await disconnectAsync();
-    setSession(emptySession);
-    router.refresh();
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+
+      if (!response.ok) {
+        throw new Error("Logout failed");
+      }
+    } catch (error) {
+      showToast(getFriendlyError(error));
+    }
+
+    try {
+      await disconnectAsync();
+    } catch (error) {
+      console.warn("Wallet disconnect failed", error);
+    } finally {
+      setSession(emptySession);
+      router.refresh();
+    }
   }
 
   if (session.authenticated && session.address) {

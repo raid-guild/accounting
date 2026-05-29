@@ -9,7 +9,7 @@ import * as schema from "@/db/schema";
 let cachedDb: ReturnType<typeof createDb> | undefined;
 
 function isLocalDatabaseUrl(databaseUrl: string) {
-  const hostname = new URL(databaseUrl).hostname;
+  const hostname = new URL(databaseUrl).hostname.replace(/^\[(.*)\]$/, "$1");
 
   return (
     hostname === "localhost" ||

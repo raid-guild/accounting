@@ -57,7 +57,8 @@ The app targets Neon in production. At runtime it uses Neon HTTP for Neon URLs a
 `pnpm db:reset:local` refuses non-localhost database URLs and protected database names, but it is still destructive for the selected local database.
 
 RaidGuild member access is checked with `DAO_SHARE_TOKEN_ADDRESS`, the DAOhaus/Baal ERC-20 shares token. `DAO_SHARE_THRESHOLD` is written as a human share amount such as `100`.
-`ANGRY_DWARF_HAT_ID` can be provided as a decimal or hex string.
+`HATS_CONTRACT_ADDRESS` is the Hats Protocol contract address used for hats-based permissions, formatted as a `0x`-prefixed EVM address. Use the deployed Hats contract for the target network, or a local test contract address for local chain testing.
+`ANGRY_DWARF_HAT_ID` can be provided as a decimal or hex string and requires `HATS_CONTRACT_ADDRESS` to function.
 
 `ENCRYPTION_KEY` must be a base64-encoded 32-byte key. Multiple-key rotation requires stable `key-id:base64-key` entries. To generate a local development key:
 

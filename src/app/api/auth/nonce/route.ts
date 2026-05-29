@@ -14,7 +14,7 @@ export async function GET() {
     console.error("Wallet nonce creation failed", error);
 
     return NextResponse.json(
-      { error: "Session configuration is missing" },
+      { error: "Nonce generation failed" },
       { status: 500 },
     );
   }

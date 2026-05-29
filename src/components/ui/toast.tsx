@@ -10,7 +10,7 @@ import {
 } from "react";
 
 type Toast = {
-  id: number;
+  id: string;
   message: string;
   state: "entering" | "leaving";
 };
@@ -25,7 +25,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = useCallback((message: string) => {
-    const id = Date.now();
+    const id = crypto.randomUUID();
     setToasts((currentToasts) => [
       ...currentToasts,
       { id, message, state: "entering" },

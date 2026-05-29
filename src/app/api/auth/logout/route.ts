@@ -12,7 +12,7 @@ export async function POST() {
     console.error("Wallet logout failed", error);
 
     return NextResponse.json(
-      { error: "Session configuration is missing" },
+      { error: "Logout failed" },
       { status: 500 },
     );
   }

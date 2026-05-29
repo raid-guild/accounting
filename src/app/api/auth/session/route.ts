@@ -11,7 +11,7 @@ export async function GET() {
     console.error("Wallet session lookup failed", error);
 
     return NextResponse.json(
-      { error: "Session configuration is missing" },
+      { error: "Session lookup failed" },
       { status: 500 },
     );
   }

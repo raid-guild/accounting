@@ -81,7 +81,13 @@ async function hasDaoShares(address: `0x${string}`) {
       functionName: "decimals",
     }),
   ]);
-  const threshold = parseUnits(process.env.DAO_SHARE_THRESHOLD ?? "100", decimals);
+  const thresholdValue = process.env.DAO_SHARE_THRESHOLD;
+
+  if (!thresholdValue) {
+    throw new Error("DAO_SHARE_THRESHOLD is required for member access checks");
+  }
+
+  const threshold = parseUnits(thresholdValue, decimals);
 
   return balance >= threshold;
 }

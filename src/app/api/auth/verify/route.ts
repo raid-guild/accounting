@@ -30,6 +30,10 @@ function getPublicErrorMessage(error: unknown) {
     return "DAO_SHARE_TOKEN_ADDRESS is required for member access checks";
   }
 
+  if (lowerMessage.includes("dao_share_threshold")) {
+    return "DAO_SHARE_THRESHOLD is required for member access checks";
+  }
+
   if (lowerMessage.includes("hats_contract_address")) {
     return "HATS_CONTRACT_ADDRESS must be a valid EVM address";
   }
@@ -70,7 +74,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const siweMessage = new SiweMessage(message);
+    let siweMessage: SiweMessage;
+
+    try {
+      siweMessage = new SiweMessage(message);
+    } catch {
+      session.destroy();
+      return NextResponse.json(
+        { error: "Invalid SIWE message" },
+        { status: 400 },
+      );
+    }
+
     const verification = await siweMessage.verify({
       domain: getExpectedDomain(request),
       nonce: session.nonce,

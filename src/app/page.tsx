@@ -39,7 +39,9 @@ async function getSessionState() {
   }
 }
 
-function PublicHome() {
+type SessionState = Awaited<ReturnType<typeof getSessionState>>;
+
+function PublicHome({ session }: { session: SessionState }) {
   return (
     <main className="min-h-screen bg-moloch-800 text-scroll-100">
       <section className="container-custom flex min-h-screen items-center py-10">
@@ -84,7 +86,7 @@ function PublicHome() {
               database-managed Cleric permissions.
             </p>
             <div className="mt-6 flex justify-start">
-              <WalletConnect />
+              <WalletConnect initialSession={session} />
             </div>
           </div>
         </div>
@@ -93,7 +95,7 @@ function PublicHome() {
   );
 }
 
-function MemberHome() {
+function MemberHome({ session }: { session: SessionState }) {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
@@ -109,7 +111,7 @@ function MemberHome() {
               </h1>
             </div>
           </div>
-          <WalletConnect />
+          <WalletConnect initialSession={session} />
         </div>
       </header>
 
@@ -237,8 +239,8 @@ export default async function Home() {
   const session = await getSessionState();
 
   if (!session.authenticated) {
-    return <PublicHome />;
+    return <PublicHome session={session} />;
   }
 
-  return <MemberHome />;
+  return <MemberHome session={session} />;
 }
