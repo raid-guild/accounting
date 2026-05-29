@@ -44,7 +44,7 @@ Stablecoin valuation:
 
 Volatile asset valuation:
 
-- ETH and wETH are valued in USD at transaction time.
+- wETH is valued in USD at transaction time.
 - CoinGecko is the preferred historical pricing source.
 
 ## 4. Supported Assets And Chains
@@ -56,7 +56,6 @@ Supported Gnosis assets:
 - USDC
 - xDAI
 - wxDAI
-- ETH
 - wETH
 
 Manual transaction lookup should support:
@@ -89,7 +88,7 @@ Cleric access:
 
 Configuration:
 
- - DAO contract address, share threshold, Hats IDs, Safe addresses, RPC URLs, and API keys must be environment-configured.
+- DAO contract address, share threshold, Hats IDs, Safe addresses, RPC URLs, and API keys must be environment-configured.
 - No sensitive values should be committed to source control.
 
 Member permissions:
@@ -523,7 +522,7 @@ Data integrations:
 - Safe/Gnosis APIs plus RPC fallback.
 - DAOhaus/Moloch DAO reads.
 - Hats Protocol data for Angry Dwarf admin checks.
-- CoinGecko historical pricing for ETH/wETH.
+- CoinGecko historical pricing for wETH.
 
 Exports:
 
