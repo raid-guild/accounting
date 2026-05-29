@@ -1,0 +1,82 @@
+name: Database
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "drizzle/**"
+      - "drizzle.config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "src/db/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "drizzle/**"
+      - "drizzle.config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "src/db/**"
+
+concurrency:
+  group: database-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  migration-check:
+    if: github.event_name == 'pull_request'
+    name: Migration Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate migrations
+        run: pnpm db:generate
+
+      - name: Verify generated migrations are committed
+        run: git diff --exit-code -- drizzle drizzle.config.ts src/db
+
+  migrate-production:
+    if: github.event_name == 'push'
+    name: Migrate Production
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply production migrations
+        run: pnpm db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
