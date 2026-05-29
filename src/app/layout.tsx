@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
+import { Providers } from "@/components/providers";
+
 export const metadata: Metadata = {
   title: "RaidGuild Accounting",
   description: "Wallet-gated accounting dashboard for RaidGuild treasury reporting.",
@@ -15,7 +17,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full">
-        {children}
+        <Providers>{children}</Providers>
         <Analytics />
       </body>
     </html>
