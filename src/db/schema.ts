@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   date,
@@ -72,6 +73,7 @@ const timestamps = {
     .notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
+    .$onUpdateFn(() => sql`now()`)
     .notNull(),
 };
 
@@ -85,7 +87,9 @@ export const appUsers = pgTable(
     ...timestamps,
   },
   (table) => [
-    uniqueIndex("app_users_wallet_address_unique").on(table.walletAddress),
+    uniqueIndex("app_users_wallet_address_unique").on(
+      sql`lower(${table.walletAddress})`,
+    ),
   ],
 );
 
@@ -104,8 +108,13 @@ export const clericRoles = pgTable(
     ...timestamps,
   },
   (table) => [
-    index("cleric_roles_wallet_address_idx").on(table.walletAddress),
-    index("cleric_roles_active_idx").on(table.walletAddress, table.revokedAt),
+    index("cleric_roles_wallet_address_idx").on(
+      sql`lower(${table.walletAddress})`,
+    ),
+    index("cleric_roles_active_idx").on(
+      sql`lower(${table.walletAddress})`,
+      table.revokedAt,
+    ),
   ],
 );
 

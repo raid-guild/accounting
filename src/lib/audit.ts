@@ -1,3 +1,5 @@
+import "server-only";
+
 import { getDb } from "@/db";
 import { auditActionEnum, auditEvents } from "@/db/schema";
 

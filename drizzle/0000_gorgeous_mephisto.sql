@@ -1,3 +1,4 @@
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";--> statement-breakpoint
 CREATE TYPE "public"."audit_action" AS ENUM('create', 'update', 'delete', 'import', 'classify', 'publish', 'reopen', 'grant_role', 'revoke_role');--> statement-breakpoint
 CREATE TYPE "public"."entity_type" AS ENUM('client', 'provider', 'subcontractor');--> statement-breakpoint
 CREATE TYPE "public"."ledger_category" AS ENUM('raid_revenue', 'subcontractor_payout', 'provider_expense', 'member_dues', 'ragequit', 'treasury_transfer', 'uncategorized');--> statement-breakpoint

@@ -56,7 +56,7 @@ Drizzle CLI commands also load `.env`, with `.env.local` overriding it when pres
 The app targets Neon in production, while Drizzle migrations use the standard `pg` driver so local Postgres databases work with `pnpm db:migrate`.
 `pnpm db:reset:local` refuses non-localhost database URLs and protected database names, but it is still destructive for the selected local database.
 
-`ENCRYPTION_KEY` must be a base64-encoded 32-byte key. To generate a local development key:
+`ENCRYPTION_KEY` must be a base64-encoded 32-byte key. Multiple-key rotation requires stable `key-id:base64-key` entries. To generate a local development key:
 
 ```bash
 openssl rand -base64 32

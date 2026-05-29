@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
@@ -24,10 +26,36 @@ function parseKeyring(): EncryptionKey[] {
     throw new Error("ENCRYPTION_KEY is required for encrypted fields");
   }
 
-  return rawKeyring.split(",").map((entry, index) => {
-    const [maybeId, maybeKey] = entry.includes(":")
-      ? entry.split(":")
+  const entries = rawKeyring
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  if (entries.length === 0) {
+    throw new Error("ENCRYPTION_KEY must contain at least one key");
+  }
+
+  return entries.map((entry, index) => {
+    const separatorIndex = entry.indexOf(":");
+    const hasId = separatorIndex !== -1;
+
+    if (!hasId && entries.length > 1) {
+      throw new Error(
+        "ENCRYPTION_KEY with multiple keys must use stable id:base64 entries",
+      );
+    }
+
+    const [maybeId, maybeKey] = hasId
+      ? [
+          entry.slice(0, separatorIndex).trim(),
+          entry.slice(separatorIndex + 1).trim(),
+        ]
       : [`key-${index + 1}`, entry];
+
+    if (!maybeId || !maybeKey) {
+      throw new Error("ENCRYPTION_KEY entries must use id:base64 or base64");
+    }
+
     const key = Buffer.from(maybeKey, "base64");
 
     if (key.length !== 32) {
