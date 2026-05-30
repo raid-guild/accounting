@@ -1,29 +1,18 @@
 import {
-  ArrowRight,
+  CircleDollarSign,
   Coins,
   FileSpreadsheet,
-  Landmark,
   LockKeyhole,
+  WalletCards,
 } from "lucide-react";
 import Image from "next/image";
 
 import { WalletConnect } from "@/components/auth/wallet-connect";
-import { Button } from "@/components/ui/button";
+import { CopyAddressButton } from "@/components/treasury/copy-address-button";
+import { SyncStatusBadge } from "@/components/treasury/sync-status-badge";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
-
-const assets = [
-  { symbol: "USDC", balance: "$0.00", tone: "bg-moloch-500" },
-  { symbol: "xDAI", balance: "$0.00", tone: "bg-scroll-600" },
-  { symbol: "wxDAI", balance: "$0.00", tone: "bg-neutral-600" },
-  { symbol: "wETH", balance: "$0.00", tone: "bg-scroll-700" },
-];
-
-const milestones = [
-  "Main Safe balances",
-  "Quarter workspaces",
-  "Manual raid flows",
-  "Q1 XLSX export",
-];
+import { getTreasuryBalanceSnapshot } from "@/lib/treasury/balances";
+import type { TreasuryBalanceSnapshot } from "@/lib/treasury/types";
 
 async function getSessionState() {
   try {
@@ -40,6 +29,31 @@ async function getSessionState() {
 }
 
 type SessionState = Awaited<ReturnType<typeof getSessionState>>;
+
+function formatCurrency(value: string) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    style: "currency",
+  }).format(Number(value));
+}
+
+function formatNumber(value: string) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 6,
+    minimumFractionDigits: 2,
+  }).format(Number(value));
+}
+
+function formatTimestamp(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function formatAddress(address: string) {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
 
 function PublicHome({ session }: { session: SessionState }) {
   return (
@@ -95,15 +109,27 @@ function PublicHome({ session }: { session: SessionState }) {
   );
 }
 
-function MemberHome({ session }: { session: SessionState }) {
+function MemberHome({
+  session,
+  snapshot,
+}: {
+  session: SessionState;
+  snapshot: TreasuryBalanceSnapshot;
+}) {
+  const treasury = snapshot.accounts[0];
+
   return (
     <main className="min-h-screen bg-background text-foreground">
       <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
         <div className="container-custom flex h-16 items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <Landmark className="size-5" aria-hidden="true" />
-            </div>
+            <Image
+              src="/raidguild-full-logo.svg"
+              alt="RaidGuild"
+              width={120}
+              height={32}
+              className="h-7 w-auto"
+            />
             <div>
               <p className="type-label-sm text-scroll-200">RaidGuild</p>
               <h1 className="text-base font-semibold leading-none">
@@ -116,118 +142,202 @@ function MemberHome({ session }: { session: SessionState }) {
       </header>
 
       <section className="container-custom py-8 md:py-12">
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-6">
+        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+          <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="type-label text-muted-foreground">
                   Current Treasury Balance
                 </p>
-                <p className="mt-3 text-5xl font-semibold tracking-normal">
-                  $0.00
+                <p className="mt-4 text-4xl font-semibold tracking-normal md:text-5xl">
+                  {formatCurrency(snapshot.totalUsd)}
                 </p>
-                <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
-                  Member-visible balance breakdown for the main Safe and future
-                  side-vaults. Real treasury data lands in the next ingestion
-                  PRs.
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Snapshot as of {formatTimestamp(snapshot.asOf)}
                 </p>
               </div>
-              <div className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
-                Q1 2026 setup
-              </div>
+              <SyncStatusBadge />
             </div>
 
-            <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {assets.map((asset) => (
-                <div
-                  key={asset.symbol}
-                  className="rounded-md border border-border bg-background p-3"
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`size-2.5 rounded-full ${asset.tone}`}
-                      aria-hidden="true"
-                    />
-                    <span className="text-sm font-medium">{asset.symbol}</span>
-                  </div>
-                  <p className="mt-3 text-lg font-semibold">{asset.balance}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-                <LockKeyhole className="size-5" aria-hidden="true" />
+            <dl className="mt-8 grid gap-5 sm:grid-cols-3">
+              <div>
+                <dt className="type-label-sm text-muted-foreground">
+                  Accounts
+                </dt>
+                <dd className="mt-2 text-xl font-semibold">
+                  {snapshot.accounts.length}
+                </dd>
               </div>
               <div>
-                <p className="type-label-sm text-muted-foreground">
-                  Access Model
-                </p>
-                <h2 className="text-lg font-semibold">Wallet gated</h2>
+                <dt className="type-label-sm text-muted-foreground">
+                  Assets
+                </dt>
+                <dd className="mt-2 text-xl font-semibold">
+                  {treasury.assets.length}
+                </dd>
               </div>
-            </div>
-            <div className="mt-6 space-y-4 text-sm leading-6 text-muted-foreground">
-              <p>
-                Members get read/export access after the DAO share check.
-                Angry Dwarfs manage quarter publishing and admin settings.
-              </p>
-              <p>
-                Clerics can add manual raid revenue, raid payouts, and spoils
-                links once granted by an Angry Dwarf.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-          <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-            <div className="flex items-center gap-3">
-              <Coins className="size-5 text-primary" aria-hidden="true" />
-              <h2 className="text-lg font-semibold">Build sequence</h2>
-            </div>
-            <ol className="mt-5 space-y-3">
-              {milestones.map((milestone, index) => (
-                <li key={milestone} className="flex items-center gap-3">
-                  <span className="flex size-7 items-center justify-center rounded-md border border-border bg-background text-sm font-medium">
-                    {index + 1}
-                  </span>
-                  <span className="text-sm">{milestone}</span>
-                </li>
-              ))}
-            </ol>
+              <div>
+                <dt className="type-label-sm text-muted-foreground">
+                  Source
+                </dt>
+                <dd className="mt-2 text-sm font-medium">Gnosis Safe</dd>
+              </div>
+            </dl>
           </section>
 
           <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="flex size-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+                <WalletCards className="size-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="type-label-sm text-muted-foreground">
+                  Account
+                </p>
+                <h2 className="text-lg font-semibold">{treasury.name}</h2>
+              </div>
+            </div>
+
+            <div className="mt-6 border-t border-border pt-4">
+              <p className="type-label-sm text-muted-foreground">
+                Configured Safe
+              </p>
+              {treasury.address ? (
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <code className="min-w-0 truncate text-sm font-medium">
+                    {formatAddress(treasury.address)}
+                  </code>
+                  <CopyAddressButton address={treasury.address} />
+                </div>
+              ) : (
+                <p className="mt-3 text-sm font-medium text-muted-foreground">
+                  Address not configured
+                </p>
+              )}
+            </div>
+
+            <div className="mt-5 border-t border-border pt-4">
+              <p className="type-label-sm text-muted-foreground">
+                Account Total
+              </p>
+              <p className="mt-3 text-2xl font-semibold tracking-normal">
+                {formatCurrency(treasury.totalUsd)}
+              </p>
+            </div>
+          </section>
+        </div>
+
+        <section className="mt-6 rounded-lg border border-border bg-card p-6 shadow-sm">
+          <div className="flex items-center gap-3">
+            <Coins className="size-5 text-primary" aria-hidden="true" />
+            <div>
+              <p className="type-label-sm text-muted-foreground">
+                Asset Breakdown
+              </p>
+              <h2 className="text-lg font-semibold">Tracked treasury assets</h2>
+            </div>
+          </div>
+          <div className="mt-6 overflow-hidden rounded-md border border-border">
+            <div className="grid grid-cols-[1fr_1fr] gap-3 border-b border-border bg-muted px-4 py-3 text-xs font-medium uppercase text-muted-foreground sm:grid-cols-[1fr_1fr_1fr]">
+              <span>Asset</span>
+              <span className="text-right sm:text-left">Balance</span>
+              <span className="hidden text-right sm:block">USD Value</span>
+            </div>
+            {treasury.assets.map((asset) => (
+              <div
+                key={asset.symbol}
+                className="grid grid-cols-[1fr_1fr] items-center gap-3 border-b border-border px-4 py-4 last:border-b-0 sm:grid-cols-[1fr_1fr_1fr]"
+              >
+                <div>
+                  <p className="text-sm font-semibold">{asset.symbol}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {asset.name}
+                  </p>
+                </div>
+                <p className="text-right text-sm font-medium sm:text-left">
+                  {formatNumber(asset.balance)} {asset.symbol}
+                </p>
+                <p className="hidden text-right text-sm font-semibold sm:block">
+                  {formatCurrency(asset.usdValue)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
+          <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <FileSpreadsheet
+                <CircleDollarSign
                   className="size-5 text-primary"
                   aria-hidden="true"
                 />
                 <div>
                   <p className="type-label-sm text-muted-foreground">
-                    First Export Target
+                    Revenue Priority
                   </p>
-                  <h2 className="text-lg font-semibold">Q1 2026 workbook</h2>
+                  <h2 className="text-lg font-semibold">
+                    Revenue-first reporting
+                  </h2>
                 </div>
               </div>
-              <Button variant="outline" size="sm">
-                View Spec
-                <ArrowRight data-icon="inline-end" />
-              </Button>
             </div>
             <div className="mt-6 grid gap-3 sm:grid-cols-3">
-              {["Taxable Revenue", "P&L", "Full Ledger"].map((label) => (
+              {["Taxable Revenue", "P&L Summary", "Q1 Workbook"].map((label) => (
                 <div
                   key={label}
                   className="rounded-md border border-border bg-background px-4 py-3 text-sm font-medium"
                 >
+                  <FileSpreadsheet
+                    data-icon="inline-start"
+                    className="text-primary"
+                  />
                   {label}
                 </div>
               ))}
             </div>
+          </section>
+
+          <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+            <div className="flex items-center gap-3">
+              <FileSpreadsheet
+                className="size-5 text-primary"
+                aria-hidden="true"
+              />
+              <div>
+                <p className="type-label-sm text-muted-foreground">
+                  Reporting Window
+                </p>
+                <h2 className="text-lg font-semibold">Q1 export readiness</h2>
+              </div>
+            </div>
+            <dl className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div>
+                <dt className="type-label-sm text-muted-foreground">
+                  Status
+                </dt>
+                <dd className="mt-2 text-sm font-medium">Draft</dd>
+              </div>
+              <div>
+                <dt className="type-label-sm text-muted-foreground">
+                  Access
+                </dt>
+                <dd className="mt-2 text-sm font-medium">Member view</dd>
+              </div>
+              <div>
+                <dt className="type-label-sm text-muted-foreground">
+                  Revenue
+                </dt>
+                <dd className="mt-2 text-sm font-medium">$0.00</dd>
+              </div>
+              <div>
+                <dt className="type-label-sm text-muted-foreground">
+                  Expenses
+                </dt>
+                <dd className="mt-2 text-sm font-medium">$0.00</dd>
+              </div>
+            </dl>
           </section>
         </div>
       </section>
@@ -242,5 +352,7 @@ export default async function Home() {
     return <PublicHome session={session} />;
   }
 
-  return <MemberHome session={session} />;
+  const snapshot = await getTreasuryBalanceSnapshot();
+
+  return <MemberHome session={session} snapshot={snapshot} />;
 }
