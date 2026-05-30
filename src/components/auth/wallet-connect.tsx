@@ -282,7 +282,7 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
         <div className="flex min-w-0 items-center rounded-md border border-scroll-300/30 bg-moloch-900/30 px-3 py-1.5 text-sm text-scroll-100">
           <span className="font-medium">{formatAddress(session.address)}</span>
           {session.permissions?.roles.length ? (
-            <span className="ml-2 truncate text-scroll-300">
+            <span className="ml-2 inline-block truncate text-scroll-300">
               {session.permissions.roles.join(", ")}
             </span>
           ) : null}

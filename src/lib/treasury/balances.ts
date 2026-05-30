@@ -46,7 +46,7 @@ const TRACKED_TREASURY_ASSETS: TreasuryAssetBalance[] = [
 function getMainSafeAddress() {
   const address = process.env.MAIN_SAFE_ADDRESS;
 
-  if (!address || !isAddress(address)) {
+  if (!address || !isAddress(address, { strict: false })) {
     return null;
   }
 

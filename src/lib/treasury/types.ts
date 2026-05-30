@@ -24,5 +24,5 @@ export type TreasuryBalanceSnapshot = {
   asOf: string;
   status: TreasurySnapshotStatus;
   totalUsd: string;
-  accounts: TreasuryAccountBalance[];
+  accounts: [TreasuryAccountBalance, ...TreasuryAccountBalance[]];
 };

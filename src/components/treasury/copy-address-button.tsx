@@ -4,9 +4,11 @@ import { Check, Copy } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 
 export function CopyAddressButton({ address }: { address: string }) {
   const [didCopy, setDidCopy] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (!didCopy) {
@@ -23,8 +25,17 @@ export function CopyAddressButton({ address }: { address: string }) {
   }, [didCopy]);
 
   async function copyAddress() {
-    await navigator.clipboard.writeText(address);
-    setDidCopy(true);
+    try {
+      if (!navigator.clipboard) {
+        throw new Error("Clipboard unavailable");
+      }
+
+      await navigator.clipboard.writeText(address);
+      setDidCopy(true);
+    } catch {
+      setDidCopy(false);
+      showToast("Could not copy address.");
+    }
   }
 
   return (
