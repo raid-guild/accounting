@@ -368,34 +368,39 @@ async function syncTreasuryBalanceSnapshotForAddress(
   );
   const status: TreasurySnapshotStatus = priceError ? "partial" : "synced";
   const syncedAt = new Date();
+  const snapshotId = crypto.randomUUID();
   const db = getDb();
+  const snapshotValues = {
+    id: snapshotId,
+    accountAddress: address,
+    chainId: gnosis.id,
+    status,
+    totalUsd,
+    syncedAt,
+    errorMessage: priceError?.message ?? null,
+  };
+  const assetValues = assets.map((asset) => ({
+    snapshotId,
+    symbol: asset.symbol,
+    name: asset.name,
+    decimals: asset.decimals,
+    rawAmount: asset.rawAmount,
+    balance: asset.balance,
+    usdPrice: asset.usdPrice,
+    usdValue: asset.usdValue,
+  }));
 
-  await db.transaction(async (tx) => {
-    const [snapshot] = await tx
-      .insert(treasuryBalanceSnapshots)
-      .values({
-        accountAddress: address,
-        chainId: gnosis.id,
-        status,
-        totalUsd,
-        syncedAt,
-        errorMessage: priceError?.message ?? null,
-      })
-      .returning();
-
-    await tx.insert(treasuryBalanceAssets).values(
-      assets.map((asset) => ({
-        snapshotId: snapshot.id,
-        symbol: asset.symbol,
-        name: asset.name,
-        decimals: asset.decimals,
-        rawAmount: asset.rawAmount,
-        balance: asset.balance,
-        usdPrice: asset.usdPrice,
-        usdValue: asset.usdValue,
-      })),
-    );
-  });
+  if ("batch" in db) {
+    await db.batch([
+      db.insert(treasuryBalanceSnapshots).values(snapshotValues),
+      db.insert(treasuryBalanceAssets).values(assetValues),
+    ]);
+  } else {
+    await db.transaction(async (tx) => {
+      await tx.insert(treasuryBalanceSnapshots).values(snapshotValues);
+      await tx.insert(treasuryBalanceAssets).values(assetValues);
+    });
+  }
 
   return createSnapshot({
     address,
