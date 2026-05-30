@@ -28,7 +28,7 @@ CREATE TABLE "treasury_balance_snapshots" (
 ALTER TABLE "treasury_balance_assets" ADD CONSTRAINT "treasury_balance_assets_snapshot_id_treasury_balance_snapshots_id_fk" FOREIGN KEY ("snapshot_id") REFERENCES "public"."treasury_balance_snapshots"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "treasury_balance_assets_snapshot_id_idx" ON "treasury_balance_assets" USING btree ("snapshot_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "treasury_balance_assets_snapshot_symbol_unique" ON "treasury_balance_assets" USING btree ("snapshot_id","symbol");--> statement-breakpoint
-CREATE INDEX "treasury_balance_snapshots_account_idx" ON "treasury_balance_snapshots" USING btree ("chain_id","account_address");--> statement-breakpoint
+CREATE INDEX "treasury_balance_snapshots_chain_account_synced_idx" ON "treasury_balance_snapshots" USING btree ("chain_id","account_address","synced_at" DESC);--> statement-breakpoint
 CREATE INDEX "treasury_balance_snapshots_synced_at_idx" ON "treasury_balance_snapshots" USING btree ("synced_at");--> statement-breakpoint
 CREATE TRIGGER "treasury_balance_assets_set_updated_at"
 BEFORE UPDATE ON "treasury_balance_assets"

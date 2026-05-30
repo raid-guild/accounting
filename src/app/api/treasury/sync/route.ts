@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAuthSession } from "@/lib/auth/session";
 import {
+  createFailedTreasuryBalanceSnapshot,
   getTreasuryBalanceSnapshot,
   syncTreasuryBalanceSnapshot,
 } from "@/lib/treasury/balances";
@@ -52,12 +53,20 @@ export async function POST() {
   } catch (error) {
     console.error("Treasury balance sync failed", error);
 
-    const snapshot = await getTreasuryBalanceSnapshot();
+    const errorMessage = getPublicSyncError(error);
+    let snapshot;
+
+    try {
+      snapshot = await getTreasuryBalanceSnapshot();
+    } catch (fallbackError) {
+      console.error("Failed to load cached treasury snapshot", fallbackError);
+      snapshot = createFailedTreasuryBalanceSnapshot(errorMessage);
+    }
 
     return NextResponse.json(
       {
         ...snapshot,
-        errorMessage: getPublicSyncError(error),
+        errorMessage,
         status: "failed",
       },
       { status: 502 },

@@ -8,7 +8,6 @@ import {
   getAddress,
   http,
   isAddress,
-  parseAbi,
   type Address,
 } from "viem";
 import { gnosis } from "viem/chains";
@@ -27,7 +26,7 @@ import type {
 
 const SNAPSHOT_TTL_MS = 60 * 60 * 1000;
 
-const WXDAI_ABI = parseAbi(["function balanceOf(address) view returns (uint256)"]);
+const inProgressSyncs = new Map<string, Promise<TreasuryBalanceSnapshot>>();
 
 const TRACKED_TREASURY_ASSETS = [
   {
@@ -154,6 +153,10 @@ function createPendingSnapshot(
   });
 }
 
+export function createFailedTreasuryBalanceSnapshot(errorMessage: string) {
+  return createPendingSnapshot(getMainSafeAddress(), errorMessage);
+}
+
 function isSyncedAtStale(syncedAt: Date) {
   return Date.now() - syncedAt.getTime() >= SNAPSHOT_TTL_MS;
 }
@@ -260,8 +263,8 @@ async function getWethUsdPrice() {
   const body = (await response.json()) as { weth?: { usd?: number } };
   const price = body.weth?.usd;
 
-  if (!price || !Number.isFinite(price)) {
-    throw new Error("CoinGecko wETH price unavailable");
+  if (!price || !Number.isFinite(price) || price <= 0) {
+    throw new Error("CoinGecko wETH price invalid or unavailable");
   }
 
   return price;
@@ -281,7 +284,7 @@ async function fetchLiveAssetBalances(address: Address) {
       }
 
       return client.readContract({
-        abi: asset.symbol === "wxDAI" ? WXDAI_ABI : erc20Abi,
+        abi: erc20Abi,
         address: asset.tokenAddress,
         functionName: "balanceOf",
         args: [address],
@@ -337,6 +340,28 @@ export async function syncTreasuryBalanceSnapshot(): Promise<TreasuryBalanceSnap
     return createPendingSnapshot(null, "MAIN_SAFE_ADDRESS is not configured");
   }
 
+  const syncKey = `${gnosis.id}:${address.toLowerCase()}`;
+  const inProgressSync = inProgressSyncs.get(syncKey);
+
+  if (inProgressSync) {
+    return inProgressSync;
+  }
+
+  const syncPromise = syncTreasuryBalanceSnapshotForAddress(address);
+  inProgressSyncs.set(syncKey, syncPromise);
+
+  try {
+    return await syncPromise;
+  } finally {
+    if (inProgressSyncs.get(syncKey) === syncPromise) {
+      inProgressSyncs.delete(syncKey);
+    }
+  }
+}
+
+async function syncTreasuryBalanceSnapshotForAddress(
+  address: Address,
+): Promise<TreasuryBalanceSnapshot> {
   const { assets, priceError } = await fetchLiveAssetBalances(address);
   const totalUsd = formatUsd(
     assets.reduce((total, asset) => total + toNumber(asset.usdValue), 0),
@@ -344,30 +369,33 @@ export async function syncTreasuryBalanceSnapshot(): Promise<TreasuryBalanceSnap
   const status: TreasurySnapshotStatus = priceError ? "partial" : "synced";
   const syncedAt = new Date();
   const db = getDb();
-  const [snapshot] = await db
-    .insert(treasuryBalanceSnapshots)
-    .values({
-      accountAddress: address,
-      chainId: gnosis.id,
-      status,
-      totalUsd,
-      syncedAt,
-      errorMessage: priceError?.message ?? null,
-    })
-    .returning();
 
-  await db.insert(treasuryBalanceAssets).values(
-    assets.map((asset) => ({
-      snapshotId: snapshot.id,
-      symbol: asset.symbol,
-      name: asset.name,
-      decimals: asset.decimals,
-      rawAmount: asset.rawAmount,
-      balance: asset.balance,
-      usdPrice: asset.usdPrice,
-      usdValue: asset.usdValue,
-    })),
-  );
+  await db.transaction(async (tx) => {
+    const [snapshot] = await tx
+      .insert(treasuryBalanceSnapshots)
+      .values({
+        accountAddress: address,
+        chainId: gnosis.id,
+        status,
+        totalUsd,
+        syncedAt,
+        errorMessage: priceError?.message ?? null,
+      })
+      .returning();
+
+    await tx.insert(treasuryBalanceAssets).values(
+      assets.map((asset) => ({
+        snapshotId: snapshot.id,
+        symbol: asset.symbol,
+        name: asset.name,
+        decimals: asset.decimals,
+        rawAmount: asset.rawAmount,
+        balance: asset.balance,
+        usdPrice: asset.usdPrice,
+        usdValue: asset.usdValue,
+      })),
+    );
+  });
 
   return createSnapshot({
     address,

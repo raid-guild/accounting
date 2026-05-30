@@ -4,7 +4,10 @@ import Image from "next/image";
 import { WalletConnect } from "@/components/auth/wallet-connect";
 import { TreasuryDashboard } from "@/components/treasury/treasury-dashboard";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
-import { getTreasuryBalanceSnapshot } from "@/lib/treasury/balances";
+import {
+  createFailedTreasuryBalanceSnapshot,
+  getTreasuryBalanceSnapshot,
+} from "@/lib/treasury/balances";
 import type { TreasuryBalanceSnapshot } from "@/lib/treasury/types";
 
 async function getSessionState() {
@@ -119,7 +122,16 @@ export default async function Home() {
     return <PublicHome session={session} />;
   }
 
-  const snapshot = await getTreasuryBalanceSnapshot();
+  let snapshot: TreasuryBalanceSnapshot;
+
+  try {
+    snapshot = await getTreasuryBalanceSnapshot();
+  } catch (error) {
+    console.error("Failed to load treasury balance snapshot", error);
+    snapshot = createFailedTreasuryBalanceSnapshot(
+      "Treasury balance cache unavailable",
+    );
+  }
 
   return <MemberHome session={session} snapshot={snapshot} />;
 }

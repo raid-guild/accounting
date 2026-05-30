@@ -150,9 +150,9 @@ The homepage should always be visible to members who pass wallet access control,
 
 Homepage content:
 
-- Current total treasury balance in USD.
-- Asset breakdown.
-- Account breakdown.
+- Current total treasury balance in USD, starting with onchain Gnosis accounts and later including the latest imported bank balance snapshot.
+- Asset breakdown across included balance sources.
+- Account breakdown by Treasury, side-vault, and eventually bank balance source.
 - Published quarter cards.
 - Export buttons for published quarters.
 
@@ -185,23 +185,26 @@ Later main Safe ingestion should fetch:
 
 Side-vaults come after main Safe support.
 
-Side-vault records are admin-managed address book entries.
+Side-vault records are Angry Dwarf admin-managed Gnosis Safe/multisig entries.
 
 Fields:
 
 - Name.
 - Address.
-- Network/type.
+- Gnosis chain.
 - Notes.
 - Whether DAO-controlled or independent multisig.
+- Active/archived status.
 
 Side-vault behavior:
 
 - Queried alongside the main treasury.
-- Included in balances and reports.
+- Included in homepage balances and later reports.
 - Labeled by source account.
 - Some side-vaults are controlled by DAO proposals.
 - Some are separate multisigs and will not have DAO proposal links.
+
+Onchain balance syncing is Gnosis-only for V1. Future bank imports should add the latest imported bank balance snapshot to the homepage total without changing the onchain account model.
 
 ### DAO Proposals
 
@@ -551,58 +554,61 @@ Each step should be its own PR.
 4. Member homepage
    - Current treasury balance UI with mocked/configured data shape, asset/account breakdown.
 
-5. Main Safe ingestion
-   - Gnosis Safe/RPC integration, import balances/transactions from env-configured main Safe.
+5. Main Safe balance ingestion
+   - Gnosis RPC integration, cached balances from env-configured Treasury.
 
-6. Quarter workspace model
+6. Side-vault admin
+   - Admin-managed Gnosis side-vault CRUD using treasury account records, including active/archived state and DAO-controlled labeling.
+
+7. Multi-account balance sync
+   - Sync Treasury plus active side-vault balances, include them in the homepage total, account breakdown, and aggregated asset breakdown.
+
+8. Quarter workspace model
    - Q1 workspace, statuses, draft/review/published/reopened flow, quarter audit history.
 
-7. Core entity management
+9. Core entity management
    - Clients, raids, providers, subcontractors, address book CRUD with admin-only writes.
 
-8. Transaction classification
+10. Main Safe and side-vault transaction ingestion
+    - Import Gnosis native/ERC-20 transfers, Safe metadata where useful, tx hashes, and timestamps from tracked onchain accounts.
+
+11. Transaction classification
    - Classify imported transactions, link to entities, categories, notes, verification/source metadata.
 
-9. Raid accounting views
+12. Raid accounting views
    - Raid revenue, 10% spoils calculation, subcontractor payout summaries, unpaid/remaining views.
 
-10. DAO proposal linking
+13. DAO proposal linking
     - Fetch money-moving proposals, link by execution tx hash, proposal expense page.
 
-11. Membership activity reports
+14. Membership activity reports
     - Member dues/joins and ragequit classification/report pages.
 
-12. Side-vault address book
-    - Admin-managed Gnosis side-vaults, source account labeling.
-
-13. Side-vault ingestion
-    - Balance/transaction scan for side-vaults, included in homepage and quarter workspaces.
-
-14. Manual transaction lookup
+15. Manual transaction lookup
     - Paste tx hash, support Gnosis/Arbitrum/Optimism/Ethereum/Base, fetch native/ERC-20 transfers.
 
-15. Manual raid revenue flow
+16. Manual raid revenue flow
     - Cleric/admin flow to select transfer(s), allocate revenue to client/raid, support split revenue and flagged unverified entries.
 
-16. Manual raid payout flow
+17. Manual raid payout flow
     - Cleric/admin flow to select transfer(s), allocate payout lines to raid/subcontractors, support split payouts and flagged unverified entries.
 
-17. Spoils linking flow
+18. Spoils linking flow
     - Cleric/admin flow to link spoils inflows to raids and compare actual spoils against expected 10%.
 
-18. RIP tracking
+19. RIP tracking
     - RIP CRUD, external links, linked tx/proposals/payees, most/least expensive views.
 
-19. Bank CSV import
+20. Bank CSV import
     - Upload, parse, normalize rows, discard original file, encrypted sensitive fields, duplicate detection.
 
-20. Bank transaction classification
+21. Bank transaction classification
     - Classify imported bank rows, link to quarter/entities/reports.
 
-21. XLSX export
+22. XLSX export
     - Q1 workbook with all required tabs, source hashes, verification flags, last published/updated date.
 
-22. Publish/export polish
+23. Publish/export polish
     - Member-facing published quarter view, export buttons, read-only locked state, final UI/security pass.
 
 ## 14. Open Questions

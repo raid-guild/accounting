@@ -1316,8 +1316,8 @@
         }
       },
       "indexes": {
-        "treasury_balance_snapshots_account_idx": {
-          "name": "treasury_balance_snapshots_account_idx",
+        "treasury_balance_snapshots_chain_account_synced_idx": {
+          "name": "treasury_balance_snapshots_chain_account_synced_idx",
           "columns": [
             {
               "expression": "chain_id",
@@ -1329,6 +1329,12 @@
               "expression": "account_address",
               "isExpression": false,
               "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "synced_at",
+              "isExpression": false,
+              "asc": false,
               "nulls": "last"
             }
           ],

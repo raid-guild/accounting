@@ -37,6 +37,23 @@ function formatAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
+function isTreasuryBalanceSnapshot(
+  value: unknown,
+): value is TreasuryBalanceSnapshot {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const snapshot = value as Partial<TreasuryBalanceSnapshot>;
+
+  return (
+    Array.isArray(snapshot.accounts) &&
+    snapshot.accounts.length > 0 &&
+    typeof snapshot.status === "string" &&
+    typeof snapshot.totalUsd === "string"
+  );
+}
+
 function getSyncCopy(snapshot: TreasuryBalanceSnapshot, isRefreshing: boolean) {
   if (isRefreshing) {
     return snapshot.syncedAt
@@ -82,26 +99,13 @@ export function TreasuryDashboard({
         const response = await fetch("/api/treasury/sync", {
           method: "POST",
         });
-        const nextSnapshot =
-          (await response.json()) as TreasuryBalanceSnapshot;
+        const nextSnapshot = (await response.json()) as unknown;
 
         if (!isMounted) {
           return;
         }
 
-        setSnapshot(nextSnapshot);
-
-        if (response.ok) {
-          setJustUpdated(true);
-        }
-      } catch {
-        if (!isMounted) {
-          return;
-        }
-
-        const response = await fetch("/api/treasury/snapshot");
-
-        if (!response.ok) {
+        if (!response.ok || !isTreasuryBalanceSnapshot(nextSnapshot)) {
           setSnapshot((currentSnapshot) => ({
             ...currentSnapshot,
             errorMessage: "Treasury balance sync failed",
@@ -110,12 +114,47 @@ export function TreasuryDashboard({
           return;
         }
 
-        const nextSnapshot = (await response.json()) as TreasuryBalanceSnapshot;
-        setSnapshot({
-          ...nextSnapshot,
-          errorMessage: "Treasury balance sync failed",
-          status: "failed",
-        });
+        setSnapshot(nextSnapshot);
+
+        setJustUpdated(true);
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        try {
+          const response = await fetch("/api/treasury/snapshot");
+          const nextSnapshot = (await response.json()) as unknown;
+
+          if (!isMounted) {
+            return;
+          }
+
+          if (!response.ok || !isTreasuryBalanceSnapshot(nextSnapshot)) {
+            setSnapshot((currentSnapshot) => ({
+              ...currentSnapshot,
+              errorMessage: "Treasury balance sync failed",
+              status: "failed",
+            }));
+            return;
+          }
+
+          setSnapshot({
+            ...nextSnapshot,
+            errorMessage: "Treasury balance sync failed",
+            status: "failed",
+          });
+        } catch {
+          if (!isMounted) {
+            return;
+          }
+
+          setSnapshot((currentSnapshot) => ({
+            ...currentSnapshot,
+            errorMessage: "Treasury balance sync failed",
+            status: "failed",
+          }));
+        }
       } finally {
         if (isMounted) {
           setIsRefreshing(false);

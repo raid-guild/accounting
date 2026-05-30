@@ -180,9 +180,10 @@ export const treasuryBalanceSnapshots = pgTable(
     ...timestamps,
   },
   (table) => [
-    index("treasury_balance_snapshots_account_idx").on(
+    index("treasury_balance_snapshots_chain_account_synced_idx").on(
       table.chainId,
       table.accountAddress,
+      table.syncedAt.desc(),
     ),
     index("treasury_balance_snapshots_synced_at_idx").on(table.syncedAt),
   ],
