@@ -55,6 +55,14 @@ export const verificationStatusEnum = pgEnum("verification_status", [
   "unverified",
 ]);
 
+export const treasurySnapshotStatusEnum = pgEnum("treasury_snapshot_status", [
+  "pending_live_sync",
+  "synced",
+  "stale_syncing",
+  "partial",
+  "failed",
+]);
+
 export const auditActionEnum = pgEnum("audit_action", [
   "create",
   "update",
@@ -156,6 +164,52 @@ export const treasuryAccounts = pgTable(
       table.address,
     ),
     index("treasury_accounts_type_idx").on(table.type),
+  ],
+);
+
+export const treasuryBalanceSnapshots = pgTable(
+  "treasury_balance_snapshots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    accountAddress: text("account_address").notNull(),
+    chainId: integer("chain_id").notNull(),
+    status: treasurySnapshotStatusEnum("status").notNull(),
+    totalUsd: numeric("total_usd", { precision: 18, scale: 2 }).notNull(),
+    syncedAt: timestamp("synced_at", { withTimezone: true }).notNull(),
+    errorMessage: text("error_message"),
+    ...timestamps,
+  },
+  (table) => [
+    index("treasury_balance_snapshots_account_idx").on(
+      table.chainId,
+      table.accountAddress,
+    ),
+    index("treasury_balance_snapshots_synced_at_idx").on(table.syncedAt),
+  ],
+);
+
+export const treasuryBalanceAssets = pgTable(
+  "treasury_balance_assets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    snapshotId: uuid("snapshot_id")
+      .notNull()
+      .references(() => treasuryBalanceSnapshots.id, { onDelete: "cascade" }),
+    symbol: text("symbol").notNull(),
+    name: text("name").notNull(),
+    decimals: integer("decimals").notNull(),
+    rawAmount: numeric("raw_amount", { precision: 78, scale: 0 }).notNull(),
+    balance: numeric("balance", { precision: 36, scale: 18 }).notNull(),
+    usdPrice: numeric("usd_price", { precision: 18, scale: 8 }).notNull(),
+    usdValue: numeric("usd_value", { precision: 18, scale: 2 }).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("treasury_balance_assets_snapshot_id_idx").on(table.snapshotId),
+    uniqueIndex("treasury_balance_assets_snapshot_symbol_unique").on(
+      table.snapshotId,
+      table.symbol,
+    ),
   ],
 );
 

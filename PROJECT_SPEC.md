@@ -158,6 +158,12 @@ Homepage content:
 
 The homepage should not include a recent activity feed in V1.
 
+Balance refresh behavior:
+
+- The homepage serves the latest cached treasury balance immediately.
+- Any authenticated member may trigger a background refresh when cached balance data is missing or older than one hour.
+- Stale data should remain readable and dated, with clear sync timing and subtle refreshing/updated UI states.
+
 ## 8. Data Sources
 
 ### Main Safe
@@ -166,9 +172,10 @@ The first automated onchain source is the main RaidGuild Safe on Gnosis.
 
 The main Safe address is environment-configured.
 
-The app should fetch:
+The app should fetch current balances for USDC, xDAI, wxDAI, and wETH through the configured Gnosis RPC. Stable assets are valued 1:1 with USD. wETH uses CoinGecko pricing when available, with the API key optional.
 
-- Current balances.
+Later main Safe ingestion should fetch:
+
 - Native transfers.
 - ERC-20 transfers.
 - Safe transaction metadata where useful.

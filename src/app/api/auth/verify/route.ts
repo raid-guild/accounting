@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { track } from "@vercel/analytics/server";
 import { getAddress } from "viem";
 import { SiweMessage } from "siwe";
 
@@ -7,6 +8,7 @@ import {
   serializeSession,
 } from "@/lib/auth/session";
 import { getWalletPermissions } from "@/lib/auth/permissions";
+import type { AuthPermissions, AuthRole } from "@/lib/auth/types";
 
 type VerifyRequestBody = {
   message?: string;
@@ -60,6 +62,18 @@ function getExpectedDomain(request: NextRequest) {
   }
 
   return request.headers.get("host") ?? request.nextUrl.host;
+}
+
+function getPrimaryRole(permissions: AuthPermissions): AuthRole {
+  if (permissions.roles.includes("admin")) {
+    return "admin";
+  }
+
+  if (permissions.roles.includes("cleric")) {
+    return "cleric";
+  }
+
+  return "member";
 }
 
 export async function POST(request: NextRequest) {
@@ -117,6 +131,14 @@ export async function POST(request: NextRequest) {
     session.permissions = permissions;
     delete session.nonce;
     await session.save();
+
+    try {
+      await track("member_login_success", {
+        role: getPrimaryRole(permissions),
+      });
+    } catch (error) {
+      console.warn("Member login analytics event failed", error);
+    }
 
     return NextResponse.json(serializeSession(session));
   } catch (error) {

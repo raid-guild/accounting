@@ -15,6 +15,13 @@
       "when": 1780075251151,
       "tag": "0001_damp_wiccan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780158690212,
+      "tag": "0002_lovely_colossus",
+      "breakpoints": true
     }
   ]
 }

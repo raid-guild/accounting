@@ -1,10 +1,16 @@
 export type TreasuryAssetSymbol = "USDC" | "xDAI" | "wxDAI" | "wETH";
 
-export type TreasurySnapshotStatus = "pending_live_sync";
+export type TreasurySnapshotStatus =
+  | "pending_live_sync"
+  | "synced"
+  | "stale_syncing"
+  | "partial"
+  | "failed";
 
 export type TreasuryAssetBalance = {
   symbol: TreasuryAssetSymbol;
   name: string;
+  rawAmount: string;
   balance: string;
   usdValue: string;
   usdPrice: string;
@@ -22,7 +28,10 @@ export type TreasuryAccountBalance = {
 
 export type TreasuryBalanceSnapshot = {
   asOf: string;
+  syncedAt: string | null;
+  isStale: boolean;
   status: TreasurySnapshotStatus;
+  errorMessage: string | null;
   totalUsd: string;
   accounts: [TreasuryAccountBalance, ...TreasuryAccountBalance[]];
 };
