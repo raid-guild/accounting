@@ -49,6 +49,7 @@ function isTreasuryBalanceSnapshot(
   return (
     Array.isArray(snapshot.accounts) &&
     snapshot.accounts.length > 0 &&
+    Array.isArray(snapshot.assets) &&
     typeof snapshot.status === "string" &&
     typeof snapshot.totalUsd === "string"
   );
@@ -82,7 +83,6 @@ export function TreasuryDashboard({
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [justUpdated, setJustUpdated] = useState(false);
-  const treasury = snapshot.accounts[0];
   const shouldRefresh = snapshot.isStale || !snapshot.syncedAt;
 
   useEffect(() => {
@@ -232,12 +232,12 @@ export function TreasuryDashboard({
             <div>
               <dt className="type-label-sm text-muted-foreground">Assets</dt>
               <dd className="mt-2 text-xl font-semibold">
-                {treasury.assets.length}
+                {snapshot.assets.length}
               </dd>
             </div>
             <div>
               <dt className="type-label-sm text-muted-foreground">Source</dt>
-              <dd className="mt-2 text-sm font-medium">Gnosis Safe</dd>
+              <dd className="mt-2 text-sm font-medium">Gnosis accounts</dd>
             </div>
           </dl>
         </section>
@@ -249,39 +249,44 @@ export function TreasuryDashboard({
             </div>
             <div>
               <p className="type-label-sm text-muted-foreground">Account</p>
-              <h2 className="text-lg font-semibold">{treasury.name}</h2>
+              <h2 className="text-lg font-semibold">Included accounts</h2>
             </div>
           </div>
 
-          <div className="mt-6 border-t border-border pt-4">
-            <p className="type-label-sm text-muted-foreground">
-              Configured Safe
-            </p>
-            {treasury.address ? (
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <code className="min-w-0 truncate text-sm font-medium">
-                  {formatAddress(treasury.address)}
-                </code>
-                <CopyAddressButton address={treasury.address} />
-              </div>
-            ) : (
-              <p className="mt-3 text-sm font-medium text-muted-foreground">
-                Address not configured
-              </p>
-            )}
-          </div>
+          <div className="mt-6 divide-y divide-border border-t border-border">
+            {snapshot.accounts.map((account) => (
+              <div key={account.id} className="py-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">
+                      {account.name}
+                    </p>
+                    {account.address ? (
+                      <code className="mt-2 block truncate text-xs font-medium text-muted-foreground">
+                        {formatAddress(account.address)}
+                      </code>
+                    ) : (
+                      <p className="mt-2 text-xs font-medium text-muted-foreground">
+                        Address not configured
+                      </p>
+                    )}
+                  </div>
 
-          <div className="mt-5 border-t border-border pt-4">
-            <p className="type-label-sm text-muted-foreground">
-              Account Total
-            </p>
-            <p
-              className={`mt-3 text-2xl font-semibold tracking-normal transition-opacity duration-500 ${
-                isPopulating ? "opacity-40" : "opacity-100"
-              }`}
-            >
-              {formatCurrency(treasury.totalUsd)}
-            </p>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <p
+                      className={`text-right text-sm font-semibold transition-opacity duration-500 ${
+                        isPopulating ? "opacity-40" : "opacity-100"
+                      }`}
+                    >
+                      {formatCurrency(account.totalUsd)}
+                    </p>
+                    {account.address ? (
+                      <CopyAddressButton address={account.address} />
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       </div>
@@ -306,7 +311,7 @@ export function TreasuryDashboard({
             <span className="text-right sm:text-left">Balance</span>
             <span className="hidden text-right sm:block">USD Value</span>
           </div>
-          {treasury.assets.map((asset) => (
+          {snapshot.assets.map((asset) => (
             <div
               key={asset.symbol}
               className="grid grid-cols-[1fr_1fr] items-center gap-3 border-b border-border px-4 py-4 transition-colors duration-500 last:border-b-0 sm:grid-cols-[1fr_1fr_1fr]"

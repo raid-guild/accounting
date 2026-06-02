@@ -33,5 +33,6 @@ export type TreasuryBalanceSnapshot = {
   status: TreasurySnapshotStatus;
   errorMessage: string | null;
   totalUsd: string;
+  assets: TreasuryAssetBalance[];
   accounts: [TreasuryAccountBalance, ...TreasuryAccountBalance[]];
 };
