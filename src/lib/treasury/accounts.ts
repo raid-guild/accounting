@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { getAddress, isAddress } from "viem";
 import { base, gnosis, mainnet } from "viem/chains";
 
@@ -38,6 +38,14 @@ export type TreasuryAccountView = {
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type TreasuryBalanceAccountSource = {
+  id: string;
+  name: string;
+  address: `0x${string}`;
+  chainId: number;
+  type: EditableTreasuryAccountType;
 };
 
 function getChainName(chainId: number) {
@@ -121,4 +129,29 @@ export async function listEditableTreasuryAccounts() {
     .orderBy(asc(treasuryAccounts.archivedAt), asc(treasuryAccounts.createdAt));
 
   return [...accounts, ...operators].map(mapTreasuryAccount);
+}
+
+export async function listActiveGnosisBalanceAccounts(): Promise<
+  TreasuryBalanceAccountSource[]
+> {
+  const db = getDb();
+  const accounts = await db
+    .select()
+    .from(treasuryAccounts)
+    .where(
+      and(
+        isNull(treasuryAccounts.archivedAt),
+        eq(treasuryAccounts.chainId, gnosis.id),
+        inArray(treasuryAccounts.type, ["side_vault", "operator"]),
+      ),
+    )
+    .orderBy(asc(treasuryAccounts.type), asc(treasuryAccounts.createdAt));
+
+  return accounts.map((account) => ({
+    id: account.id,
+    name: decryptField(account.nameEncrypted as EncryptedField),
+    address: getAddress(account.address),
+    chainId: account.chainId,
+    type: account.type as EditableTreasuryAccountType,
+  }));
 }
