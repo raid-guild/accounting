@@ -258,7 +258,9 @@ export function TreasuryDashboard({
               <div key={account.id} className="py-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold">{account.name}</p>
+                    <p className="truncate text-sm font-semibold">
+                      {account.name}
+                    </p>
                     {account.address ? (
                       <code className="mt-2 block truncate text-xs font-medium text-muted-foreground">
                         {formatAddress(account.address)}

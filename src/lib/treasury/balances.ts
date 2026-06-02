@@ -346,7 +346,7 @@ async function getLatestCachedAccountSnapshot(
       account: createEmptyAccountBalance(account),
       errorMessage: "MAIN_SAFE_ADDRESS is not configured",
       isStale: true,
-      status: "pending_live_sync",
+      status: "failed",
       syncedAt: null,
     };
   }
@@ -496,29 +496,39 @@ async function syncAccountBalanceSnapshot({
   syncedAt: Date;
   wethPricePromise: Promise<number>;
 }): Promise<SyncedAccountSnapshot> {
-  const { assets, priceError } = await fetchLiveAssetBalances({
-    address: account.address,
-    client,
-    wethPricePromise,
-  });
-  const totalUsd = formatUsd(
-    assets.reduce((total, asset) => total + toNumber(asset.usdValue), 0),
-  );
-  const status: TreasurySnapshotStatus = priceError ? "partial" : "synced";
-
-  return {
-    account: {
-      id: account.id,
-      name: account.name,
+  try {
+    const { assets, priceError } = await fetchLiveAssetBalances({
       address: account.address,
-      chainId: account.chainId,
-      totalUsd,
-      assets: sortAssetsByUsdValue(assets),
-    },
-    errorMessage: priceError?.message ?? null,
-    status,
-    syncedAt,
-  };
+      client,
+      wethPricePromise,
+    });
+    const totalUsd = formatUsd(
+      assets.reduce((total, asset) => total + toNumber(asset.usdValue), 0),
+    );
+    const status: TreasurySnapshotStatus = priceError ? "partial" : "synced";
+
+    return {
+      account: {
+        id: account.id,
+        name: account.name,
+        address: account.address,
+        chainId: account.chainId,
+        totalUsd,
+        assets: sortAssetsByUsdValue(assets),
+      },
+      errorMessage: priceError?.message ?? null,
+      status,
+      syncedAt,
+    };
+  } catch (error) {
+    return {
+      account: createEmptyAccountBalance(account),
+      errorMessage:
+        error instanceof Error ? error.message : "Balance sync failed",
+      status: "failed",
+      syncedAt,
+    };
+  }
 }
 
 async function insertSyncedAccountSnapshot(snapshot: SyncedAccountSnapshot) {
@@ -662,7 +672,7 @@ async function syncTreasuryAccountBalances(): Promise<TreasuryBalanceSnapshot> {
           account: createEmptyAccountBalance(account),
           errorMessage: "MAIN_SAFE_ADDRESS is not configured",
           isStale: true,
-          status: "pending_live_sync",
+          status: "failed",
           syncedAt: null,
         }) satisfies CachedAccountSnapshot,
     );
