@@ -1,15 +1,11 @@
 "use client";
 
-import {
-  CircleDollarSign,
-  Coins,
-  FileSpreadsheet,
-  WalletCards,
-} from "lucide-react";
+import { Coins, FileSpreadsheet, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { CopyAddressButton } from "@/components/treasury/copy-address-button";
 import { SyncStatusBadge } from "@/components/treasury/sync-status-badge";
+import type { QuarterSummary } from "@/lib/quarters";
 import type { TreasuryBalanceSnapshot } from "@/lib/treasury/types";
 
 function formatCurrency(value: string) {
@@ -30,7 +26,15 @@ function formatTimestamp(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "UTC",
   }).format(new Date(value));
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00.000Z`));
 }
 
 function formatAddress(address: string) {
@@ -77,8 +81,10 @@ function getSyncCopy(snapshot: TreasuryBalanceSnapshot, isRefreshing: boolean) {
 
 export function TreasuryDashboard({
   initialSnapshot,
+  publishedQuarters,
 }: {
   initialSnapshot: TreasuryBalanceSnapshot;
+  publishedQuarters: QuarterSummary[];
 }) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -333,73 +339,66 @@ export function TreasuryDashboard({
         </div>
       </section>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
-        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <CircleDollarSign
-                className="size-5 text-primary"
-                aria-hidden="true"
-              />
-              <div>
-                <p className="type-label-sm text-muted-foreground">
-                  Revenue Priority
-                </p>
-                <h2 className="text-lg font-semibold">
-                  Revenue-first reporting
-                </h2>
-              </div>
-            </div>
+      <section className="mt-6 rounded-lg border border-border bg-card p-6 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="type-label-sm text-muted-foreground">
+              Published Quarters
+            </p>
+            <h2 className="mt-1 text-lg font-semibold">
+              Member reporting periods
+            </h2>
           </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            {["Taxable Revenue", "P&L Summary", "Q1 Workbook"].map((label) => (
-              <div
-                key={label}
-                className="rounded-md border border-border bg-background px-4 py-3 text-sm font-medium"
+          <span className="type-label-sm text-muted-foreground">
+            {publishedQuarters.length} published
+          </span>
+        </div>
+
+        {publishedQuarters.length > 0 ? (
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {publishedQuarters.map((quarter) => (
+              <article
+                key={quarter.id}
+                className="rounded-md border border-border bg-background p-4"
               >
-                <FileSpreadsheet
-                  data-icon="inline-start"
-                  className="text-primary"
-                />
-                {label}
-              </div>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold">
+                      {quarter.label}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {formatDate(quarter.startsOn)} -{" "}
+                      {formatDate(quarter.endsOn)}
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center rounded-md border border-emerald-600/25 bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-800">
+                    Published
+                  </span>
+                </div>
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Last published{" "}
+                  {quarter.publishedAt
+                    ? formatTimestamp(quarter.publishedAt)
+                    : "date unavailable"}
+                </p>
+                <button
+                  type="button"
+                  disabled
+                  className="mt-4 inline-flex h-8 items-center justify-center rounded-lg border border-border bg-muted px-2.5 text-sm font-medium text-muted-foreground"
+                >
+                  <FileSpreadsheet data-icon="inline-start" />
+                  Export
+                </button>
+              </article>
             ))}
           </div>
-        </section>
-
-        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <div className="flex items-center gap-3">
-            <FileSpreadsheet
-              className="size-5 text-primary"
-              aria-hidden="true"
-            />
-            <div>
-              <p className="type-label-sm text-muted-foreground">
-                Reporting Window
-              </p>
-              <h2 className="text-lg font-semibold">Q1 export readiness</h2>
-            </div>
+        ) : (
+          <div className="mt-6 rounded-md border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
+            No published quarters yet.
           </div>
-          <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-            <div>
-              <dt className="type-label-sm text-muted-foreground">Status</dt>
-              <dd className="mt-2 text-sm font-medium">Draft</dd>
-            </div>
-            <div>
-              <dt className="type-label-sm text-muted-foreground">Access</dt>
-              <dd className="mt-2 text-sm font-medium">Member view</dd>
-            </div>
-            <div>
-              <dt className="type-label-sm text-muted-foreground">Revenue</dt>
-              <dd className="mt-2 text-sm font-medium">$0.00</dd>
-            </div>
-            <div>
-              <dt className="type-label-sm text-muted-foreground">Expenses</dt>
-              <dd className="mt-2 text-sm font-medium">$0.00</dd>
-            </div>
-          </dl>
-        </section>
-      </div>
+        )}
+      </section>
+
     </section>
   );
 }

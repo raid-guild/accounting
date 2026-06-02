@@ -10,6 +10,7 @@ import {
   getTreasuryBalanceSnapshot,
 } from "@/lib/treasury/balances";
 import type { TreasuryBalanceSnapshot } from "@/lib/treasury/types";
+import { listPublishedQuarters, type QuarterSummary } from "@/lib/quarters";
 
 async function getSessionState() {
   try {
@@ -82,9 +83,11 @@ function PublicHome({ session }: { session: SessionState }) {
 }
 
 function MemberHome({
+  publishedQuarters,
   session,
   snapshot,
 }: {
+  publishedQuarters: QuarterSummary[];
   session: SessionState;
   snapshot: TreasuryBalanceSnapshot;
 }) {
@@ -109,17 +112,28 @@ function MemberHome({
           </div>
           <WalletConnect initialSession={session} />
           {session.permissions?.canAdmin ? (
-            <Link
-              href="/admin/treasury-accounts"
-              className="inline-flex h-7 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium text-foreground transition-all hover:bg-muted"
-            >
-              Treasury Accounts
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href="/admin/quarters"
+                className="inline-flex h-7 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium text-foreground transition-all hover:bg-muted"
+              >
+                Quarters
+              </Link>
+              <Link
+                href="/admin/treasury-accounts"
+                className="inline-flex h-7 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium text-foreground transition-all hover:bg-muted"
+              >
+                Treasury Accounts
+              </Link>
+            </div>
           ) : null}
         </div>
       </header>
 
-      <TreasuryDashboard initialSnapshot={snapshot} />
+      <TreasuryDashboard
+        initialSnapshot={snapshot}
+        publishedQuarters={publishedQuarters}
+      />
     </main>
   );
 }
@@ -132,6 +146,7 @@ export default async function Home() {
   }
 
   let snapshot: TreasuryBalanceSnapshot;
+  let publishedQuarters: QuarterSummary[] = [];
 
   try {
     snapshot = await getTreasuryBalanceSnapshot();
@@ -142,5 +157,17 @@ export default async function Home() {
     );
   }
 
-  return <MemberHome session={session} snapshot={snapshot} />;
+  try {
+    publishedQuarters = await listPublishedQuarters();
+  } catch (error) {
+    console.error("Failed to load published quarters", error);
+  }
+
+  return (
+    <MemberHome
+      publishedQuarters={publishedQuarters}
+      session={session}
+      snapshot={snapshot}
+    />
+  );
 }
