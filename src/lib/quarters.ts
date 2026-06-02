@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, inArray } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import { auditEvents, quarterStatusEnum, quarters } from "@/db/schema";
@@ -126,10 +126,30 @@ export async function listQuarterReportingPeriods(): Promise<
 > {
   const quarterRows = await listQuarters();
 
-  return Promise.all(
-    quarterRows.map(async (quarter) => ({
-      ...quarter,
-      history: await getQuarterHistory(quarter.id),
-    })),
-  );
+  if (quarterRows.length === 0) {
+    return [];
+  }
+
+  const db = getDb();
+  const events = await db
+    .select()
+    .from(auditEvents)
+    .where(inArray(auditEvents.quarterId, quarterRows.map((quarter) => quarter.id)))
+    .orderBy(asc(auditEvents.createdAt));
+  const historyByQuarter = new Map<string, QuarterHistoryEvent[]>();
+
+  for (const event of events) {
+    if (!event.quarterId) {
+      continue;
+    }
+
+    const history = historyByQuarter.get(event.quarterId) ?? [];
+    history.push(mapHistoryEvent(event));
+    historyByQuarter.set(event.quarterId, history);
+  }
+
+  return quarterRows.map((quarter) => ({
+    ...quarter,
+    history: historyByQuarter.get(quarter.id) ?? [],
+  }));
 }

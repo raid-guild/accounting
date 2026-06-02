@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  CircleDollarSign,
-  Coins,
-  FileSpreadsheet,
-  WalletCards,
-} from "lucide-react";
+import { Coins, FileSpreadsheet, WalletCards } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { CopyAddressButton } from "@/components/treasury/copy-address-button";
@@ -31,6 +26,7 @@ function formatTimestamp(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: "UTC",
   }).format(new Date(value));
 }
 
@@ -403,73 +399,6 @@ export function TreasuryDashboard({
         )}
       </section>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1fr]">
-        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <CircleDollarSign
-                className="size-5 text-primary"
-                aria-hidden="true"
-              />
-              <div>
-                <p className="type-label-sm text-muted-foreground">
-                  Revenue Priority
-                </p>
-                <h2 className="text-lg font-semibold">
-                  Revenue-first reporting
-                </h2>
-              </div>
-            </div>
-          </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            {["Taxable Revenue", "P&L Summary", "Q1 Workbook"].map((label) => (
-              <div
-                key={label}
-                className="rounded-md border border-border bg-background px-4 py-3 text-sm font-medium"
-              >
-                <FileSpreadsheet
-                  data-icon="inline-start"
-                  className="text-primary"
-                />
-                {label}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <div className="flex items-center gap-3">
-            <FileSpreadsheet
-              className="size-5 text-primary"
-              aria-hidden="true"
-            />
-            <div>
-              <p className="type-label-sm text-muted-foreground">
-                Reporting Window
-              </p>
-              <h2 className="text-lg font-semibold">Q1 export readiness</h2>
-            </div>
-          </div>
-          <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-            <div>
-              <dt className="type-label-sm text-muted-foreground">Status</dt>
-              <dd className="mt-2 text-sm font-medium">Draft</dd>
-            </div>
-            <div>
-              <dt className="type-label-sm text-muted-foreground">Access</dt>
-              <dd className="mt-2 text-sm font-medium">Member view</dd>
-            </div>
-            <div>
-              <dt className="type-label-sm text-muted-foreground">Revenue</dt>
-              <dd className="mt-2 text-sm font-medium">$0.00</dd>
-            </div>
-            <div>
-              <dt className="type-label-sm text-muted-foreground">Expenses</dt>
-              <dd className="mt-2 text-sm font-medium">$0.00</dd>
-            </div>
-          </dl>
-        </section>
-      </div>
     </section>
   );
 }

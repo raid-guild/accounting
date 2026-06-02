@@ -103,17 +103,6 @@ export async function createQ1ReportingPeriod() {
   const session = await requireAdminSession();
   const db = getDb();
   const q1 = getQ1_2026Definition();
-  const [existingQ1] = await db
-    .select()
-    .from(quarters)
-    .where(and(eq(quarters.year, q1.year), eq(quarters.quarter, q1.quarter)))
-    .limit(1);
-
-  if (existingQ1) {
-    revalidatePath(QUARTERS_PATH);
-    return;
-  }
-
   const [quarter] = await db
     .insert(quarters)
     .values({
@@ -124,7 +113,15 @@ export async function createQ1ReportingPeriod() {
       status: "draft",
       year: q1.year,
     })
+    .onConflictDoNothing({
+      target: [quarters.year, quarters.quarter],
+    })
     .returning();
+
+  if (!quarter) {
+    revalidatePath(QUARTERS_PATH);
+    return;
+  }
 
   await writeAuditEvent({
     action: "create",
@@ -166,7 +163,15 @@ export async function updateQuarterStatus(formData: FormData) {
   };
   const db = getDb();
 
-  await db.update(quarters).set(updates).where(eq(quarters.id, id));
+  const [updatedQuarter] = await db
+    .update(quarters)
+    .set(updates)
+    .where(and(eq(quarters.id, id), eq(quarters.status, quarter.status)))
+    .returning();
+
+  if (!updatedQuarter) {
+    throw new Error("Quarter status changed. Refresh and try again.");
+  }
 
   await writeAuditEvent({
     action:
