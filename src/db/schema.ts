@@ -24,6 +24,7 @@ export const quarterStatusEnum = pgEnum("quarter_status", [
 export const treasuryAccountTypeEnum = pgEnum("treasury_account_type", [
   "main_safe",
   "side_vault",
+  "operator",
 ]);
 
 export const entityTypeEnum = pgEnum("entity_type", [
@@ -156,6 +157,7 @@ export const treasuryAccounts = pgTable(
     type: treasuryAccountTypeEnum("type").notNull(),
     isDaoControlled: boolean("is_dao_controlled").default(true).notNull(),
     notesEncrypted: jsonb("notes_encrypted"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
@@ -164,6 +166,7 @@ export const treasuryAccounts = pgTable(
       table.address,
     ),
     index("treasury_accounts_type_idx").on(table.type),
+    index("treasury_accounts_archived_at_idx").on(table.archivedAt),
   ],
 );
 

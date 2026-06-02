@@ -1,5 +1,6 @@
 import { LockKeyhole } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 
 import { WalletConnect } from "@/components/auth/wallet-connect";
 import { TreasuryDashboard } from "@/components/treasury/treasury-dashboard";
@@ -107,6 +108,14 @@ function MemberHome({
             </div>
           </div>
           <WalletConnect initialSession={session} />
+          {session.permissions?.canAdmin ? (
+            <Link
+              href="/admin/treasury-accounts"
+              className="inline-flex h-7 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium text-foreground transition-all hover:bg-muted"
+            >
+              Treasury Accounts
+            </Link>
+          ) : null}
         </div>
       </header>
 
