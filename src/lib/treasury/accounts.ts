@@ -24,6 +24,8 @@ export const SUPPORTED_OPERATOR_CHAINS = [
   { id: base.id, name: "Base" },
 ] as const;
 
+export const DEFAULT_TREASURY_ACCOUNT_CHAIN_ID = gnosis.id;
+
 export type TreasuryAccountView = {
   id: string;
   name: string;

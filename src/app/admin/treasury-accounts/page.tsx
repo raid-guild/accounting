@@ -13,6 +13,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
 import {
+  DEFAULT_TREASURY_ACCOUNT_CHAIN_ID,
   listEditableTreasuryAccounts,
   SUPPORTED_OPERATOR_CHAINS,
   type EditableTreasuryAccountType,
@@ -133,7 +134,7 @@ function CreateAccountForm() {
           </label>
           <label className="grid gap-2 text-sm font-medium">
             <span className="type-label-sm text-muted-foreground">Chain</span>
-            <ChainSelect defaultValue={100} />
+            <ChainSelect defaultValue={DEFAULT_TREASURY_ACCOUNT_CHAIN_ID} />
           </label>
         </div>
         <NotesField />

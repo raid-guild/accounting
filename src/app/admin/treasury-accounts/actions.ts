@@ -30,6 +30,10 @@ function getAccountType(value: string): EditableTreasuryAccountType {
 }
 
 function getChainId(value: string) {
+  if (!value) {
+    throw new Error("Chain is required");
+  }
+
   const chainId = Number(value);
 
   if (!Number.isInteger(chainId)) {
@@ -77,7 +81,9 @@ async function assertUniqueAccount({
     .limit(1);
 
   if (rows.length > 0) {
-    throw new Error("A treasury account already exists for that address");
+    throw new Error(
+      "A treasury account already exists for that address on this chain",
+    );
   }
 }
 
