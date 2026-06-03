@@ -81,8 +81,16 @@ export type TreasuryTransactionAccountSyncResult = {
   source: "main_safe" | "side_vault";
 };
 
+export type TreasuryTransactionAccountSyncError = {
+  accountAddress: Address;
+  accountName: string;
+  error: string;
+  source: "main_safe" | "side_vault";
+};
+
 export type TreasuryTransactionSyncResult = {
   accounts: TreasuryTransactionAccountSyncResult[];
+  errors: TreasuryTransactionAccountSyncError[];
   importedTransfers: number;
   importedTransactions: number;
   scannedTransfers: number;
@@ -120,6 +128,10 @@ function normalizeHash(value: string | null | undefined) {
   }
 
   return value.toLowerCase() as `0x${string}`;
+}
+
+function lower(value: string) {
+  return value.toLowerCase();
 }
 
 function normalizeAddress(value: string | null | undefined) {
@@ -365,8 +377,10 @@ async function getOrCreateTransaction({
     .where(
       and(
         eq(treasuryTransactions.chainId, account.chainId),
-        eq(treasuryTransactions.accountAddress, account.address),
-        eq(treasuryTransactions.txHash, transfer.txHash),
+        sql`lower(${treasuryTransactions.accountAddress}) = ${lower(
+          account.address,
+        )}`,
+        sql`lower(${treasuryTransactions.txHash}) = ${lower(transfer.txHash)}`,
       ),
     )
     .limit(1);
@@ -404,8 +418,10 @@ async function getOrCreateTransaction({
     .where(
       and(
         eq(treasuryTransactions.chainId, account.chainId),
-        eq(treasuryTransactions.accountAddress, account.address),
-        eq(treasuryTransactions.txHash, transfer.txHash),
+        sql`lower(${treasuryTransactions.accountAddress}) = ${lower(
+          account.address,
+        )}`,
+        sql`lower(${treasuryTransactions.txHash}) = ${lower(transfer.txHash)}`,
       ),
     )
     .limit(1);
@@ -530,17 +546,41 @@ export async function syncTreasuryTransactions({
   const pageCount = getPositiveInteger(maxPages, DEFAULT_MAX_PAGES);
 
   if (sources.length === 0) {
-    throw new Error("MAIN_SAFE_ADDRESS is required to sync treasury transactions");
+    throw new Error(
+      "At least one treasury or active Gnosis side-vault account is required to sync treasury transactions",
+    );
   }
 
-  const accounts = await Promise.all(
+  const results = await Promise.allSettled(
     sources.map((account) =>
       syncAccountTransfers({ account, limit: pageLimit, maxPages: pageCount }),
     ),
   );
+  const accounts: TreasuryTransactionAccountSyncResult[] = [];
+  const errors: TreasuryTransactionAccountSyncError[] = [];
+
+  results.forEach((result, index) => {
+    const source = sources[index];
+
+    if (result.status === "fulfilled") {
+      accounts.push(result.value);
+      return;
+    }
+
+    errors.push({
+      accountAddress: source.address,
+      accountName: source.name,
+      error:
+        result.reason instanceof Error
+          ? result.reason.message
+          : "Treasury account sync failed",
+      source: source.source,
+    });
+  });
 
   return {
     accounts,
+    errors,
     importedTransfers: accounts.reduce(
       (total, account) => total + account.importedTransfers,
       0,
@@ -557,7 +597,7 @@ export async function syncTreasuryTransactions({
   };
 }
 
-export async function getRecentTreasuryTransactions(limit = 25) {
+export async function getRecentTreasuryTransactionTransfers(limit = 25) {
   return getDb()
     .select()
     .from(treasuryTransactionTransfers)
