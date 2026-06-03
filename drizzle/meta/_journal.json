@@ -29,6 +29,20 @@
       "when": 1780407169291,
       "tag": "0003_nifty_turbo",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780516190052,
+      "tag": "0004_flippant_nightshade",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1780518492589,
+      "tag": "0005_public_diamondback",
+      "breakpoints": true
     }
   ]
 }

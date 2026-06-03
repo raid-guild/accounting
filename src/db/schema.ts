@@ -226,9 +226,13 @@ export const entities = pgTable(
     websiteEncrypted: jsonb("website_encrypted"),
     notesEncrypted: jsonb("notes_encrypted"),
     isMember: boolean("is_member").default(false).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
   },
-  (table) => [index("entities_type_idx").on(table.type)],
+  (table) => [
+    index("entities_type_idx").on(table.type),
+    index("entities_archived_at_idx").on(table.archivedAt),
+  ],
 );
 
 export const entityAddresses = pgTable(
@@ -246,6 +250,10 @@ export const entityAddresses = pgTable(
   (table) => [
     index("entity_addresses_entity_id_idx").on(table.entityId),
     index("entity_addresses_address_idx").on(table.address),
+    uniqueIndex("entity_addresses_chain_address_unique").on(
+      sql`coalesce(${table.chainId}, -1)`,
+      sql`lower(${table.address})`,
+    ),
   ],
 );
 
@@ -258,9 +266,13 @@ export const raids = pgTable(
       .references(() => entities.id, { onDelete: "restrict" }),
     nameEncrypted: jsonb("name_encrypted").notNull(),
     notesEncrypted: jsonb("notes_encrypted"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps,
   },
-  (table) => [index("raids_client_entity_id_idx").on(table.clientEntityId)],
+  (table) => [
+    index("raids_client_entity_id_idx").on(table.clientEntityId),
+    index("raids_archived_at_idx").on(table.archivedAt),
+  ],
 );
 
 export const ledgerEntries = pgTable(
