@@ -7,6 +7,7 @@ import {
   archiveEntityForAccess,
   archiveRaidForAccess,
   createEntityForAccess,
+  CoreEntityValidationError,
   createRaidForAccess,
   deleteEntityForAccess,
   deleteRaidForAccess,
@@ -16,6 +17,13 @@ import {
   updateEntityForAccess,
   updateRaidForAccess,
 } from "@/lib/core-entity-mutations";
+
+type RaidActionError =
+  | "client-has-raids"
+  | "duplicate-address"
+  | "invalid-address"
+  | "invalid-chain"
+  | "missing-address";
 
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -30,6 +38,28 @@ function getEntityKind(formData: FormData) {
 }
 
 function getAddressError(error: unknown) {
+  if (error instanceof CoreEntityValidationError) {
+    if (error.code === "client_has_raids") {
+      return "client-has-raids";
+    }
+
+    if (error.code === "duplicate_address") {
+      return "duplicate-address";
+    }
+
+    if (error.code === "invalid_address") {
+      return "invalid-address";
+    }
+
+    if (error.code === "invalid_chain") {
+      return "invalid-chain";
+    }
+
+    if (error.code === "missing_address") {
+      return "missing-address";
+    }
+  }
+
   if (!(error instanceof Error)) {
     return null;
   }
@@ -45,12 +75,22 @@ function getAddressError(error: unknown) {
     return "invalid-address";
   }
 
-  if (error.message === "Chain ID must be a whole number") {
+  if (
+    error.message === "Chain ID must be a whole number" ||
+    error.message === "Chain ID must be a positive whole number"
+  ) {
     return "invalid-chain";
   }
 
   if (error.message === "Address is required") {
     return "missing-address";
+  }
+
+  if (
+    error.message ===
+    "Client cannot be permanently deleted while raids reference it"
+  ) {
+    return "client-has-raids";
   }
 
   return null;
@@ -68,11 +108,15 @@ function getAddressErrorMessage(error: unknown) {
   }
 
   if (addressError === "invalid-chain") {
-    return "Chain ID must be a whole number.";
+    return "Chain ID must be a positive whole number.";
   }
 
   if (addressError === "missing-address") {
     return "Address is required.";
+  }
+
+  if (addressError === "client-has-raids") {
+    return "Client cannot be permanently deleted while raids reference it.";
   }
 
   return null;
@@ -136,7 +180,19 @@ export async function restoreRaidEntity(formData: FormData) {
 
 export async function deleteRaidEntity(formData: FormData) {
   const entityKind = getEntityKind(formData);
-  await deleteEntityForAccess(formData, "raid-related");
+
+  try {
+    await deleteEntityForAccess(formData, "raid-related");
+  } catch (error) {
+    const actionError: RaidActionError | null = getAddressError(error);
+
+    if (actionError !== "client-has-raids") {
+      throw error;
+    }
+
+    redirect(`/raids?error=${actionError}`);
+  }
+
   redirect(`/raids?deleted=${entityKind}`);
 }
 

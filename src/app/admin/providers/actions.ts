@@ -6,6 +6,7 @@ import {
   addAddressForAccess,
   archiveEntityForAccess,
   createEntityForAccess,
+  CoreEntityValidationError,
   deleteEntityForAccess,
   removeAddressForAccess,
   restoreEntityForAccess,
@@ -13,6 +14,24 @@ import {
 } from "@/lib/core-entity-mutations";
 
 function getAddressError(error: unknown) {
+  if (error instanceof CoreEntityValidationError) {
+    if (error.code === "duplicate_address") {
+      return "duplicate-address";
+    }
+
+    if (error.code === "invalid_address") {
+      return "invalid-address";
+    }
+
+    if (error.code === "invalid_chain") {
+      return "invalid-chain";
+    }
+
+    if (error.code === "missing_address") {
+      return "missing-address";
+    }
+  }
+
   if (!(error instanceof Error)) {
     return null;
   }
@@ -28,7 +47,10 @@ function getAddressError(error: unknown) {
     return "invalid-address";
   }
 
-  if (error.message === "Chain ID must be a whole number") {
+  if (
+    error.message === "Chain ID must be a whole number" ||
+    error.message === "Chain ID must be a positive whole number"
+  ) {
     return "invalid-chain";
   }
 
@@ -51,7 +73,7 @@ function getAddressErrorMessage(error: unknown) {
   }
 
   if (addressError === "invalid-chain") {
-    return "Chain ID must be a whole number.";
+    return "Chain ID must be a positive whole number.";
   }
 
   if (addressError === "missing-address") {

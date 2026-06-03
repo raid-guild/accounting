@@ -26,7 +26,7 @@ function getErrorMessage(error: ProviderToastError) {
   }
 
   if (error === "invalid-chain") {
-    return "Chain ID must be a whole number.";
+    return "Chain ID must be a positive whole number.";
   }
 
   return "Address is required.";
@@ -46,7 +46,12 @@ export function ProviderManagementToast({
   useEffect(() => {
     const toastKey = `${added ?? ""}:${error ?? ""}`;
 
-    if (toastKey === ":" || shownToastKey.current === toastKey) {
+    if (!added && !error) {
+      shownToastKey.current = null;
+      return;
+    }
+
+    if (shownToastKey.current === toastKey) {
       return;
     }
 

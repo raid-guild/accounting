@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "crypto";
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getAddress, isAddress } from "viem";
@@ -23,6 +24,23 @@ type EntityInput = {
   type: CoreEntityType;
   website: string;
 };
+
+export type CoreEntityValidationCode =
+  | "client_has_raids"
+  | "duplicate_address"
+  | "invalid_address"
+  | "invalid_chain"
+  | "missing_address";
+
+export class CoreEntityValidationError extends Error {
+  code: CoreEntityValidationCode;
+
+  constructor(code: CoreEntityValidationCode, message: string) {
+    super(message);
+    this.name = "CoreEntityValidationError";
+    this.code = code;
+  }
+}
 
 const RAID_RELATED_ENTITY_TYPES: RaidRelatedEntityType[] = [
   "client",
@@ -97,14 +115,20 @@ function parseOptionalAddress(formData: FormData) {
   }
 
   if (!isAddress(rawAddress)) {
-    throw new Error("Address must be a valid EVM address");
+    throw new CoreEntityValidationError(
+      "invalid_address",
+      "Address must be a valid EVM address",
+    );
   }
 
   const rawChainId = getString(formData, "chainId");
   const chainId = rawChainId ? Number(rawChainId) : null;
 
-  if (chainId !== null && !Number.isInteger(chainId)) {
-    throw new Error("Chain ID must be a whole number");
+  if (chainId !== null && (!Number.isInteger(chainId) || chainId <= 0)) {
+    throw new CoreEntityValidationError(
+      "invalid_chain",
+      "Chain ID must be a positive whole number",
+    );
   }
 
   return {
@@ -238,24 +262,30 @@ async function assertUniqueAddress({
     .limit(1);
 
   if (existingAddress) {
-    throw new Error("That address is already assigned to an entity");
+    throw new CoreEntityValidationError(
+      "duplicate_address",
+      "That address is already assigned to an entity",
+    );
   }
 }
 
-async function insertAddressForEntity(
+function isUniqueAddressViolation(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message.includes("entity_addresses_chain_address_unique")
+  );
+}
+
+function getEntityAddressValues(
   entityId: string,
   address: NonNullable<ReturnType<typeof parseOptionalAddress>>,
 ) {
-  if (!address) {
-    return;
-  }
-
-  await getDb().insert(entityAddresses).values({
+  return {
     address: address.address,
     chainId: address.chainId,
     entityId,
     labelEncrypted: getEncryptedNullable(address.label),
-  });
+  };
 }
 
 function revalidateEntityPaths() {
@@ -279,32 +309,55 @@ export async function createEntityForAccess(
   }
 
   const address = parseOptionalAddress(formData);
-
-  if (address) {
-    await assertUniqueAddress(address);
-  }
-
+  const entityId = randomUUID();
   const db = getDb();
-  const [entity] = await db
-    .insert(entities)
-    .values({
-      isMember: input.isMember,
-      nameEncrypted: encryptField(input.name),
-      notesEncrypted: getEncryptedNullable(input.notes),
-      type: input.type,
-      websiteEncrypted: getEncryptedNullable(input.website),
-    })
-    .returning();
+  const entityValues = {
+    id: entityId,
+    isMember: input.isMember,
+    nameEncrypted: encryptField(input.name),
+    notesEncrypted: getEncryptedNullable(input.notes),
+    type: input.type,
+    websiteEncrypted: getEncryptedNullable(input.website),
+  };
 
-  if (address) {
-    await insertAddressForEntity(entity.id, address);
+  try {
+    if (address) {
+      await assertUniqueAddress(address);
+
+      if ("batch" in db) {
+        await db.batch([
+          db.insert(entities).values(entityValues),
+          db.insert(entityAddresses).values(
+            getEntityAddressValues(entityId, address),
+          ),
+        ]);
+      } else {
+        await db.transaction(async (tx) => {
+          await tx.insert(entities).values(entityValues);
+          await tx
+            .insert(entityAddresses)
+            .values(getEntityAddressValues(entityId, address));
+        });
+      }
+    } else {
+      await db.insert(entities).values(entityValues);
+    }
+  } catch (error) {
+    if (isUniqueAddressViolation(error)) {
+      throw new CoreEntityValidationError(
+        "duplicate_address",
+        "That address is already assigned to an entity",
+      );
+    }
+
+    throw error;
   }
 
   await writeAuditEvent({
     action: "create",
     actorWalletAddress: session.address,
     metadata: { type: input.type },
-    subjectId: entity.id,
+    subjectId: entityId,
     subjectTable: "entities",
     summary: `Created ${input.type} record`,
   });
@@ -405,6 +458,21 @@ export async function deleteEntityForAccess(
   const id = assertUuid(getString(formData, "id"), "Entity");
   const entity = await assertArchivedEntity(id, access);
 
+  if (entity.type === "client") {
+    const [dependentRaid] = await getDb()
+      .select({ id: raids.id })
+      .from(raids)
+      .where(eq(raids.clientEntityId, id))
+      .limit(1);
+
+    if (dependentRaid) {
+      throw new CoreEntityValidationError(
+        "client_has_raids",
+        "Client cannot be permanently deleted while raids reference it",
+      );
+    }
+  }
+
   await getDb().delete(entities).where(eq(entities.id, id));
 
   await writeAuditEvent({
@@ -430,20 +498,31 @@ export async function addAddressForAccess(
   const address = parseOptionalAddress(formData);
 
   if (!address) {
-    throw new Error("Address is required");
+    throw new CoreEntityValidationError(
+      "missing_address",
+      "Address is required",
+    );
   }
 
   await assertUniqueAddress(address);
 
-  const [createdAddress] = await getDb()
-    .insert(entityAddresses)
-    .values({
-      address: address.address,
-      chainId: address.chainId,
-      entityId,
-      labelEncrypted: getEncryptedNullable(address.label),
-    })
-    .returning();
+  let createdAddress: typeof entityAddresses.$inferSelect;
+
+  try {
+    [createdAddress] = await getDb()
+      .insert(entityAddresses)
+      .values(getEntityAddressValues(entityId, address))
+      .returning();
+  } catch (error) {
+    if (isUniqueAddressViolation(error)) {
+      throw new CoreEntityValidationError(
+        "duplicate_address",
+        "That address is already assigned to an entity",
+      );
+    }
+
+    throw error;
+  }
 
   await writeAuditEvent({
     action: "update",

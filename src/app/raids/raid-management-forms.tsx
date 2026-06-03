@@ -99,7 +99,7 @@ export function RaidEntityCreateForm({
   );
 
   return (
-    <form action={action} className="mt-6 grid gap-4" noValidate>
+    <form action={action} className="mt-6 grid gap-4">
       <input type="hidden" name="type" value={type} />
       <div className="grid gap-4 md:grid-cols-2">
         <TextInput label="Name" name="name" required />

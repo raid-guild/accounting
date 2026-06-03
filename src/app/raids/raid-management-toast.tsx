@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/ui/toast";
 
 type RaidToastError =
+  | "client-has-raids"
   | "duplicate-address"
   | "invalid-address"
   | "invalid-chain"
@@ -29,6 +30,10 @@ function getSubjectLabel(subject: RaidToastSubject) {
 }
 
 function getErrorMessage(error: RaidToastError) {
+  if (error === "client-has-raids") {
+    return "Client cannot be permanently deleted while raids reference it.";
+  }
+
   if (error === "duplicate-address") {
     return "That address is already assigned to an entity.";
   }
@@ -38,7 +43,7 @@ function getErrorMessage(error: RaidToastError) {
   }
 
   if (error === "invalid-chain") {
-    return "Chain ID must be a whole number.";
+    return "Chain ID must be a positive whole number.";
   }
 
   return "Address is required.";
@@ -62,7 +67,12 @@ export function RaidManagementToast({
   useEffect(() => {
     const toastKey = `${added ?? ""}:${deleted ?? ""}:${error ?? ""}:${flow ?? ""}`;
 
-    if (toastKey === ":::" || shownToastKey.current === toastKey) {
+    if (!added && !deleted && !error) {
+      shownToastKey.current = null;
+      return;
+    }
+
+    if (shownToastKey.current === toastKey) {
       return;
     }
 

@@ -42,6 +42,7 @@ import { RaidManagementToast } from "@/app/raids/raid-management-toast";
 type FormAction = (formData: FormData) => Promise<void>;
 type RaidFlow = "client" | "raid" | "subcontractor";
 type RaidToastError =
+  | "client-has-raids"
   | "duplicate-address"
   | "invalid-address"
   | "invalid-chain"
@@ -461,6 +462,12 @@ function RaidCard({
   clients: CoreEntityView[];
   raid: RaidView;
 }) {
+  const clientOptions = clients.some(
+    (client) => client.id === raid.clientEntityId,
+  )
+    ? clients
+    : [...clients, { ...raid.client, name: `${raid.client.name} (archived)` }];
+
   return (
     <article className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -500,7 +507,7 @@ function RaidCard({
                 className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                 required
               >
-                {clients.map((client) => (
+                {clientOptions.map((client) => (
                   <option key={client.id} value={client.id}>
                     {client.name}
                   </option>
@@ -615,7 +622,8 @@ function parseToastError(
     error === "duplicate-address" ||
     error === "invalid-address" ||
     error === "invalid-chain" ||
-    error === "missing-address"
+    error === "missing-address" ||
+    error === "client-has-raids"
   ) {
     return error;
   }
