@@ -140,7 +140,9 @@ function AddressList({ provider }: { provider: CoreEntityView }) {
                 <p className="font-mono">{formatAddress(address.address)}</p>
                 <p className="text-xs text-muted-foreground">
                   {address.label ? `${address.label} · ` : ""}
-                  {address.chainId ? `Chain ${address.chainId}` : "Any chain"}
+                  {address.chainId !== null
+                    ? `Chain ${address.chainId}`
+                    : "Any chain"}
                 </p>
               </div>
               <form action={removeProviderAddress}>
