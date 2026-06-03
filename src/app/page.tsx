@@ -28,6 +28,17 @@ async function getSessionState() {
 
 type SessionState = Awaited<ReturnType<typeof getSessionState>>;
 
+function AppNavLink({ children, href }: { children: string; href: string }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex h-8 shrink-0 items-center justify-center rounded-md px-3 text-sm font-medium text-scroll-200 transition-all hover:bg-scroll-100/10 hover:text-scroll-100"
+    >
+      {children}
+    </Link>
+  );
+}
+
 function PublicHome({ session }: { session: SessionState }) {
   return (
     <main className="min-h-screen bg-moloch-800 text-scroll-100">
@@ -94,39 +105,48 @@ function MemberHome({
   return (
     <main className="min-h-screen bg-background text-foreground">
       <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
-        <div className="container-custom flex h-16 items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
+        <div className="container-custom grid min-h-18 gap-3 py-3 lg:grid-cols-[auto_1fr] lg:items-center">
+          <div className="flex min-w-0 items-center gap-3">
             <Image
               src="/raidguild-full-logo.svg"
               alt="RaidGuild"
               width={120}
               height={32}
-              className="h-7 w-auto"
+              className="h-8 w-auto shrink-0"
             />
-            <div>
+            <div className="min-w-0">
               <p className="type-label-sm text-scroll-200">RaidGuild</p>
               <h1 className="text-base font-semibold leading-none">
                 Accounting
               </h1>
             </div>
           </div>
-          <WalletConnect initialSession={session} />
-          {session.permissions?.canAdmin ? (
-            <div className="flex items-center gap-2">
-              <Link
-                href="/admin/quarters"
-                className="inline-flex h-7 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium text-foreground transition-all hover:bg-muted"
+
+          <div className="flex min-w-0 flex-wrap items-center gap-3 lg:justify-end">
+            {session.permissions?.canWriteRaidAccounting ||
+            session.permissions?.canAdmin ? (
+              <nav
+                className="flex min-w-0 flex-wrap items-center gap-1 rounded-lg border border-scroll-300/20 bg-moloch-900/35 p-1 shadow-inner shadow-black/10"
+                aria-label="Accounting sections"
               >
-                Quarters
-              </Link>
-              <Link
-                href="/admin/treasury-accounts"
-                className="inline-flex h-7 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-[0.8rem] font-medium text-foreground transition-all hover:bg-muted"
-              >
-                Treasury Accounts
-              </Link>
-            </div>
-          ) : null}
+                {session.permissions.canWriteRaidAccounting ? (
+                  <AppNavLink href="/raids">Raids</AppNavLink>
+                ) : null}
+                {session.permissions.canAdmin ? (
+                  <AppNavLink href="/admin/providers">Providers</AppNavLink>
+                ) : null}
+                {session.permissions.canAdmin ? (
+                  <>
+                    <AppNavLink href="/admin/quarters">Quarters</AppNavLink>
+                    <AppNavLink href="/admin/treasury-accounts">
+                      Accounts
+                    </AppNavLink>
+                  </>
+                ) : null}
+              </nav>
+            ) : null}
+            <WalletConnect initialSession={session} />
+          </div>
         </div>
       </header>
 

@@ -278,8 +278,8 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
 
   if (session.authenticated && session.address) {
     return (
-      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-        <div className="flex min-w-0 items-center rounded-md border border-scroll-300/30 bg-moloch-900/30 px-3 py-1.5 text-sm text-scroll-100">
+      <div className="flex min-w-0 items-center gap-1 rounded-lg border border-scroll-300/20 bg-moloch-900/35 p-1 shadow-inner shadow-black/10">
+        <div className="flex h-8 min-w-0 items-center px-2.5 text-sm text-scroll-100">
           <span className="font-medium">{formatAddress(session.address)}</span>
           {session.permissions?.roles.length ? (
             <span className="ml-2 inline-block truncate text-scroll-300">
@@ -290,7 +290,7 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
         <Button
           size="icon-sm"
           variant="ghost"
-          className="border border-scroll-300/30 bg-scroll-100/10 text-scroll-100 hover:bg-scroll-100/20 hover:text-scroll-100"
+          className="text-scroll-200 hover:bg-scroll-100/10 hover:text-scroll-100"
           onClick={signOut}
           aria-label="Sign out"
         >
