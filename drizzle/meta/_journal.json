@@ -43,6 +43,13 @@
       "when": 1780518492589,
       "tag": "0005_public_diamondback",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780524457784,
+      "tag": "0006_shocking_franklin_storm",
+      "breakpoints": true
     }
   ]
 }

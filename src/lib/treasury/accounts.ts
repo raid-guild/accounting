@@ -155,3 +155,28 @@ export async function listActiveGnosisBalanceAccounts(): Promise<
     type: account.type as EditableTreasuryAccountType,
   }));
 }
+
+export async function listActiveGnosisSideVaultAccounts(): Promise<
+  TreasuryBalanceAccountSource[]
+> {
+  const db = getDb();
+  const accounts = await db
+    .select()
+    .from(treasuryAccounts)
+    .where(
+      and(
+        isNull(treasuryAccounts.archivedAt),
+        eq(treasuryAccounts.chainId, gnosis.id),
+        eq(treasuryAccounts.type, "side_vault"),
+      ),
+    )
+    .orderBy(asc(treasuryAccounts.createdAt));
+
+  return accounts.map((account) => ({
+    id: account.id,
+    name: decryptField(account.nameEncrypted as EncryptedField),
+    address: getAddress(account.address),
+    chainId: account.chainId,
+    type: "side_vault",
+  }));
+}
