@@ -268,9 +268,12 @@ export function TreasuryDashboard({
                       {account.name}
                     </p>
                     {account.address ? (
-                      <code className="mt-2 block truncate text-xs font-medium text-muted-foreground">
-                        {formatAddress(account.address)}
-                      </code>
+                      <div className="mt-2 inline-flex max-w-full items-center gap-2">
+                        <code className="min-w-0 truncate text-xs font-medium text-muted-foreground">
+                          {formatAddress(account.address)}
+                        </code>
+                        <CopyAddressButton address={account.address} />
+                      </div>
                     ) : (
                       <p className="mt-2 text-xs font-medium text-muted-foreground">
                         Address not configured
@@ -278,18 +281,13 @@ export function TreasuryDashboard({
                     )}
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-3">
-                    <p
-                      className={`text-right text-sm font-semibold transition-opacity duration-500 ${
-                        isPopulating ? "opacity-40" : "opacity-100"
-                      }`}
-                    >
-                      {formatCurrency(account.totalUsd)}
-                    </p>
-                    {account.address ? (
-                      <CopyAddressButton address={account.address} />
-                    ) : null}
-                  </div>
+                  <p
+                    className={`shrink-0 text-right text-sm font-semibold transition-opacity duration-500 ${
+                      isPopulating ? "opacity-40" : "opacity-100"
+                    }`}
+                  >
+                    {formatCurrency(account.totalUsd)}
+                  </p>
                 </div>
               </div>
             ))}

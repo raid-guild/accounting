@@ -64,6 +64,11 @@ export const treasurySnapshotStatusEnum = pgEnum("treasury_snapshot_status", [
   "failed",
 ]);
 
+export const treasuryTransferDirectionEnum = pgEnum(
+  "treasury_transfer_direction",
+  ["inflow", "outflow", "internal"],
+);
+
 export const auditActionEnum = pgEnum("audit_action", [
   "create",
   "update",
@@ -213,6 +218,96 @@ export const treasuryBalanceAssets = pgTable(
     uniqueIndex("treasury_balance_assets_snapshot_symbol_unique").on(
       table.snapshotId,
       table.symbol,
+    ),
+  ],
+);
+
+export const treasuryTransactions = pgTable(
+  "treasury_transactions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    treasuryAccountId: uuid("treasury_account_id").references(
+      () => treasuryAccounts.id,
+      { onDelete: "set null" },
+    ),
+    source: ledgerSourceEnum("source").notNull(),
+    accountAddress: text("account_address").notNull(),
+    chainId: integer("chain_id").notNull(),
+    txHash: text("tx_hash").notNull(),
+    safeTransactionHash: text("safe_transaction_hash"),
+    transactionType: text("transaction_type").notNull(),
+    executedAt: timestamp("executed_at", { withTimezone: true }).notNull(),
+    blockNumber: integer("block_number"),
+    rawMetadata: jsonb("raw_metadata"),
+    importedAt: timestamp("imported_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("treasury_transactions_chain_account_tx_unique").on(
+      table.chainId,
+      sql`lower(${table.accountAddress})`,
+      sql`lower(${table.txHash})`,
+    ),
+    index("treasury_transactions_tx_hash_idx").on(table.txHash),
+    index("treasury_transactions_account_executed_idx").on(
+      table.chainId,
+      table.accountAddress,
+      table.executedAt.desc(),
+    ),
+    index("treasury_transactions_treasury_account_id_idx").on(
+      table.treasuryAccountId,
+    ),
+  ],
+);
+
+export const treasuryTransactionTransfers = pgTable(
+  "treasury_transaction_transfers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    treasuryTransactionId: uuid("treasury_transaction_id")
+      .notNull()
+      .references(() => treasuryTransactions.id, { onDelete: "cascade" }),
+    treasuryAccountId: uuid("treasury_account_id").references(
+      () => treasuryAccounts.id,
+      { onDelete: "set null" },
+    ),
+    transferId: text("transfer_id").notNull(),
+    direction: treasuryTransferDirectionEnum("direction").notNull(),
+    transferType: text("transfer_type").notNull(),
+    accountAddress: text("account_address").notNull(),
+    chainId: integer("chain_id").notNull(),
+    txHash: text("tx_hash").notNull(),
+    executedAt: timestamp("executed_at", { withTimezone: true }).notNull(),
+    fromAddress: text("from_address").notNull(),
+    toAddress: text("to_address").notNull(),
+    tokenAddress: text("token_address"),
+    assetSymbol: text("asset_symbol").notNull(),
+    assetName: text("asset_name").notNull(),
+    decimals: integer("decimals").notNull(),
+    rawAmount: numeric("raw_amount", { precision: 78, scale: 0 }).notNull(),
+    amount: numeric("amount", { precision: 36, scale: 18 }).notNull(),
+    usdPrice: numeric("usd_price", { precision: 18, scale: 8 }),
+    usdAmount: numeric("usd_amount", { precision: 18, scale: 2 }),
+    rawMetadata: jsonb("raw_metadata"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("treasury_transaction_transfers_chain_transfer_unique").on(
+      table.chainId,
+      sql`lower(${table.accountAddress})`,
+      table.transferId,
+    ),
+    index("treasury_transaction_transfers_transaction_id_idx").on(
+      table.treasuryTransactionId,
+    ),
+    index("treasury_transaction_transfers_treasury_account_id_idx").on(
+      table.treasuryAccountId,
+    ),
+    index("treasury_transaction_transfers_tx_hash_idx").on(table.txHash),
+    index("treasury_transaction_transfers_executed_at_idx").on(
+      table.executedAt,
     ),
   ],
 );
