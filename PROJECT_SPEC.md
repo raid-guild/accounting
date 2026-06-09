@@ -459,6 +459,19 @@ Membership activity should also be available as its own report/export:
 - Asset and USD value.
 - Date/quarter/year.
 
+Future published quarter reports should support a lightweight analysis assistant:
+
+- Members can open a chat box on a published quarter report page and ask analysis questions or request visual summaries of that quarter's report data.
+- Example prompts:
+  - "What were our top 5 raids?"
+  - "Please chart the balance for the quarter."
+  - "Please show a pie chart of all clients by revenue."
+- The assistant should answer analysis questions inline and, when useful, update the page UI by adding or replacing chart widgets inside the published quarter report view.
+- Chart generation should be scoped to already-published, member-visible quarter data.
+- The assistant should not expose draft data, unpublished classifications, audit-only metadata, decrypted private notes, or raw sensitive records.
+- Supported responses should start with concise text answers and simple tables, plus line/bar/pie charts for visual prompts, backed by deterministic report queries rather than arbitrary database access.
+- Generated answers and chart widgets should show enough provenance for members to understand the underlying report slice, such as quarter, metric, grouping, and last published date.
+
 ## 11. Security And Privacy
 
 The repo is public.
@@ -610,6 +623,9 @@ Each step should be its own PR.
 
 23. Publish/export polish
     - Member-facing published quarter view, export buttons, read-only locked state, final UI/security pass.
+
+24. Published report analysis assistant
+    - Add a member-facing chat box to published quarter reports that can answer scoped analysis questions and create chart widgets from published report data, such as top raids, quarter balance charts, or client revenue pie charts.
 
 ## 14. Open Questions
 

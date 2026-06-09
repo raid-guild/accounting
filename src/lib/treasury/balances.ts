@@ -21,6 +21,7 @@ import {
   listActiveGnosisBalanceAccounts,
   type TreasuryBalanceAccountSource,
 } from "@/lib/treasury/accounts";
+import { GNOSIS_TREASURY_ASSETS } from "@/lib/treasury/assets";
 import type {
   TreasuryAccountBalance,
   TreasuryAssetBalance,
@@ -34,42 +35,7 @@ const MULTI_ACCOUNT_SYNC_KEY = `${gnosis.id}:treasury-accounts`;
 
 const inProgressSyncs = new Map<string, Promise<TreasuryBalanceSnapshot>>();
 
-const TRACKED_TREASURY_ASSETS = [
-  {
-    symbol: "USDC",
-    name: "USD Coin",
-    decimals: 6,
-    tokenAddress: "0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83",
-    stableUsd: true,
-  },
-  {
-    symbol: "xDAI",
-    name: "Gnosis xDAI",
-    decimals: 18,
-    tokenAddress: null,
-    stableUsd: true,
-  },
-  {
-    symbol: "wxDAI",
-    name: "Wrapped xDAI",
-    decimals: 18,
-    tokenAddress: "0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d",
-    stableUsd: true,
-  },
-  {
-    symbol: "wETH",
-    name: "Wrapped Ether",
-    decimals: 18,
-    tokenAddress: "0x6A023CCd1ff6F2045C3309768eAd9E68F978f6e1",
-    stableUsd: false,
-  },
-] as const satisfies ReadonlyArray<{
-  symbol: TreasuryAssetSymbol;
-  name: string;
-  decimals: number;
-  tokenAddress: Address | null;
-  stableUsd: boolean;
-}>;
+const TRACKED_TREASURY_ASSETS = GNOSIS_TREASURY_ASSETS;
 
 type BalanceAccountSource = {
   id: string;

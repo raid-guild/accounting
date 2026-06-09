@@ -1,9 +1,15 @@
 import "server-only";
 
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { getDb } from "@/db";
-import { auditEvents, quarterStatusEnum, quarters } from "@/db/schema";
+import {
+  auditEvents,
+  ledgerEntries,
+  quarterStatusEnum,
+  quarters,
+  treasuryTransactionTransfers,
+} from "@/db/schema";
 
 export type QuarterStatus = (typeof quarterStatusEnum.enumValues)[number];
 
@@ -30,7 +36,14 @@ export type QuarterHistoryEvent = {
   metadata: Record<string, unknown> | null;
 };
 
+export type QuarterClassificationSummary = {
+  classifiedTransfers: number;
+  totalTransfers: number;
+  unclassifiedTransfers: number;
+};
+
 export type QuarterReportingPeriod = QuarterSummary & {
+  classificationSummary: QuarterClassificationSummary;
   history: QuarterHistoryEvent[];
 };
 
@@ -84,6 +97,57 @@ function mapHistoryEvent(
     createdAt: event.createdAt.toISOString(),
     summary: event.summary,
     metadata: event.metadata as Record<string, unknown> | null,
+  };
+}
+
+function getQuarterBounds({
+  endsOn,
+  startsOn,
+}: {
+  endsOn: string;
+  startsOn: string;
+}) {
+  const startsAt = new Date(`${startsOn}T00:00:00.000Z`);
+  const endsAtExclusive = new Date(`${endsOn}T00:00:00.000Z`);
+  endsAtExclusive.setUTCDate(endsAtExclusive.getUTCDate() + 1);
+
+  return { endsAtExclusive, startsAt };
+}
+
+export async function getQuarterClassificationSummary({
+  endsOn,
+  startsOn,
+}: {
+  endsOn: string;
+  startsOn: string;
+}): Promise<QuarterClassificationSummary> {
+  const { endsAtExclusive, startsAt } = getQuarterBounds({ endsOn, startsOn });
+  const [summary] = await getDb()
+    .select({
+      classifiedTransfers: count(ledgerEntries.id),
+      totalTransfers: count(treasuryTransactionTransfers.id),
+    })
+    .from(treasuryTransactionTransfers)
+    .leftJoin(
+      ledgerEntries,
+      eq(
+        ledgerEntries.treasuryTransactionTransferId,
+        treasuryTransactionTransfers.id,
+      ),
+    )
+    .where(
+      and(
+        sql`${treasuryTransactionTransfers.executedAt} >= ${startsAt}`,
+        sql`${treasuryTransactionTransfers.executedAt} < ${endsAtExclusive}`,
+      ),
+    );
+  const totalTransfers = summary?.totalTransfers ?? 0;
+  const classifiedTransfers = summary?.classifiedTransfers ?? 0;
+
+  return {
+    classifiedTransfers,
+    totalTransfers,
+    unclassifiedTransfers: totalTransfers - classifiedTransfers,
   };
 }
 
@@ -148,8 +212,18 @@ export async function listQuarterReportingPeriods(): Promise<
     historyByQuarter.set(event.quarterId, history);
   }
 
-  return quarterRows.map((quarter) => ({
+  const summaries = await Promise.all(
+    quarterRows.map((quarter) =>
+      getQuarterClassificationSummary({
+        endsOn: quarter.endsOn,
+        startsOn: quarter.startsOn,
+      }),
+    ),
+  );
+
+  return quarterRows.map((quarter, index) => ({
     ...quarter,
+    classificationSummary: summaries[index],
     history: historyByQuarter.get(quarter.id) ?? [],
   }));
 }

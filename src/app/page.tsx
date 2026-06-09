@@ -52,6 +52,7 @@ function PublicHome({ session }: { session: SessionState }) {
               height={110}
               priority
               className="h-auto w-64 max-w-full"
+              style={{ height: "auto" }}
             />
             <p className="mt-10 type-label text-scroll-300">
               Accounting Dashboard
@@ -113,6 +114,7 @@ function MemberHome({
               width={120}
               height={32}
               className="h-8 w-auto shrink-0"
+              style={{ width: "auto" }}
             />
             <div className="min-w-0">
               <p className="type-label-sm text-scroll-200">RaidGuild</p>

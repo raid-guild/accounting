@@ -8,6 +8,7 @@ import { quarters } from "@/db/schema";
 import { writeAuditEvent } from "@/lib/audit";
 import { getAuthSession } from "@/lib/auth/session";
 import {
+  getQuarterClassificationSummary,
   getQ1_2026Definition,
   type QuarterStatus,
 } from "@/lib/quarters";
@@ -153,6 +154,19 @@ export async function updateQuarterStatus(formData: FormData) {
     reason,
     targetStatus,
   });
+
+  if (targetStatus === "published") {
+    const summary = await getQuarterClassificationSummary({
+      endsOn: quarter.endsOn,
+      startsOn: quarter.startsOn,
+    });
+
+    if (summary.unclassifiedTransfers > 0) {
+      throw new Error(
+        "Classify all imported transactions before publishing this quarter",
+      );
+    }
+  }
 
   const now = new Date();
   const updates = {

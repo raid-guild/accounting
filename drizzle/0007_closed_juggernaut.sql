@@ -1,0 +1,3 @@
+ALTER TABLE "ledger_entries" ADD COLUMN "treasury_transaction_transfer_id" uuid;--> statement-breakpoint
+ALTER TABLE "ledger_entries" ADD CONSTRAINT "ledger_entries_treasury_transaction_transfer_id_treasury_transaction_transfers_id_fk" FOREIGN KEY ("treasury_transaction_transfer_id") REFERENCES "public"."treasury_transaction_transfers"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "ledger_entries_treasury_transfer_unique" ON "ledger_entries" USING btree ("treasury_transaction_transfer_id");
