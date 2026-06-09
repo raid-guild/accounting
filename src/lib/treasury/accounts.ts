@@ -180,3 +180,27 @@ export async function listActiveGnosisSideVaultAccounts(): Promise<
     type: "side_vault",
   }));
 }
+
+export async function listActiveOperatorAccounts(): Promise<
+  TreasuryBalanceAccountSource[]
+> {
+  const db = getDb();
+  const accounts = await db
+    .select()
+    .from(treasuryAccounts)
+    .where(
+      and(
+        isNull(treasuryAccounts.archivedAt),
+        eq(treasuryAccounts.type, "operator"),
+      ),
+    )
+    .orderBy(asc(treasuryAccounts.chainId), asc(treasuryAccounts.createdAt));
+
+  return accounts.map((account) => ({
+    id: account.id,
+    name: decryptField(account.nameEncrypted as EncryptedField),
+    address: getAddress(account.address),
+    chainId: account.chainId,
+    type: "operator",
+  }));
+}

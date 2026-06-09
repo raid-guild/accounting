@@ -45,6 +45,7 @@ function PublicHome({ session }: { session: SessionState }) {
       <section className="container-custom flex min-h-screen items-center py-10">
         <div className="grid w-full items-center gap-10 lg:grid-cols-[1fr_0.8fr]">
           <div className="max-w-3xl">
+            {/* Keep the complementary dimension auto when className controls logo width. */}
             <Image
               src="/raidguild-full-logo.svg"
               alt="RaidGuild"
@@ -52,6 +53,7 @@ function PublicHome({ session }: { session: SessionState }) {
               height={110}
               priority
               className="h-auto w-64 max-w-full"
+              style={{ height: "auto" }}
             />
             <p className="mt-10 type-label text-scroll-300">
               Accounting Dashboard
@@ -107,12 +109,14 @@ function MemberHome({
       <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
         <div className="container-custom grid min-h-18 gap-3 py-3 lg:grid-cols-[auto_1fr] lg:items-center">
           <div className="flex min-w-0 items-center gap-3">
+            {/* Keep the complementary dimension auto when className controls logo height. */}
             <Image
               src="/raidguild-full-logo.svg"
               alt="RaidGuild"
               width={120}
               height={32}
               className="h-8 w-auto shrink-0"
+              style={{ width: "auto" }}
             />
             <div className="min-w-0">
               <p className="type-label-sm text-scroll-200">RaidGuild</p>

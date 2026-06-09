@@ -5,6 +5,7 @@ import {
   LockKeyhole,
   RotateCcw,
   Save,
+  Tags,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -150,7 +151,16 @@ function QuarterCard({ quarter }: { quarter: QuarterReportingPeriod }) {
         <StatusBadge status={quarter.status} />
       </div>
 
-      <dl className="mt-6 grid gap-4 border-t border-border pt-4 sm:grid-cols-3">
+      <dl className="mt-6 grid gap-4 border-t border-border pt-4 sm:grid-cols-4">
+        <div>
+          <dt className="type-label-sm text-muted-foreground">
+            Transactions
+          </dt>
+          <dd className="mt-2 text-sm font-medium">
+            {quarter.classificationSummary.classifiedTransfers} /{" "}
+            {quarter.classificationSummary.totalTransfers} classified
+          </dd>
+        </div>
         <div>
           <dt className="type-label-sm text-muted-foreground">Published</dt>
           <dd className="mt-2 text-sm font-medium">
@@ -172,6 +182,13 @@ function QuarterCard({ quarter }: { quarter: QuarterReportingPeriod }) {
       </dl>
 
       <div className="mt-6 flex flex-wrap gap-2">
+        <Link
+          href={`/admin/quarters/${quarter.id}/transactions`}
+          className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
+        >
+          <Tags data-icon="inline-start" />
+          Review Transactions
+        </Link>
         <StatusAction
           quarter={quarter}
           status="draft"
@@ -195,7 +212,10 @@ function QuarterCard({ quarter }: { quarter: QuarterReportingPeriod }) {
           quarter={quarter}
           status="published"
           variant="default"
-          disabled={quarter.status === "published"}
+          disabled={
+            quarter.status === "published" ||
+            quarter.classificationSummary.unclassifiedTransfers > 0
+          }
         >
           <LockKeyhole data-icon="inline-start" />
           Publish Quarter

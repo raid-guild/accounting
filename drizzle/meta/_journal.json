@@ -50,6 +50,20 @@
       "when": 1780524457784,
       "tag": "0006_shocking_franklin_storm",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781027843741,
+      "tag": "0007_closed_juggernaut",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781031608739,
+      "tag": "0008_keen_george_stacy",
+      "breakpoints": true
     }
   ]
 }

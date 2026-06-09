@@ -36,6 +36,7 @@ export const entityTypeEnum = pgEnum("entity_type", [
 export const ledgerSourceEnum = pgEnum("ledger_source", [
   "main_safe",
   "side_vault",
+  "operator",
   "manual",
   "bank_csv",
   "dao_proposal",
@@ -389,6 +390,11 @@ export const ledgerEntries = pgTable(
       () => treasuryAccounts.id,
       { onDelete: "set null" },
     ),
+    treasuryTransactionTransferId: uuid(
+      "treasury_transaction_transfer_id",
+    ).references(() => treasuryTransactionTransfers.id, {
+      onDelete: "set null",
+    }),
     assetSymbol: text("asset_symbol").notNull(),
     assetAmount: numeric("asset_amount", {
       precision: 36,
@@ -410,6 +416,9 @@ export const ledgerEntries = pgTable(
     index("ledger_entries_quarter_id_idx").on(table.quarterId),
     index("ledger_entries_category_idx").on(table.category),
     index("ledger_entries_tx_hash_idx").on(table.txHash),
+    uniqueIndex("ledger_entries_treasury_transfer_unique").on(
+      table.treasuryTransactionTransferId,
+    ),
     index("ledger_entries_raid_id_idx").on(table.raidId),
     index("ledger_entries_occurred_at_idx").on(table.occurredAt),
   ],
