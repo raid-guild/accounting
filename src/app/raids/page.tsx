@@ -1,6 +1,7 @@
 import {
   Archive,
   ArrowLeft,
+  BarChart3,
   BriefcaseBusiness,
   CircleDollarSign,
   Plus,
@@ -22,6 +23,12 @@ import {
   type RaidView,
 } from "@/lib/core-entities";
 import {
+  formatAccountingCurrency,
+  getRaidAccountingOverview,
+  type ClientRevenueSummary,
+  type RaidAccountingSummary,
+} from "@/lib/raid-accounting";
+import {
   archiveRaid,
   archiveRaidEntity,
   createRaid,
@@ -41,6 +48,7 @@ import { RaidManagementToast } from "@/app/raids/raid-management-toast";
 
 type FormAction = (formData: FormData) => Promise<void>;
 type RaidFlow = "client" | "raid" | "subcontractor";
+type TeamPayoutStatus = RaidAccountingSummary["status"];
 type RaidToastError =
   | "client-has-raids"
   | "duplicate-address"
@@ -59,6 +67,40 @@ function getEntityLabel(type: RaidRelatedEntityType) {
 
 function getFlowHref(flow: RaidFlow) {
   return `/raids?flow=${flow}`;
+}
+
+const TEAM_PAYOUT_STATUS_COPY: Record<
+  TeamPayoutStatus,
+  { label: string; tone: string }
+> = {
+  fully_paid: {
+    label: "Fully Paid",
+    tone: "border-emerald-600/25 bg-emerald-600/10 text-emerald-800",
+  },
+  no_revenue: {
+    label: "No Revenue",
+    tone: "border-border bg-muted text-muted-foreground",
+  },
+  overpaid: {
+    label: "Overpaid",
+    tone: "border-primary/25 bg-primary/10 text-primary",
+  },
+  payouts_pending: {
+    label: "Payouts Pending",
+    tone: "border-amber-500/30 bg-amber-500/10 text-amber-800",
+  },
+};
+
+function TeamPayoutStatusBadge({ status }: { status: TeamPayoutStatus }) {
+  const copy = TEAM_PAYOUT_STATUS_COPY[status];
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${copy.tone}`}
+    >
+      {copy.label}
+    </span>
+  );
 }
 
 function TextInput({
@@ -168,6 +210,165 @@ function FlowLauncher() {
         icon={<CircleDollarSign className="size-5" aria-hidden="true" />}
         title="Add Subcontractor"
       />
+    </section>
+  );
+}
+
+function AccountingSectionHeader({
+  countLabel,
+  title,
+}: {
+  countLabel: string;
+  title: string;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+          <BarChart3 className="size-5" aria-hidden="true" />
+        </div>
+        <h2 className="text-lg font-semibold">{title}</h2>
+      </div>
+      <span className="type-label-sm text-muted-foreground">{countLabel}</span>
+    </div>
+  );
+}
+
+function TopClientsTable({ clients }: { clients: ClientRevenueSummary[] }) {
+  return (
+    <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+      <AccountingSectionHeader
+        countLabel={`${clients.length} clients`}
+        title="Top Clients By Revenue"
+      />
+      {clients.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="border-b border-border text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="px-3 py-3 font-medium">Client</th>
+                <th className="px-3 py-3 text-right font-medium">Revenue</th>
+                <th className="px-3 py-3 text-right font-medium">Raids</th>
+                <th className="px-3 py-3 text-right font-medium">
+                  Expected Spoils
+                </th>
+                <th className="px-3 py-3 text-right font-medium">
+                  Team Pool
+                </th>
+                <th className="px-3 py-3 text-right font-medium">Payouts</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {clients.map((client) => (
+                <tr key={client.clientId}>
+                  <td className="px-3 py-3 font-medium">
+                    {client.clientName}
+                  </td>
+                  <td className="px-3 py-3 text-right font-medium">
+                    {formatAccountingCurrency(client.revenueCents)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    {client.raidCount}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    {formatAccountingCurrency(client.expectedSpoilsCents)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    {formatAccountingCurrency(client.expectedTeamPoolCents)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    {formatAccountingCurrency(client.subcontractorPayoutCents)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border bg-background p-6 text-sm text-muted-foreground">
+          No client revenue yet.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RaidAccountingTable({
+  summaries,
+}: {
+  summaries: RaidAccountingSummary[];
+}) {
+  return (
+    <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+      <AccountingSectionHeader
+        countLabel={`${summaries.length} raids`}
+        title="Raid Accounting"
+      />
+      {summaries.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] text-left text-sm">
+            <thead className="border-b border-border text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="px-3 py-3 font-medium">Client</th>
+                <th className="px-3 py-3 font-medium">Raid</th>
+                <th className="px-3 py-3 text-right font-medium">Revenue</th>
+                <th className="px-3 py-3 text-right font-medium">
+                  Expected Spoils
+                </th>
+                <th className="px-3 py-3 text-right font-medium">
+                  Team Pool
+                </th>
+                <th className="px-3 py-3 text-right font-medium">Payouts</th>
+                <th className="px-3 py-3 text-right font-medium">
+                  Remaining
+                </th>
+                <th className="px-3 py-3 font-medium">Team Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {summaries.map((summary) => (
+                <tr key={summary.raidId}>
+                  <td className="px-3 py-3 font-medium">
+                    {summary.clientName}
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{summary.raidName}</span>
+                      {summary.isShipped ? (
+                        <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+                          Shipped
+                        </span>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 text-right font-medium">
+                    {formatAccountingCurrency(summary.revenueCents)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    {formatAccountingCurrency(summary.expectedSpoilsCents)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    {formatAccountingCurrency(summary.expectedTeamPoolCents)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    {formatAccountingCurrency(summary.subcontractorPayoutCents)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    {formatAccountingCurrency(summary.remainingPoolCents)}
+                  </td>
+                  <td className="px-3 py-3">
+                    <TeamPayoutStatusBadge status={summary.status} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border bg-background p-6 text-sm text-muted-foreground">
+          No raid accounting activity yet.
+        </div>
+      )}
     </section>
   );
 }
@@ -692,7 +893,8 @@ export default async function RaidsPage({
     );
   }
 
-  const [entities, raids] = await Promise.all([
+  const [accountingOverview, entities, raids] = await Promise.all([
+    getRaidAccountingOverview(),
     listEntitiesByTypes(["client", "subcontractor"]),
     listRaids(),
   ]);
@@ -740,6 +942,8 @@ export default async function RaidsPage({
       <section className="container-custom grid gap-8 py-8 md:py-12">
         <FlowLauncher />
         <SelectedFlow activeClients={activeClients} flow={flow} />
+        <TopClientsTable clients={accountingOverview.clients} />
+        <RaidAccountingTable summaries={accountingOverview.raids} />
         <RaidList
           clients={activeClients}
           emptyLabel="No active raids yet."
