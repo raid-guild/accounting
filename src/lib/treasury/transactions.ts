@@ -611,6 +611,19 @@ async function findBlockAtOrAfterTimestamp({
   timestamp: bigint;
 }) {
   const latestBlock = await client.getBlock();
+
+  if (latestBlock.timestamp === undefined) {
+    throw new Error(
+      `Latest block timestamp is unavailable for chain ${client.chain.id}`,
+    );
+  }
+
+  if (timestamp > latestBlock.timestamp) {
+    throw new Error(
+      `Target timestamp ${timestamp} is after the latest block timestamp ${latestBlock.timestamp}`,
+    );
+  }
+
   let low = BigInt(0);
   let high = latestBlock.number ?? BigInt(0);
 

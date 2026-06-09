@@ -472,6 +472,28 @@ Future published quarter reports should support a lightweight analysis assistant
 - Supported responses should start with concise text answers and simple tables, plus line/bar/pie charts for visual prompts, backed by deterministic report queries rather than arbitrary database access.
 - Generated answers and chart widgets should show enough provenance for members to understand the underlying report slice, such as quarter, metric, grouping, and last published date.
 
+Security and implementation constraints:
+
+- A `ReportQueryValidator` should enforce an allowlist of deterministic report queries, validate query parameters against a schema, and scope every query to the published quarter report view.
+- The assistant should only read published-only datasets and member-visible report slices.
+- A `PromptGuard` layer should mitigate prompt injection with instruction sanitization, a strict system prompt, and tokenized input checks before any query or chart plan is accepted.
+- The chat API should enforce rate limits and per-user throttling.
+- A `ChartRendererSandbox` should render generated widgets with DOM sanitization, CSP-compatible output, resource/time limits, and image-only outputs where practical.
+- Generated queries, answers, and widgets should be logged for auditability without storing decrypted private notes or raw sensitive records.
+- Every answer and chart widget should include provenance fields: quarter, metric, grouping, and last published date.
+
+Future published accounting data should also be available through a paid machine-access API:
+
+- Add an x402-compatible endpoint that lets external services request published accounting data for a configured price.
+- Requests must satisfy both access requirements:
+  - Payment is completed or verified through the x402 flow.
+  - The request is signed by an EVM wallet that currently qualifies as a RaidGuild member.
+- The endpoint should only return published, member-visible accounting data.
+- The endpoint should not expose draft data, reopened-but-unpublished changes, audit-only metadata, decrypted private notes, raw bank memo data, or admin-only records.
+- Supported response shapes should start with deterministic report slices, such as quarter summary, taxable revenue, client revenue, raid revenue, provider expenses, and full ledger rows that match the published export.
+- Responses should include provenance fields such as quarter, published timestamp, source transaction hash where available, and report/export version.
+- Pricing, accepted settlement asset/network, x402 facilitator/provider, replay protection, request expiry, and rate limits should be finalized during implementation.
+
 ## 11. Security And Privacy
 
 The repo is public.
@@ -627,6 +649,9 @@ Each step should be its own PR.
 24. Published report analysis assistant
     - Add a member-facing chat box to published quarter reports that can answer scoped analysis questions and create chart widgets from published report data, such as top raids, quarter balance charts, or client revenue pie charts.
 
+25. x402 published accounting data endpoint
+    - Add a paid machine-access endpoint for published accounting data that requires x402 payment plus an EVM signature from a current member address.
+
 ## 14. Open Questions
 
 - Exact DAOhaus/Moloch contracts and read methods for shares, joins, ragequits, and proposal data.
@@ -636,3 +661,4 @@ Each step should be its own PR.
 - Whether side-vaults are all Gnosis in V1 or some side-vault scanning needs other chains.
 - How much entity naming should be encrypted versus visible as normal app data.
 - Whether published quarter exports should include internal audit history or only source/verification fields.
+- x402 endpoint pricing, accepted settlement asset/network, facilitator/provider, request expiry, replay protection, and rate limits.

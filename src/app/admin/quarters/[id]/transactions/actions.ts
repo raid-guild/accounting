@@ -54,11 +54,20 @@ function getCategory(value: string): LedgerCategory {
 }
 
 function getUsdAmount(value: string) {
-  if (!value || !/^\d+(\.\d{1,2})?$/.test(value)) {
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value);
+
+  if (!match) {
     throw new Error("USD amount must be a positive dollar amount");
   }
 
-  return Number(value).toFixed(2);
+  const whole = match[1].replace(/^0+(?=\d)/, "");
+  const cents = (match[2] ?? "").padEnd(2, "0");
+
+  if (whole === "0" && cents === "00") {
+    throw new Error("USD amount must be greater than zero");
+  }
+
+  return `${whole}.${cents}`;
 }
 
 async function requireAdminSession() {
@@ -229,11 +238,6 @@ export async function classifyQuarterTransfer(formData: FormData) {
   await assertRaidIsAvailable(raidId);
 
   const source = await getLedgerSourceForTransfer(transfer);
-  const [existingEntry] = await getDb()
-    .select({ id: ledgerEntries.id })
-    .from(ledgerEntries)
-    .where(eq(ledgerEntries.treasuryTransactionTransferId, transfer.id))
-    .limit(1);
   const entryValues = {
     assetAmount: transfer.amount,
     assetSymbol: transfer.assetSymbol,
@@ -268,14 +272,13 @@ export async function classifyQuarterTransfer(formData: FormData) {
     verificationStatus: "verified",
   } satisfies typeof ledgerEntries.$inferInsert;
 
-  if (existingEntry) {
-    await getDb()
-      .update(ledgerEntries)
-      .set(entryValues)
-      .where(eq(ledgerEntries.id, existingEntry.id));
-  } else {
-    await getDb().insert(ledgerEntries).values(entryValues);
-  }
+  await getDb()
+    .insert(ledgerEntries)
+    .values(entryValues)
+    .onConflictDoUpdate({
+      set: entryValues,
+      target: ledgerEntries.treasuryTransactionTransferId,
+    });
 
   await writeAuditEvent({
     action: "classify",
@@ -296,9 +299,7 @@ export async function classifyQuarterTransfer(formData: FormData) {
     quarterId,
     subjectId: transfer.id,
     subjectTable: "treasury_transaction_transfers",
-    summary: existingEntry
-      ? "Updated transaction classification"
-      : "Classified transaction transfer",
+    summary: "Saved transaction classification",
   });
 
   revalidatePath("/admin/quarters");

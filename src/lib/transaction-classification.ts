@@ -262,7 +262,7 @@ export async function listClassificationOptions(): Promise<ClassificationOptions
 }
 
 export async function listTreasuryTransferClassifications({
-  limit = 50,
+  limit,
   quarter,
   status = "unclassified",
 }: {
@@ -289,29 +289,30 @@ export async function listTreasuryTransferClassifications({
       ? and(statusFilter, quarterFilter)
       : (statusFilter ?? quarterFilter);
 
+  const query = db
+    .select({
+      account: treasuryAccounts,
+      ledgerEntry: ledgerEntries,
+      transfer: treasuryTransactionTransfers,
+    })
+    .from(treasuryTransactionTransfers)
+    .leftJoin(
+      ledgerEntries,
+      eq(
+        ledgerEntries.treasuryTransactionTransferId,
+        treasuryTransactionTransfers.id,
+      ),
+    )
+    .leftJoin(
+      treasuryAccounts,
+      eq(treasuryAccounts.id, treasuryTransactionTransfers.treasuryAccountId),
+    )
+    .where(filters)
+    .orderBy(asc(treasuryTransactionTransfers.executedAt));
+
   const [labels, rows] = await Promise.all([
     getTreasuryAccountLabels(),
-    db
-      .select({
-        account: treasuryAccounts,
-        ledgerEntry: ledgerEntries,
-        transfer: treasuryTransactionTransfers,
-      })
-      .from(treasuryTransactionTransfers)
-      .leftJoin(
-        ledgerEntries,
-        eq(
-          ledgerEntries.treasuryTransactionTransferId,
-          treasuryTransactionTransfers.id,
-        ),
-      )
-      .leftJoin(
-        treasuryAccounts,
-        eq(treasuryAccounts.id, treasuryTransactionTransfers.treasuryAccountId),
-      )
-      .where(filters)
-      .orderBy(asc(treasuryTransactionTransfers.executedAt))
-      .limit(limit),
+    limit ? query.limit(limit) : query,
   ]);
 
   return rows.map((row) => mapTransferRow({ ...row, labels }));

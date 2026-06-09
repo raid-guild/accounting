@@ -19,9 +19,15 @@ export function UsdAmountField({
   async function fetchPrice() {
     setIsFetching(true);
     setMessage(null);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      controller.abort();
+    }, 10000);
 
     try {
-      const response = await fetch(`/api/treasury/transfers/${transferId}/price`);
+      const response = await fetch(`/api/treasury/transfers/${transferId}/price`, {
+        signal: controller.signal,
+      });
       const body = (await response.json()) as {
         error?: string;
         priceSource?: string;
@@ -40,12 +46,18 @@ export function UsdAmountField({
           : "Filled from 1:1 stablecoin pricing",
       );
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        setMessage("Request timed out. Please try again.");
+        return;
+      }
+
       setMessage(
         error instanceof Error
           ? error.message
           : "Historical price unavailable",
       );
     } finally {
+      window.clearTimeout(timeoutId);
       setIsFetching(false);
     }
   }

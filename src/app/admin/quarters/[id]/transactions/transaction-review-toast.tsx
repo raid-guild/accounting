@@ -4,7 +4,22 @@ import { useEffect } from "react";
 
 import { useToast } from "@/components/ui/toast";
 
+const MAX_SHOWN_TOAST_KEYS = 50;
 const shownToastKeys = new Set<string>();
+
+function rememberToastKey(key: string) {
+  shownToastKeys.add(key);
+
+  if (shownToastKeys.size <= MAX_SHOWN_TOAST_KEYS) {
+    return;
+  }
+
+  const oldestKey = shownToastKeys.values().next().value;
+
+  if (oldestKey) {
+    shownToastKeys.delete(oldestKey);
+  }
+}
 
 export function TransactionReviewToast({
   classifiedId,
@@ -39,7 +54,7 @@ export function TransactionReviewToast({
 
     if (syncStatus === "complete") {
       if (syncToastKey) {
-        shownToastKeys.add(syncToastKey);
+        rememberToastKey(syncToastKey);
       }
 
       showToast(
@@ -51,7 +66,7 @@ export function TransactionReviewToast({
 
     if (syncStatus === "partial") {
       if (syncToastKey) {
-        shownToastKeys.add(syncToastKey);
+        rememberToastKey(syncToastKey);
       }
 
       showToast(
@@ -61,7 +76,7 @@ export function TransactionReviewToast({
 
     if (saved) {
       if (classificationToastKey) {
-        shownToastKeys.add(classificationToastKey);
+        rememberToastKey(classificationToastKey);
       }
 
       showToast("Transaction classification saved.");

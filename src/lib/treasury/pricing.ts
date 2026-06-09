@@ -45,13 +45,23 @@ async function fetchHistoricalEthUsdPrice(executedAt: Date) {
 
   const body = (await response.json()) as { prices?: [number, number][] };
   const prices = body.prices ?? [];
-  const nearest = prices
-    .filter(([, price]) => isPositiveFinite(price))
-    .sort(
-      ([timestampA], [timestampB]) =>
-        Math.abs(timestampA - executedAt.getTime()) -
-        Math.abs(timestampB - executedAt.getTime()),
-    )[0];
+  let nearest: [number, number] | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const pricePoint of prices) {
+    const [timestamp, price] = pricePoint;
+
+    if (!isPositiveFinite(price)) {
+      continue;
+    }
+
+    const distance = Math.abs(timestamp - executedAt.getTime());
+
+    if (distance < nearestDistance) {
+      nearest = pricePoint;
+      nearestDistance = distance;
+    }
+  }
 
   if (!nearest) {
     throw new Error("CoinGecko historical ETH price unavailable");
