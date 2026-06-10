@@ -71,6 +71,20 @@
       "when": 1781095924435,
       "tag": "0009_wakeful_freak",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781124098541,
+      "tag": "0010_chief_starhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781128621482,
+      "tag": "0011_glamorous_franklin_richards",
+      "breakpoints": true
     }
   ]
 }

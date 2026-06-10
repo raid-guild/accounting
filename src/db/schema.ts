@@ -70,6 +70,30 @@ export const treasuryTransferDirectionEnum = pgEnum(
   ["inflow", "outflow", "internal"],
 );
 
+export const membershipActivityTypeEnum = pgEnum("membership_activity_type", [
+  "join",
+  "ragequit",
+]);
+
+export const quarterSyncStepEnum = pgEnum("quarter_sync_step", [
+  "transactions",
+  "proposals",
+  "membership",
+  "finalize",
+]);
+
+export const quarterSyncStepStatusEnum = pgEnum("quarter_sync_step_status", [
+  "pending",
+  "running",
+  "success",
+  "failed",
+]);
+
+export const quarterSyncOverallStatusEnum = pgEnum(
+  "quarter_sync_overall_status",
+  ["idle", "running", "success", "partial", "failed"],
+);
+
 export const auditActionEnum = pgEnum("audit_action", [
   "create",
   "update",
@@ -150,6 +174,83 @@ export const quarters = pgTable(
   (table) => [
     uniqueIndex("quarters_year_quarter_unique").on(table.year, table.quarter),
     index("quarters_status_idx").on(table.status),
+  ],
+);
+
+export const quarterSyncStatuses = pgTable(
+  "quarter_sync_statuses",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    quarterId: uuid("quarter_id")
+      .notNull()
+      .references(() => quarters.id, { onDelete: "cascade" }),
+    runId: text("run_id").notNull(),
+    overallStatus: quarterSyncOverallStatusEnum("overall_status")
+      .default("idle")
+      .notNull(),
+    currentStep: quarterSyncStepEnum("current_step"),
+    transactionsStatus: quarterSyncStepStatusEnum("transactions_status")
+      .default("pending")
+      .notNull(),
+    proposalsStatus: quarterSyncStepStatusEnum("proposals_status")
+      .default("pending")
+      .notNull(),
+    membershipStatus: quarterSyncStepStatusEnum("membership_status")
+      .default("pending")
+      .notNull(),
+    finalizeStatus: quarterSyncStepStatusEnum("finalize_status")
+      .default("pending")
+      .notNull(),
+    transactionsStartedAt: timestamp("transactions_started_at", {
+      withTimezone: true,
+    }),
+    transactionsCompletedAt: timestamp("transactions_completed_at", {
+      withTimezone: true,
+    }),
+    proposalsStartedAt: timestamp("proposals_started_at", {
+      withTimezone: true,
+    }),
+    proposalsCompletedAt: timestamp("proposals_completed_at", {
+      withTimezone: true,
+    }),
+    membershipStartedAt: timestamp("membership_started_at", {
+      withTimezone: true,
+    }),
+    membershipCompletedAt: timestamp("membership_completed_at", {
+      withTimezone: true,
+    }),
+    finalizeStartedAt: timestamp("finalize_started_at", {
+      withTimezone: true,
+    }),
+    finalizeCompletedAt: timestamp("finalize_completed_at", {
+      withTimezone: true,
+    }),
+    transactionsError: text("transactions_error"),
+    proposalsError: text("proposals_error"),
+    membershipError: text("membership_error"),
+    finalizeError: text("finalize_error"),
+    importedTransactions: integer("imported_transactions")
+      .default(0)
+      .notNull(),
+    importedTransfers: integer("imported_transfers").default(0).notNull(),
+    scannedTransfers: integer("scanned_transfers").default(0).notNull(),
+    syncErrorCount: integer("sync_error_count").default(0).notNull(),
+    proposalLinkedTransactions: integer("proposal_linked_transactions")
+      .default(0)
+      .notNull(),
+    proposalMatches: integer("proposal_matches").default(0).notNull(),
+    membershipActivities: integer("membership_activities")
+      .default(0)
+      .notNull(),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("quarter_sync_statuses_quarter_id_unique").on(
+      table.quarterId,
+    ),
+    index("quarter_sync_statuses_overall_status_idx").on(table.overallStatus),
+    index("quarter_sync_statuses_last_synced_at_idx").on(table.lastSyncedAt),
   ],
 );
 
@@ -456,6 +557,49 @@ export const ledgerEntries = pgTable(
     ),
     index("ledger_entries_raid_id_idx").on(table.raidId),
     index("ledger_entries_occurred_at_idx").on(table.occurredAt),
+  ],
+);
+
+export const membershipActivities = pgTable(
+  "membership_activities",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    quarterId: uuid("quarter_id").references(() => quarters.id, {
+      onDelete: "set null",
+    }),
+    daoProposalId: uuid("dao_proposal_id").references(() => daoProposals.id, {
+      onDelete: "set null",
+    }),
+    type: membershipActivityTypeEnum("type").notNull(),
+    daoAddress: text("dao_address").notNull(),
+    chainId: integer("chain_id").notNull(),
+    memberAddress: text("member_address").notNull(),
+    recipientAddress: text("recipient_address"),
+    txHash: text("tx_hash").notNull(),
+    executedAt: timestamp("executed_at", { withTimezone: true }).notNull(),
+    proposalId: text("proposal_id"),
+    proposalTitle: text("proposal_title"),
+    assetAddress: text("asset_address"),
+    assetSymbol: text("asset_symbol"),
+    assetAmount: numeric("asset_amount", { precision: 36, scale: 18 }),
+    usdAmount: numeric("usd_amount", { precision: 18, scale: 2 }),
+    shares: numeric("shares", { precision: 36, scale: 18 }),
+    loot: numeric("loot", { precision: 36, scale: 18 }),
+    rawMetadata: jsonb("raw_metadata"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("membership_activities_chain_tx_type_member_unique").on(
+      table.chainId,
+      sql`lower(${table.txHash})`,
+      table.type,
+      sql`lower(${table.memberAddress})`,
+    ),
+    index("membership_activities_quarter_id_idx").on(table.quarterId),
+    index("membership_activities_dao_proposal_id_idx").on(table.daoProposalId),
+    index("membership_activities_executed_at_idx").on(table.executedAt),
+    index("membership_activities_type_idx").on(table.type),
+    index("membership_activities_member_address_idx").on(table.memberAddress),
   ],
 );
 

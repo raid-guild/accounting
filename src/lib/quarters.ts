@@ -10,6 +10,12 @@ import {
   quarters,
   treasuryTransactionTransfers,
 } from "@/db/schema";
+import {
+  buildQuarterWorkflowSteps,
+  getQuarterSyncStatusMap,
+  type QuarterSyncStatus,
+  type QuarterWorkflowStep,
+} from "@/lib/quarter-sync";
 
 export type QuarterStatus = (typeof quarterStatusEnum.enumValues)[number];
 
@@ -45,6 +51,8 @@ export type QuarterClassificationSummary = {
 export type QuarterReportingPeriod = QuarterSummary & {
   classificationSummary: QuarterClassificationSummary;
   history: QuarterHistoryEvent[];
+  syncStatus: QuarterSyncStatus | null;
+  workflowSteps: QuarterWorkflowStep[];
 };
 
 const Q1_2026 = {
@@ -220,10 +228,19 @@ export async function listQuarterReportingPeriods(): Promise<
       }),
     ),
   );
+  const syncStatusByQuarter = await getQuarterSyncStatusMap(
+    quarterRows.map((quarter) => quarter.id),
+  );
 
   return quarterRows.map((quarter, index) => ({
     ...quarter,
     classificationSummary: summaries[index],
     history: historyByQuarter.get(quarter.id) ?? [],
+    syncStatus: syncStatusByQuarter.get(quarter.id) ?? null,
+    workflowSteps: buildQuarterWorkflowSteps({
+      classificationSummary: summaries[index],
+      quarter,
+      syncStatus: syncStatusByQuarter.get(quarter.id) ?? null,
+    }),
   }));
 }

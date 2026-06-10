@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { classifyQuarterTransfer } from "@/app/admin/quarters/[id]/transactions/actions";
+import { QuarterWorkflowProgress } from "@/components/quarters/quarter-workflow-progress";
 import { SyncTransactionsForm } from "@/app/admin/quarters/[id]/transactions/sync-transactions-form";
 import { TransactionReviewToast } from "@/app/admin/quarters/[id]/transactions/transaction-review-toast";
 import { UsdAmountField } from "@/app/admin/quarters/[id]/transactions/usd-amount-field";
@@ -23,6 +24,10 @@ import {
   listQuarters,
   type QuarterSummary,
 } from "@/lib/quarters";
+import {
+  buildQuarterWorkflowSteps,
+  getQuarterSyncStatus,
+} from "@/lib/quarter-sync";
 import {
   getCategoryLabel,
   IMPORTED_TRANSFER_CLASSIFICATION_CATEGORIES,
@@ -697,15 +702,16 @@ export default async function QuarterTransactionsPage({
     );
   }
 
-  const [options, transfers, summary] = await Promise.all([
+  const [options, transfers, summary, quarterSyncStatus] = await Promise.all([
     listClassificationOptions(),
     listTreasuryTransferClassifications({
       quarter,
       status: "all",
     }),
     getQuarterClassificationSummary(quarter),
+    getQuarterSyncStatus(quarter.id),
   ]);
-  const syncStatus =
+  const toastSyncStatus =
     query.synced === "1"
       ? "complete"
       : query.synced === "partial"
@@ -714,6 +720,13 @@ export default async function QuarterTransactionsPage({
   const syncErrorCount = getQueryNumber(query.errors);
   const syncImportedCount = getQueryNumber(query.imported);
   const proposalMatchCount = getQueryNumber(query.proposals);
+  const workflowSteps = buildQuarterWorkflowSteps({
+    classificationSummary: summary,
+    quarter,
+    syncStatus: quarterSyncStatus,
+  });
+  const syncComplete =
+    workflowSteps.find((step) => step.key === "sync")?.status === "complete";
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -724,10 +737,10 @@ export default async function QuarterTransactionsPage({
         syncErrorCount={syncErrorCount}
         syncId={query.syncId ?? null}
         syncImportedCount={syncImportedCount}
-        syncStatus={syncStatus}
+        syncStatus={toastSyncStatus}
       />
       <section className="container-custom py-8 md:py-10">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="mb-6 grid gap-5">
           <div>
             <Link
               href="/admin/quarters"
@@ -750,8 +763,8 @@ export default async function QuarterTransactionsPage({
               </div>
             </div>
           </div>
-          <div className="rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-            <div className="flex flex-wrap items-center gap-4">
+          <div className="grid gap-4 rounded-lg border border-border bg-card p-4 shadow-sm lg:grid-cols-[minmax(180px,240px)_1fr]">
+            <div className="flex items-center justify-between gap-4 lg:justify-start">
               <div className="flex items-center gap-3">
                 <CircleDollarSign
                   className="size-5 text-primary"
@@ -766,9 +779,14 @@ export default async function QuarterTransactionsPage({
                   </p>
                 </div>
               </div>
-              <SyncTransactionsForm quarterId={quarter.id} />
             </div>
+            <SyncTransactionsForm
+              initialSyncStatus={quarterSyncStatus}
+              syncComplete={syncComplete}
+              quarterId={quarter.id}
+            />
           </div>
+          <QuarterWorkflowProgress steps={workflowSteps} />
         </div>
 
         {summary.unclassifiedTransfers > 0 ? (
@@ -779,7 +797,7 @@ export default async function QuarterTransactionsPage({
           </div>
         ) : null}
 
-        {syncStatus === "partial" ? (
+        {toastSyncStatus === "partial" ? (
           <div className="mb-5 flex gap-3 rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
             <AlertTriangle
               className="mt-0.5 size-4 shrink-0"
