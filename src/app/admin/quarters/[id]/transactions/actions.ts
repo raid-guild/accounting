@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import { writeAuditEvent } from "@/lib/audit";
 import { getAuthSession } from "@/lib/auth/session";
+import { syncDaoProposalsForPeriod } from "@/lib/dao-proposals";
 import { encryptField } from "@/lib/encryption";
 import {
   assertClassificationEntityMatchesCategory,
@@ -143,6 +144,10 @@ function getTransactionsPath(quarterId: string) {
   return `/admin/quarters/${quarterId}/transactions`;
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "DAO proposal sync failed";
+}
+
 function getQuarterSyncPeriod(quarter: typeof quarters.$inferSelect) {
   const startsAt = new Date(`${quarter.startsOn}T00:00:00.000Z`);
   const endsAtExclusive = new Date(`${quarter.endsOn}T00:00:00.000Z`);
@@ -160,7 +165,22 @@ export async function syncQuarterTransactions(formData: FormData) {
   }
 
   const quarter = await getQuarterById(quarterId);
-  const result = await syncTreasuryTransactions(getQuarterSyncPeriod(quarter));
+  const syncPeriod = getQuarterSyncPeriod(quarter);
+  const result = await syncTreasuryTransactions(syncPeriod);
+  let proposalError: string | null = null;
+  let proposalResult = {
+    linkedTransactions: 0,
+    matchedProposals: 0,
+    skipped: true,
+    syncedAt: result.syncedAt,
+  };
+
+  try {
+    proposalResult = await syncDaoProposalsForPeriod(syncPeriod);
+  } catch (error) {
+    proposalError = getErrorMessage(error);
+    console.error("DAO proposal sync failed", error);
+  }
 
   await writeAuditEvent({
     action: "import",
@@ -175,6 +195,10 @@ export async function syncQuarterTransactions(formData: FormData) {
       errorCount: result.errors.length,
       importedTransactions: result.importedTransactions,
       importedTransfers: result.importedTransfers,
+      proposalLinkedTransactions: proposalResult.linkedTransactions,
+      proposalError,
+      proposalMatches: proposalResult.matchedProposals,
+      proposalsSkipped: proposalResult.skipped,
       scannedTransfers: result.scannedTransfers,
     },
     quarterId,
@@ -185,9 +209,11 @@ export async function syncQuarterTransactions(formData: FormData) {
 
   revalidatePath("/admin/quarters");
   revalidatePath(getTransactionsPath(quarterId));
+  revalidatePath("/proposals");
 
   const params = new URLSearchParams({
     imported: String(result.importedTransfers),
+    proposals: String(proposalResult.linkedTransactions),
     syncId: result.syncedAt,
     synced: result.errors.length > 0 ? "partial" : "1",
   });

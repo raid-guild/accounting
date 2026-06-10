@@ -5,6 +5,7 @@ import {
   CircleDollarSign,
   Pencil,
   ExternalLink,
+  FileText,
   Save,
   Tags,
 } from "lucide-react";
@@ -30,6 +31,7 @@ import {
   type ClassificationEntityOption,
   type ClassificationOptions,
   type LedgerCategory,
+  type TreasuryTransferDaoProposal,
   type TreasuryTransferClassificationView,
 } from "@/lib/transaction-classification";
 
@@ -39,6 +41,7 @@ type SearchParams = Promise<{
   classifiedId?: string;
   errors?: string;
   imported?: string;
+  proposals?: string;
   syncId?: string;
   synced?: string;
 }>;
@@ -272,6 +275,73 @@ function Field({
   );
 }
 
+function ProposalTitleLink({
+  proposal,
+}: {
+  proposal: TreasuryTransferDaoProposal;
+}) {
+  return (
+    <a
+      href={proposal.daohausUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex min-w-0 items-center gap-1 font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
+    >
+      <span className="truncate">{proposal.title}</span>
+      <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
+      <span className="sr-only">Open DAO proposal</span>
+    </a>
+  );
+}
+
+function ProposalInline({
+  proposal,
+}: {
+  proposal: TreasuryTransferDaoProposal | null;
+}) {
+  if (!proposal) {
+    return null;
+  }
+
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1">
+      <FileText className="size-3 shrink-0 text-primary" aria-hidden="true" />
+      <span>Proposal:</span>
+      <ProposalTitleLink proposal={proposal} />
+    </span>
+  );
+}
+
+function ProposalContext({
+  proposal,
+}: {
+  proposal: TreasuryTransferDaoProposal | null;
+}) {
+  if (!proposal) {
+    return null;
+  }
+
+  return (
+    <div className="mt-5 border-t border-border pt-4 text-sm">
+      <div className="flex min-w-0 items-start gap-3">
+        <FileText
+          className="mt-0.5 size-4 shrink-0 text-primary"
+          aria-hidden="true"
+        />
+        <div className="min-w-0">
+          <p className="type-label-sm text-muted-foreground">DAO Proposal</p>
+          <div className="mt-1 flex min-w-0">
+            <ProposalTitleLink proposal={proposal} />
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Proposal {proposal.proposalNumber ?? proposal.proposalId}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ClassificationForm({
   counterpartyAddress,
   counterpartyLabel,
@@ -438,6 +508,7 @@ function TransferCard({
                   {formatAddress(counterpartyAddress)}
                 </span>
               </span>
+              <ProposalInline proposal={transfer.daoProposal} />
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -557,6 +628,8 @@ function TransferCard({
         </div>
       </dl>
 
+      <ProposalContext proposal={transfer.daoProposal} />
+
       <div className="mt-5 border-t border-border pt-5">
         <ClassificationForm
           counterpartyAddress={counterpartyAddress}
@@ -640,11 +713,13 @@ export default async function QuarterTransactionsPage({
         : null;
   const syncErrorCount = getQueryNumber(query.errors);
   const syncImportedCount = getQueryNumber(query.imported);
+  const proposalMatchCount = getQueryNumber(query.proposals);
 
   return (
     <main className="min-h-screen bg-background text-foreground">
       <TransactionReviewToast
         classifiedId={query.classifiedId ?? null}
+        proposalMatchCount={proposalMatchCount}
         saved={query.classified === "1"}
         syncErrorCount={syncErrorCount}
         syncId={query.syncId ?? null}
