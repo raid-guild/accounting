@@ -893,11 +893,11 @@ export default async function RaidsPage({
     );
   }
 
-  const [accountingOverview, entities, raids] = await Promise.all([
-    getRaidAccountingOverview(),
+  const [entities, raids] = await Promise.all([
     listEntitiesByTypes(["client", "subcontractor"]),
     listRaids(),
   ]);
+  const accountingOverview = await getRaidAccountingOverview(raids);
   const activeClients = entities.filter(
     (entity) => entity.type === "client" && !entity.archivedAt,
   );

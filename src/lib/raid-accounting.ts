@@ -1,10 +1,10 @@
 import "server-only";
 
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { getDb } from "@/db";
-import { entities, ledgerEntries, raids } from "@/db/schema";
-import { decryptField, type EncryptedField } from "@/lib/encryption";
+import { ledgerEntries } from "@/db/schema";
+import type { RaidView } from "@/lib/core-entities";
 
 type RaidAccountingStatus =
   | "fully_paid"
@@ -12,14 +12,10 @@ type RaidAccountingStatus =
   | "overpaid"
   | "payouts_pending";
 
-type LedgerRow = {
-  category: "raid_revenue" | "subcontractor_payout";
-  clientId: string;
-  clientName: string;
-  raidArchivedAt: Date | null;
-  raidId: string;
-  raidName: string;
-  usdAmount: string;
+type RaidLedgerTotals = {
+  raidId: string | null;
+  revenueUsd: string;
+  subcontractorPayoutUsd: string;
 };
 
 const ZERO = BigInt(0);
@@ -56,10 +52,6 @@ export type RaidAccountingOverview = {
   clients: ClientRevenueSummary[];
   raids: RaidAccountingSummary[];
 };
-
-function decryptNullableField(value: unknown) {
-  return value ? decryptField(value as EncryptedField) : null;
-}
 
 function parseUsdCents(value: string) {
   const [dollars = "0", rawCents = ""] = value.split(".");
@@ -129,50 +121,48 @@ export function formatAccountingCurrency(cents: bigint) {
   return `${isNegative ? "-" : ""}$${formatted}`;
 }
 
-export async function getRaidAccountingOverview(): Promise<RaidAccountingOverview> {
+async function listRaidLedgerTotals(): Promise<RaidLedgerTotals[]> {
   const db = getDb();
-  const [raidRows, ledgerRows] = await Promise.all([
-    db
-      .select({ client: entities, raid: raids })
-      .from(raids)
-      .innerJoin(entities, eq(raids.clientEntityId, entities.id))
-      .orderBy(asc(raids.createdAt)),
-    db
-      .select({
-        category: ledgerEntries.category,
-        clientId: entities.id,
-        clientNameEncrypted: entities.nameEncrypted,
-        raidArchivedAt: raids.archivedAt,
-        raidId: raids.id,
-        raidNameEncrypted: raids.nameEncrypted,
-        usdAmount: ledgerEntries.usdAmount,
-      })
-      .from(ledgerEntries)
-      .innerJoin(raids, eq(ledgerEntries.raidId, raids.id))
-      .innerJoin(entities, eq(raids.clientEntityId, entities.id))
-      .where(
+
+  return db
+    .select({
+      raidId: ledgerEntries.raidId,
+      revenueUsd: sql<string>`coalesce(sum(case when ${ledgerEntries.category} = 'raid_revenue' then ${ledgerEntries.usdAmount} else 0 end), 0)`,
+      subcontractorPayoutUsd: sql<string>`coalesce(sum(case when ${ledgerEntries.category} = 'subcontractor_payout' then ${ledgerEntries.usdAmount} else 0 end), 0)`,
+    })
+    .from(ledgerEntries)
+    .where(
+      and(
+        isNotNull(ledgerEntries.raidId),
         inArray(ledgerEntries.category, [
           "raid_revenue",
           "subcontractor_payout",
         ]),
       ),
-  ]);
+    )
+    .groupBy(ledgerEntries.raidId);
+}
 
+export async function getRaidAccountingOverview(
+  raids: RaidView[],
+): Promise<RaidAccountingOverview> {
+  const ledgerRows = await listRaidLedgerTotals();
   const raidSummaries = new Map<string, RaidAccountingSummary>();
+  const raidsById = new Map(raids.map((raid) => [raid.id, raid]));
 
-  for (const { client, raid } of raidRows) {
+  for (const raid of raids) {
     if (raid.archivedAt) {
       continue;
     }
 
     raidSummaries.set(raid.id, {
-      clientId: client.id,
-      clientName: decryptField(client.nameEncrypted as EncryptedField),
+      clientId: raid.client.id,
+      clientName: raid.client.name,
       expectedSpoilsCents: ZERO,
       expectedTeamPoolCents: ZERO,
       isShipped: false,
       raidId: raid.id,
-      raidName: decryptField(raid.nameEncrypted as EncryptedField),
+      raidName: raid.name,
       remainingPoolCents: ZERO,
       revenueCents: ZERO,
       status: "no_revenue",
@@ -181,42 +171,38 @@ export async function getRaidAccountingOverview(): Promise<RaidAccountingOvervie
   }
 
   for (const row of ledgerRows) {
-    const ledgerRow: LedgerRow = {
-      category: row.category as LedgerRow["category"],
-      clientId: row.clientId,
-      clientName:
-        decryptNullableField(row.clientNameEncrypted) ?? "Unknown client",
-      raidArchivedAt: row.raidArchivedAt,
-      raidId: row.raidId,
-      raidName: decryptNullableField(row.raidNameEncrypted) ?? "Unknown raid",
-      usdAmount: row.usdAmount,
-    };
+    if (!row.raidId) {
+      continue;
+    }
+
+    const raid = raidsById.get(row.raidId);
+
+    if (!raid) {
+      continue;
+    }
+
     const summary =
-      raidSummaries.get(ledgerRow.raidId) ??
+      raidSummaries.get(row.raidId) ??
       ({
-        clientId: ledgerRow.clientId,
-        clientName: ledgerRow.clientName,
+        clientId: raid.client.id,
+        clientName: raid.client.name,
         expectedSpoilsCents: ZERO,
         expectedTeamPoolCents: ZERO,
-        isShipped: Boolean(ledgerRow.raidArchivedAt),
-        raidId: ledgerRow.raidId,
-        raidName: ledgerRow.raidName,
+        isShipped: Boolean(raid.archivedAt),
+        raidId: raid.id,
+        raidName: raid.name,
         remainingPoolCents: ZERO,
         revenueCents: ZERO,
         status: "no_revenue",
         subcontractorPayoutCents: ZERO,
       } satisfies RaidAccountingSummary);
-    const cents = parseUsdCents(ledgerRow.usdAmount);
 
-    if (ledgerRow.category === "raid_revenue") {
-      summary.revenueCents += cents;
-    }
+    summary.revenueCents = parseUsdCents(row.revenueUsd);
+    summary.subcontractorPayoutCents = parseUsdCents(
+      row.subcontractorPayoutUsd,
+    );
 
-    if (ledgerRow.category === "subcontractor_payout") {
-      summary.subcontractorPayoutCents += cents;
-    }
-
-    raidSummaries.set(ledgerRow.raidId, summary);
+    raidSummaries.set(row.raidId, summary);
   }
 
   const raidAccounting = Array.from(raidSummaries.values()).map((summary) => {
@@ -240,7 +226,7 @@ export async function getRaidAccountingOverview(): Promise<RaidAccountingOvervie
   const clientSummaries = new Map<string, ClientRevenueSummary>();
 
   for (const summary of raidAccounting) {
-    if (summary.revenueCents <= ZERO) {
+    if (summary.revenueCents === ZERO) {
       continue;
     }
 
