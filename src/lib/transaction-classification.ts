@@ -7,12 +7,14 @@ import { gnosis } from "viem/chains";
 import { getDb } from "@/db";
 import {
   auditEvents,
+  daoProposals,
   entities,
   ledgerCategoryEnum,
   ledgerEntries,
   quarters,
   raids,
   treasuryAccounts,
+  treasuryTransactions,
   treasuryTransactionTransfers,
 } from "@/db/schema";
 import { decryptField, type EncryptedField } from "@/lib/encryption";
@@ -44,6 +46,13 @@ export type TreasuryAccountLabel = {
   label: string;
 };
 
+export type TreasuryTransferDaoProposal = {
+  daohausUrl: string;
+  proposalId: string;
+  proposalNumber: string | null;
+  title: string;
+};
+
 export type TreasuryTransferClassificationView = {
   accountAddress: string;
   accountName: string;
@@ -53,6 +62,7 @@ export type TreasuryTransferClassificationView = {
   chainId: number;
   counterpartyEntityId: string | null;
   direction: "inflow" | "outflow" | "internal";
+  daoProposal: TreasuryTransferDaoProposal | null;
   executedAt: string;
   fromAddress: string;
   fromLabel: string | null;
@@ -174,11 +184,13 @@ export function getTreasuryAccountLabel({
 
 function mapTransferRow({
   account,
+  daoProposal,
   labels,
   ledgerEntry,
   transfer,
 }: {
   account: typeof treasuryAccounts.$inferSelect | null;
+  daoProposal: typeof daoProposals.$inferSelect | null;
   labels: Map<string, TreasuryAccountLabel>;
   ledgerEntry: typeof ledgerEntries.$inferSelect | null;
   transfer: typeof treasuryTransactionTransfers.$inferSelect;
@@ -203,6 +215,14 @@ function mapTransferRow({
     chainId: transfer.chainId,
     counterpartyEntityId: ledgerEntry?.counterpartyEntityId ?? null,
     direction: transfer.direction,
+    daoProposal: daoProposal
+      ? {
+          daohausUrl: daoProposal.daohausUrl,
+          proposalId: daoProposal.proposalId,
+          proposalNumber: daoProposal.proposalNumber,
+          title: daoProposal.title,
+        }
+      : null,
     executedAt: transfer.executedAt.toISOString(),
     fromAddress: transfer.fromAddress,
     fromLabel: fromLabel?.label ?? null,
@@ -292,6 +312,7 @@ export async function listTreasuryTransferClassifications({
   const query = db
     .select({
       account: treasuryAccounts,
+      daoProposal: daoProposals,
       ledgerEntry: ledgerEntries,
       transfer: treasuryTransactionTransfers,
     })
@@ -306,6 +327,14 @@ export async function listTreasuryTransferClassifications({
     .leftJoin(
       treasuryAccounts,
       eq(treasuryAccounts.id, treasuryTransactionTransfers.treasuryAccountId),
+    )
+    .leftJoin(
+      treasuryTransactions,
+      eq(treasuryTransactions.id, treasuryTransactionTransfers.treasuryTransactionId),
+    )
+    .leftJoin(
+      daoProposals,
+      eq(daoProposals.id, treasuryTransactions.daoProposalId),
     )
     .where(filters)
     .orderBy(asc(treasuryTransactionTransfers.executedAt));

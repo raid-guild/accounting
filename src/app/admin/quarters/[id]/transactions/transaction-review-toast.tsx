@@ -23,6 +23,7 @@ function rememberToastKey(key: string) {
 
 export function TransactionReviewToast({
   classifiedId,
+  proposalMatchCount,
   saved,
   syncErrorCount,
   syncImportedCount,
@@ -30,6 +31,7 @@ export function TransactionReviewToast({
   syncStatus,
 }: {
   classifiedId: string | null;
+  proposalMatchCount: number;
   saved: boolean;
   syncErrorCount: number;
   syncImportedCount: number;
@@ -59,8 +61,8 @@ export function TransactionReviewToast({
 
       showToast(
         syncImportedCount > 0
-          ? `Quarter transactions synced. ${syncImportedCount} new transfer${syncImportedCount === 1 ? "" : "s"} imported.`
-          : "Quarter transactions synced. No new transfers imported.",
+          ? `Quarter transactions synced. ${syncImportedCount} new transfer${syncImportedCount === 1 ? "" : "s"} imported. ${proposalMatchCount} proposal match${proposalMatchCount === 1 ? "" : "es"} linked.`
+          : `Quarter transactions synced. No new transfers imported. ${proposalMatchCount} proposal match${proposalMatchCount === 1 ? "" : "es"} linked.`,
       );
     }
 
@@ -83,6 +85,7 @@ export function TransactionReviewToast({
     }
   }, [
     classifiedId,
+    proposalMatchCount,
     saved,
     showToast,
     syncErrorCount,

@@ -227,6 +227,9 @@ export const treasuryTransactions = pgTable(
   "treasury_transactions",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    daoProposalId: uuid("dao_proposal_id").references(() => daoProposals.id, {
+      onDelete: "set null",
+    }),
     treasuryAccountId: uuid("treasury_account_id").references(
       () => treasuryAccounts.id,
       { onDelete: "set null" },
@@ -260,6 +263,38 @@ export const treasuryTransactions = pgTable(
     index("treasury_transactions_treasury_account_id_idx").on(
       table.treasuryAccountId,
     ),
+    index("treasury_transactions_dao_proposal_id_idx").on(table.daoProposalId),
+  ],
+);
+
+export const daoProposals = pgTable(
+  "dao_proposals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    daoAddress: text("dao_address").notNull(),
+    chainId: integer("chain_id").notNull(),
+    proposalId: text("proposal_id").notNull(),
+    proposalNumber: text("proposal_number"),
+    title: text("title").notNull(),
+    status: text("status"),
+    executionTxHash: text("execution_tx_hash").notNull(),
+    executedAt: timestamp("executed_at", { withTimezone: true }).notNull(),
+    daohausUrl: text("daohaus_url").notNull(),
+    rawMetadata: jsonb("raw_metadata"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("dao_proposals_chain_dao_proposal_unique").on(
+      table.chainId,
+      sql`lower(${table.daoAddress})`,
+      table.proposalId,
+    ),
+    uniqueIndex("dao_proposals_chain_execution_tx_unique").on(
+      table.chainId,
+      sql`lower(${table.executionTxHash})`,
+    ),
+    index("dao_proposals_executed_at_idx").on(table.executedAt),
+    index("dao_proposals_status_idx").on(table.status),
   ],
 );
 

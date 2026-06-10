@@ -128,11 +128,15 @@ function MemberHome({
 
           <div className="flex min-w-0 flex-wrap items-center gap-3 lg:justify-end">
             {session.permissions?.canWriteRaidAccounting ||
-            session.permissions?.canAdmin ? (
+            session.permissions?.canAdmin ||
+            session.permissions?.canAccess ? (
               <nav
                 className="flex min-w-0 flex-wrap items-center gap-1 rounded-lg border border-scroll-300/20 bg-moloch-900/35 p-1 shadow-inner shadow-black/10"
                 aria-label="Accounting sections"
               >
+                {session.permissions.canAccess ? (
+                  <AppNavLink href="/proposals">Proposals</AppNavLink>
+                ) : null}
                 {session.permissions.canWriteRaidAccounting ? (
                   <AppNavLink href="/raids">Raids</AppNavLink>
                 ) : null}
