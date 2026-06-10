@@ -12,6 +12,7 @@ import {
   getQ1_2026Definition,
   type QuarterStatus,
 } from "@/lib/quarters";
+import { getQuarterSyncStatus, isQuarterSyncFresh } from "@/lib/quarter-sync";
 
 const QUARTERS_PATH = "/admin/quarters";
 
@@ -98,6 +99,10 @@ function assertAllowedTransition({
   if (currentStatus === "published" && targetStatus !== "reopened") {
     throw new Error("Published quarters must be reopened before editing");
   }
+
+  if (targetStatus === "published" && currentStatus !== "ready_for_review") {
+    throw new Error("Mark the quarter ready before publishing");
+  }
 }
 
 export async function createQ1ReportingPeriod() {
@@ -155,7 +160,14 @@ export async function updateQuarterStatus(formData: FormData) {
     targetStatus,
   });
 
-  if (targetStatus === "published") {
+  if (targetStatus === "ready_for_review" || targetStatus === "published") {
+    const syncStatus = await getQuarterSyncStatus(id);
+    if (!isQuarterSyncFresh({ quarter, syncStatus })) {
+      throw new Error(
+        "Sync quarter activity after the quarter has ended before marking it ready",
+      );
+    }
+
     const summary = await getQuarterClassificationSummary({
       endsOn: quarter.endsOn,
       startsOn: quarter.startsOn,
@@ -163,7 +175,7 @@ export async function updateQuarterStatus(formData: FormData) {
 
     if (summary.unclassifiedTransfers > 0) {
       throw new Error(
-        "Classify all imported transactions before publishing this quarter",
+        "Classify all imported transactions before marking this quarter ready",
       );
     }
   }

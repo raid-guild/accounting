@@ -14,6 +14,7 @@ import {
   createQ1ReportingPeriod,
   updateQuarterStatus,
 } from "@/app/admin/quarters/actions";
+import { QuarterWorkflowProgress } from "@/components/quarters/quarter-workflow-progress";
 import { Button } from "@/components/ui/button";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
 import {
@@ -135,6 +136,10 @@ function ReopenForm({ quarter }: { quarter: QuarterReportingPeriod }) {
 
 function QuarterCard({ quarter }: { quarter: QuarterReportingPeriod }) {
   const statusCopy = STATUS_COPY[quarter.status];
+  const readyStep = quarter.workflowSteps.find((step) => step.key === "ready");
+  const publishStep = quarter.workflowSteps.find(
+    (step) => step.key === "publish",
+  );
 
   return (
     <article className="rounded-lg border border-border bg-card p-6 shadow-sm">
@@ -181,6 +186,10 @@ function QuarterCard({ quarter }: { quarter: QuarterReportingPeriod }) {
         </div>
       </dl>
 
+      <div className="mt-5 border-t border-border pt-5">
+        <QuarterWorkflowProgress compact steps={quarter.workflowSteps} />
+      </div>
+
       <div className="mt-6 flex flex-wrap gap-2">
         <Link
           href={`/admin/quarters/${quarter.id}/transactions`}
@@ -202,7 +211,8 @@ function QuarterCard({ quarter }: { quarter: QuarterReportingPeriod }) {
           status="ready_for_review"
           disabled={
             quarter.status === "ready_for_review" ||
-            quarter.status === "published"
+            quarter.status === "published" ||
+            readyStep?.status !== "current"
           }
         >
           <CheckCircle2 data-icon="inline-start" />
@@ -214,7 +224,7 @@ function QuarterCard({ quarter }: { quarter: QuarterReportingPeriod }) {
           variant="default"
           disabled={
             quarter.status === "published" ||
-            quarter.classificationSummary.unclassifiedTransfers > 0
+            publishStep?.status !== "current"
           }
         >
           <LockKeyhole data-icon="inline-start" />

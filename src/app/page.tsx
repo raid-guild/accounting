@@ -135,7 +135,10 @@ function MemberHome({
                 aria-label="Accounting sections"
               >
                 {session.permissions?.canAccess ? (
-                  <AppNavLink href="/proposals">Proposals</AppNavLink>
+                  <>
+                    <AppNavLink href="/membership">Membership</AppNavLink>
+                    <AppNavLink href="/proposals">Proposals</AppNavLink>
+                  </>
                 ) : null}
                 {session.permissions?.canWriteRaidAccounting ? (
                   <AppNavLink href="/raids">Raids</AppNavLink>

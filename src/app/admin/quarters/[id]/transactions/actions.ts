@@ -16,6 +16,7 @@ import { writeAuditEvent } from "@/lib/audit";
 import { getAuthSession } from "@/lib/auth/session";
 import { syncDaoProposalsForPeriod } from "@/lib/dao-proposals";
 import { encryptField } from "@/lib/encryption";
+import { syncMembershipActivitiesForPeriod } from "@/lib/membership-activity";
 import {
   assertClassificationEntityMatchesCategory,
   assertRaidIsAvailable,
@@ -24,6 +25,14 @@ import {
   getTreasuryAccountLabels,
   type LedgerCategory,
 } from "@/lib/transaction-classification";
+import {
+  getQuarterSyncStatus,
+  markQuarterSyncStepFailed,
+  markQuarterSyncStepRunning,
+  markQuarterSyncStepSuccess,
+  startOrResumeQuarterSync,
+  type QuarterSyncStatus,
+} from "@/lib/quarter-sync";
 import { syncTreasuryTransactions } from "@/lib/treasury/transactions";
 
 function getString(formData: FormData, key: string) {
@@ -145,7 +154,7 @@ function getTransactionsPath(quarterId: string) {
 }
 
 function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "DAO proposal sync failed";
+  return error instanceof Error ? error.message : "Sync failed";
 }
 
 function getQuarterSyncPeriod(quarter: typeof quarters.$inferSelect) {
@@ -157,72 +166,269 @@ function getQuarterSyncPeriod(quarter: typeof quarters.$inferSelect) {
 }
 
 export async function syncQuarterTransactions(formData: FormData) {
-  const session = await requireAdminSession();
+  await requireAdminSession();
   const quarterId = getString(formData, "quarterId");
 
   if (!quarterId) {
     throw new Error("Quarter is required");
   }
 
-  const quarter = await getQuarterById(quarterId);
-  const syncPeriod = getQuarterSyncPeriod(quarter);
-  const result = await syncTreasuryTransactions(syncPeriod);
-  let proposalError: string | null = null;
-  let proposalResult = {
-    linkedTransactions: 0,
-    matchedProposals: 0,
-    skipped: true,
-    syncedAt: result.syncedAt,
-  };
-
-  try {
-    proposalResult = await syncDaoProposalsForPeriod(syncPeriod);
-  } catch (error) {
-    proposalError = getErrorMessage(error);
-    console.error("DAO proposal sync failed", error);
-  }
-
-  await writeAuditEvent({
-    action: "import",
-    actorWalletAddress: session.address,
-    metadata: {
-      accountCount: result.accounts.length,
-      errors: result.errors.map((error) => ({
-        accountAddress: error.accountAddress,
-        error: error.error,
-        source: error.source,
-      })),
-      errorCount: result.errors.length,
-      importedTransactions: result.importedTransactions,
-      importedTransfers: result.importedTransfers,
-      proposalLinkedTransactions: proposalResult.linkedTransactions,
-      proposalError,
-      proposalMatches: proposalResult.matchedProposals,
-      proposalsSkipped: proposalResult.skipped,
-      scannedTransfers: result.scannedTransfers,
-    },
+  let status = await startQuarterSync(quarterId);
+  status = await syncQuarterTransactionsStep({
     quarterId,
-    subjectId: quarterId,
-    subjectTable: "treasury_transaction_transfers",
-    summary: "Synced quarter transactions",
+    runId: status.runId,
+  });
+  throwIfStepFailed(status, "transactions");
+  status = await syncQuarterProposalsStep({ quarterId, runId: status.runId });
+  throwIfStepFailed(status, "proposals");
+  status = await syncQuarterMembershipStep({ quarterId, runId: status.runId });
+  throwIfStepFailed(status, "membership");
+  status = await finalizeQuarterSyncStep({
+    quarterId,
+    runId: status.runId,
+    writeAudit: true,
   });
 
+  const syncStatus = status.overallStatus === "success" ? "1" : "partial";
+  const params = new URLSearchParams({
+    imported: String(status.importedTransfers),
+    proposals: String(status.proposalLinkedTransactions),
+    syncId: status.lastSyncedAt ?? new Date().toISOString(),
+    synced: syncStatus,
+  });
+
+  if (status.syncErrorCount > 0) {
+    params.set("errors", String(status.syncErrorCount));
+  }
+
+  revalidateQuarterSyncPaths(quarterId);
+  redirect(`${getTransactionsPath(quarterId)}?${params.toString()}`);
+}
+
+function revalidateQuarterSyncPaths(quarterId: string) {
   revalidatePath("/admin/quarters");
   revalidatePath(getTransactionsPath(quarterId));
   revalidatePath("/proposals");
+  revalidatePath("/membership");
+}
 
-  const params = new URLSearchParams({
-    imported: String(result.importedTransfers),
-    proposals: String(proposalResult.linkedTransactions),
-    syncId: result.syncedAt,
-    synced: result.errors.length > 0 ? "partial" : "1",
-  });
+function throwIfStepFailed(status: QuarterSyncStatus, step: string) {
+  const error =
+    step === "transactions"
+      ? status.transactionsError
+      : step === "proposals"
+        ? status.proposalsError
+        : step === "membership"
+          ? status.membershipError
+          : status.finalizeError;
 
-  if (result.errors.length > 0) {
-    params.set("errors", String(result.errors.length));
+  if (status.overallStatus === "failed" && error) {
+    throw new Error(error);
+  }
+}
+
+export async function startQuarterSync(quarterId: string) {
+  await requireAdminSession();
+
+  if (!quarterId) {
+    throw new Error("Quarter is required");
   }
 
-  redirect(`${getTransactionsPath(quarterId)}?${params.toString()}`);
+  await getQuarterById(quarterId);
+
+  return startOrResumeQuarterSync(quarterId);
+}
+
+export async function syncQuarterTransactionsStep({
+  quarterId,
+  runId,
+}: {
+  quarterId: string;
+  runId: string;
+}) {
+  await requireAdminSession();
+
+  const quarter = await getQuarterById(quarterId);
+  const syncPeriod = getQuarterSyncPeriod(quarter);
+
+  await markQuarterSyncStepRunning({ quarterId, runId, step: "transactions" });
+
+  try {
+    const result = await syncTreasuryTransactions(syncPeriod);
+    const status = await markQuarterSyncStepSuccess({
+      counts: {
+        importedTransactions: result.importedTransactions,
+        importedTransfers: result.importedTransfers,
+        scannedTransfers: result.scannedTransfers,
+        syncErrorCount: result.errors.length,
+      },
+      quarterId,
+      runId,
+      step: "transactions",
+    });
+
+    if (result.errors.length > 0) {
+      return markQuarterSyncStepFailed({
+        error: `${result.errors.length} account${
+          result.errors.length === 1 ? "" : "s"
+        } failed to sync.`,
+        quarterId,
+        runId,
+        step: "transactions",
+      });
+    }
+
+    revalidateQuarterSyncPaths(quarterId);
+    return status;
+  } catch (error) {
+    return markQuarterSyncStepFailed({
+      error: getErrorMessage(error),
+      quarterId,
+      runId,
+      step: "transactions",
+    });
+  }
+}
+
+export async function syncQuarterProposalsStep({
+  quarterId,
+  runId,
+}: {
+  quarterId: string;
+  runId: string;
+}) {
+  await requireAdminSession();
+
+  const priorStatus = await getQuarterSyncStatus(quarterId);
+  if (priorStatus?.transactionsStatus !== "success") {
+    throw new Error("Sync transactions before matching proposals");
+  }
+
+  const quarter = await getQuarterById(quarterId);
+  const syncPeriod = getQuarterSyncPeriod(quarter);
+
+  await markQuarterSyncStepRunning({ quarterId, runId, step: "proposals" });
+
+  try {
+    const result = await syncDaoProposalsForPeriod(syncPeriod);
+    const status = await markQuarterSyncStepSuccess({
+      counts: {
+        proposalLinkedTransactions: result.linkedTransactions,
+        proposalMatches: result.matchedProposals,
+      },
+      quarterId,
+      runId,
+      step: "proposals",
+    });
+
+    revalidateQuarterSyncPaths(quarterId);
+    return status;
+  } catch (error) {
+    return markQuarterSyncStepFailed({
+      error: getErrorMessage(error),
+      quarterId,
+      runId,
+      step: "proposals",
+    });
+  }
+}
+
+export async function syncQuarterMembershipStep({
+  quarterId,
+  runId,
+}: {
+  quarterId: string;
+  runId: string;
+}) {
+  await requireAdminSession();
+
+  const priorStatus = await getQuarterSyncStatus(quarterId);
+  if (priorStatus?.proposalsStatus !== "success") {
+    throw new Error("Sync proposals before membership activity");
+  }
+
+  const quarter = await getQuarterById(quarterId);
+  const syncPeriod = getQuarterSyncPeriod(quarter);
+
+  await markQuarterSyncStepRunning({ quarterId, runId, step: "membership" });
+
+  try {
+    const result = await syncMembershipActivitiesForPeriod({
+      period: syncPeriod,
+      quarterId,
+    });
+    const status = await markQuarterSyncStepSuccess({
+      counts: {
+        membershipActivities: result.syncedActivities,
+      },
+      quarterId,
+      runId,
+      step: "membership",
+    });
+
+    revalidateQuarterSyncPaths(quarterId);
+    return status;
+  } catch (error) {
+    return markQuarterSyncStepFailed({
+      error: getErrorMessage(error),
+      quarterId,
+      runId,
+      step: "membership",
+    });
+  }
+}
+
+export async function finalizeQuarterSyncStep({
+  quarterId,
+  runId,
+  writeAudit = false,
+}: {
+  quarterId: string;
+  runId: string;
+  writeAudit?: boolean;
+}) {
+  const session = await requireAdminSession();
+  const priorStatus = await getQuarterSyncStatus(quarterId);
+
+  if (
+    priorStatus?.transactionsStatus !== "success" ||
+    priorStatus.proposalsStatus !== "success" ||
+    priorStatus.membershipStatus !== "success"
+  ) {
+    throw new Error("Finish each sync step before finalizing");
+  }
+
+  await markQuarterSyncStepRunning({ quarterId, runId, step: "finalize" });
+  const status = await markQuarterSyncStepSuccess({
+    quarterId,
+    runId,
+    step: "finalize",
+  });
+
+  if (writeAudit) {
+    await writeAuditEvent({
+      action: "import",
+      actorWalletAddress: session.address,
+      metadata: {
+        importedTransactions: status.importedTransactions,
+        importedTransfers: status.importedTransfers,
+        membershipActivities: status.membershipActivities,
+        proposalLinkedTransactions: status.proposalLinkedTransactions,
+        proposalMatches: status.proposalMatches,
+        runId: status.runId,
+        scannedTransfers: status.scannedTransfers,
+      },
+      quarterId,
+      subjectId: quarterId,
+      subjectTable: "treasury_transaction_transfers",
+      summary: "Synced quarter transactions",
+    });
+  }
+
+  revalidateQuarterSyncPaths(quarterId);
+  throwIfStepFailed(status, "finalize");
+
+  return status;
 }
 
 export async function classifyQuarterTransfer(formData: FormData) {
