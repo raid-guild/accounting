@@ -213,7 +213,7 @@ export async function syncQuarterTransactions(formData: FormData) {
 
   const params = new URLSearchParams({
     imported: String(result.importedTransfers),
-    proposals: String(proposalResult.matchedProposals),
+    proposals: String(proposalResult.linkedTransactions),
     syncId: result.syncedAt,
     synced: result.errors.length > 0 ? "partial" : "1",
   });

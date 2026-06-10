@@ -134,16 +134,16 @@ function MemberHome({
                 className="flex min-w-0 flex-wrap items-center gap-1 rounded-lg border border-scroll-300/20 bg-moloch-900/35 p-1 shadow-inner shadow-black/10"
                 aria-label="Accounting sections"
               >
-                {session.permissions.canAccess ? (
+                {session.permissions?.canAccess ? (
                   <AppNavLink href="/proposals">Proposals</AppNavLink>
                 ) : null}
-                {session.permissions.canWriteRaidAccounting ? (
+                {session.permissions?.canWriteRaidAccounting ? (
                   <AppNavLink href="/raids">Raids</AppNavLink>
                 ) : null}
-                {session.permissions.canAdmin ? (
+                {session.permissions?.canAdmin ? (
                   <AppNavLink href="/admin/providers">Providers</AppNavLink>
                 ) : null}
-                {session.permissions.canAdmin ? (
+                {session.permissions?.canAdmin ? (
                   <>
                     <AppNavLink href="/admin/quarters">Quarters</AppNavLink>
                     <AppNavLink href="/admin/treasury-accounts">

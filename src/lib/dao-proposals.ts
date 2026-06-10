@@ -15,6 +15,7 @@ import { daoProposals, treasuryTransactions } from "@/db/schema";
 
 const DEFAULT_DAOHAUS_APP_BASE_URL = "https://admin.daohaus.club";
 const MAX_PROPOSALS_TO_SCAN = 1000;
+const ONCHAIN_PROPOSAL_RPC_CONCURRENCY = 6;
 const HASH_PATTERN = /^0x[a-fA-F0-9]{64}$/;
 const FIELD_CANDIDATES = [
   "id",
@@ -131,7 +132,7 @@ function getGnosisClient() {
   const rpcUrl = process.env.GNOSIS_RPC_URL;
 
   if (!rpcUrl) {
-    throw new Error("GNOSIS_RPC_URL is required to sync DAO proposals");
+    return null;
   }
 
   return createPublicClient({
@@ -431,9 +432,12 @@ function getProposalTxHashes(proposal: GraphProposal) {
 
 function getProposalId(proposal: GraphProposal) {
   return (
-    pickString(proposal, ["proposalId", "proposalNumber", "proposalIndex", "serial"]) ??
-    pickString(proposal, ["id"]) ??
-    crypto.randomUUID()
+    pickString(proposal, [
+      "proposalId",
+      "proposalNumber",
+      "proposalIndex",
+      "serial",
+    ]) ?? pickString(proposal, ["id"])
   );
 }
 
@@ -501,6 +505,10 @@ function getMatchedProposal({
 
     const proposalId = getProposalId(proposal);
 
+    if (!proposalId) {
+      continue;
+    }
+
     return {
       daoAddress,
       daohausUrl: getDaohausProposalUrl({
@@ -522,13 +530,14 @@ function getMatchedProposal({
 }
 
 async function getOnchainProposalMatch({
+  client,
   daoAddress,
   transaction,
 }: {
+  client: NonNullable<ReturnType<typeof getGnosisClient>>;
   daoAddress: `0x${string}`;
   transaction: { executedAt: Date; id: string; txHash: string };
 }): Promise<MatchedProposal | null> {
-  const client = getGnosisClient();
   const chainTransaction = await client
     .getTransaction({
       hash: transaction.txHash as `0x${string}`,
@@ -581,12 +590,31 @@ async function getOnchainProposalMatches({
   transactions: { executedAt: Date; id: string; txHash: string }[];
 }) {
   const matches = new Map<`0x${string}`, MatchedProposal>();
+  const client = getGnosisClient();
 
-  for (const transaction of transactions) {
-    const match = await getOnchainProposalMatch({ daoAddress, transaction });
+  if (!client) {
+    return matches;
+  }
 
-    if (match) {
-      matches.set(match.executionTxHash, match);
+  for (
+    let index = 0;
+    index < transactions.length;
+    index += ONCHAIN_PROPOSAL_RPC_CONCURRENCY
+  ) {
+    const batch = transactions.slice(
+      index,
+      index + ONCHAIN_PROPOSAL_RPC_CONCURRENCY,
+    );
+    const results = await Promise.allSettled(
+      batch.map((transaction) =>
+        getOnchainProposalMatch({ client, daoAddress, transaction }),
+      ),
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled" && result.value) {
+        matches.set(result.value.executionTxHash, result.value);
+      }
     }
   }
 
@@ -603,7 +631,8 @@ function mergeProposalMetadata({
   const proposalId = getProposalId(proposal);
   const proposalNumber = getProposalNumber(proposal);
 
-  const proposalIdMatches = proposalId === base.proposalId;
+  const proposalIdMatches =
+    proposalId !== null && proposalId === base.proposalId;
   const proposalNumberMatches =
     proposalNumber !== null &&
     base.proposalNumber !== null &&
@@ -671,6 +700,7 @@ async function upsertAndLinkProposal(proposal: MatchedProposal) {
       and(
         eq(treasuryTransactions.chainId, gnosis.id),
         sql`lower(${treasuryTransactions.txHash}) = ${proposal.executionTxHash}`,
+        sql`${treasuryTransactions.daoProposalId} is distinct from ${proposalRow.id}`,
       ),
     )
     .returning();

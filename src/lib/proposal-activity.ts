@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, eq, isNotNull } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import {
@@ -39,7 +39,16 @@ const EXPLORER_BY_CHAIN: Record<number, string> = {
 };
 
 function decryptNullableField(value: unknown) {
-  return value ? decryptField(value as EncryptedField) : null;
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return decryptField(value as EncryptedField);
+  } catch (error) {
+    console.error("Failed to decrypt proposal activity field", error);
+    return null;
+  }
 }
 
 function getExplorerUrl(chainId: number, txHash: string) {
@@ -83,7 +92,6 @@ export async function listProposalActivity({
     )
     .leftJoin(quarters, eq(ledgerEntries.quarterId, quarters.id))
     .leftJoin(entities, eq(ledgerEntries.counterpartyEntityId, entities.id))
-    .where(isNotNull(treasuryTransactions.daoProposalId))
     .orderBy(asc(daoProposals.executedAt), asc(treasuryTransactionTransfers.id));
 
   return rows

@@ -36,6 +36,7 @@ function SyncButton() {
         type="submit"
         disabled={pending}
         aria-busy={pending}
+        onClick={() => setStepIndex(0)}
         className="w-full"
       >
         <RefreshCw

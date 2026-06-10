@@ -39,7 +39,7 @@ function formatCurrency(value: string | null) {
   const number = Number(value);
 
   if (!Number.isFinite(number)) {
-    return `$${value}`;
+    return "-";
   }
 
   return new Intl.NumberFormat("en-US", {
@@ -175,7 +175,7 @@ export default async function ProposalsPage() {
   }
 
   const rows = await listProposalActivity({
-    visibility: session.permissions.canAdmin ? "admin" : "member",
+    visibility: session.permissions?.canAdmin ? "admin" : "member",
   });
 
   return (
