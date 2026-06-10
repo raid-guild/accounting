@@ -164,7 +164,9 @@ export async function updateQuarterStatus(formData: FormData) {
     const syncStatus = await getQuarterSyncStatus(id);
     if (!isQuarterSyncFresh({ quarter, syncStatus })) {
       throw new Error(
-        "Sync quarter activity after the quarter has ended before marking it ready",
+        targetStatus === "published"
+          ? "Sync quarter activity after the quarter has ended before publishing"
+          : "Sync quarter activity after the quarter has ended before marking it ready",
       );
     }
 
@@ -175,7 +177,9 @@ export async function updateQuarterStatus(formData: FormData) {
 
     if (summary.unclassifiedTransfers > 0) {
       throw new Error(
-        "Classify all imported transactions before marking this quarter ready",
+        targetStatus === "published"
+          ? "Classify all imported transactions before publishing this quarter"
+          : "Classify all imported transactions before marking this quarter ready",
       );
     }
   }

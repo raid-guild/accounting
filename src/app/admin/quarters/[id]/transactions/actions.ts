@@ -255,20 +255,16 @@ export async function syncQuarterTransactionsStep({
 
   try {
     const result = await syncTreasuryTransactions(syncPeriod);
-    const status = await markQuarterSyncStepSuccess({
-      counts: {
-        importedTransactions: result.importedTransactions,
-        importedTransfers: result.importedTransfers,
-        scannedTransfers: result.scannedTransfers,
-        syncErrorCount: result.errors.length,
-      },
-      quarterId,
-      runId,
-      step: "transactions",
-    });
+    const counts = {
+      importedTransactions: result.importedTransactions,
+      importedTransfers: result.importedTransfers,
+      scannedTransfers: result.scannedTransfers,
+      syncErrorCount: result.errors.length,
+    };
 
     if (result.errors.length > 0) {
       return markQuarterSyncStepFailed({
+        counts,
         error: `${result.errors.length} account${
           result.errors.length === 1 ? "" : "s"
         } failed to sync.`,
@@ -277,6 +273,13 @@ export async function syncQuarterTransactionsStep({
         step: "transactions",
       });
     }
+
+    const status = await markQuarterSyncStepSuccess({
+      counts,
+      quarterId,
+      runId,
+      step: "transactions",
+    });
 
     revalidateQuarterSyncPaths(quarterId);
     return status;

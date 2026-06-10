@@ -102,6 +102,8 @@ export type MembershipActivityReport = {
 };
 
 const DEFAULT_DAOHAUS_APP_BASE_URL = "https://admin.daohaus.club";
+const DEFAULT_SUBGRAPH_TIMEOUT_MS = 10_000;
+const GRAPH_PAGE_SIZE = 250;
 const STABLE_ASSET_SYMBOLS = new Set(["USDC", "XDAI", "WXDAI"]);
 const ZERO = BigInt(0);
 const ONE = BigInt(1);
@@ -119,6 +121,14 @@ function getDaoAddress() {
 
 function getSubgraphUrl() {
   return process.env.DAOHAUS_SUBGRAPH_URL?.trim() || null;
+}
+
+function getSubgraphTimeoutMs() {
+  const value = Number(process.env.DAOHAUS_SUBGRAPH_TIMEOUT_MS ?? "");
+
+  return Number.isFinite(value) && value > 0
+    ? value
+    : DEFAULT_SUBGRAPH_TIMEOUT_MS;
 }
 
 function getDaohausProposalUrl(proposalId: string) {
@@ -233,12 +243,27 @@ async function requestGraphQl<T>({
     throw new Error("DAOHAUS_SUBGRAPH_URL is required to sync membership activity");
   }
 
-  const response = await fetch(url, {
-    body: JSON.stringify({ query, variables }),
-    cache: "no-store",
-    headers: { "content-type": "application/json" },
-    method: "POST",
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), getSubgraphTimeoutMs());
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      body: JSON.stringify({ query, variables }),
+      cache: "no-store",
+      headers: { "content-type": "application/json" },
+      method: "POST",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("DAOhaus subgraph request timed out");
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     throw new Error(`DAOhaus subgraph request failed: ${response.status}`);
@@ -262,11 +287,20 @@ async function requestGraphQl<T>({
   return json.data;
 }
 
-async function fetchMembershipGraph(daoAddress: string) {
+async function fetchMembershipGraphPage({
+  daoAddress,
+  skip,
+}: {
+  daoAddress: string;
+  skip: number;
+}) {
   return requestGraphQl<MembershipGraphResponse>({
-    query: `query MembershipActivity($dao: String!, $first: Int!) {
+    query: `query MembershipActivity($dao: String!, $first: Int!, $skip: Int!) {
       proposals(
         first: $first
+        skip: $skip
+        orderBy: processTxAt
+        orderDirection: asc
         where: { dao: $dao, proposalType: "TOKENS_FOR_SHARES", processed: true, passed: true }
       ) {
         id
@@ -287,7 +321,13 @@ async function fetchMembershipGraph(daoAddress: string) {
         passed
         details
       }
-      rageQuits(first: $first, where: { dao: $dao }) {
+      rageQuits(
+        first: $first
+        skip: $skip
+        orderBy: createdAt
+        orderDirection: asc
+        where: { dao: $dao }
+      ) {
         id
         createdAt
         txHash
@@ -300,9 +340,34 @@ async function fetchMembershipGraph(daoAddress: string) {
     }`,
     variables: {
       dao: daoAddress.toLowerCase(),
-      first: 1000,
+      first: GRAPH_PAGE_SIZE,
+      skip,
     },
   });
+}
+
+async function fetchMembershipGraph(daoAddress: string) {
+  const proposals: MembershipProposal[] = [];
+  const rageQuits: RageQuit[] = [];
+  let skip = 0;
+
+  while (true) {
+    const page = await fetchMembershipGraphPage({ daoAddress, skip });
+
+    proposals.push(...(page.proposals ?? []));
+    rageQuits.push(...(page.rageQuits ?? []));
+
+    if (
+      (page.proposals?.length ?? 0) < GRAPH_PAGE_SIZE &&
+      (page.rageQuits?.length ?? 0) < GRAPH_PAGE_SIZE
+    ) {
+      break;
+    }
+
+    skip += GRAPH_PAGE_SIZE;
+  }
+
+  return { proposals, rageQuits };
 }
 
 async function getTransferValue({
@@ -554,12 +619,12 @@ export async function syncMembershipActivitiesForPeriod({
   const daoAddress = getDaoAddress();
   const syncedAt = new Date().toISOString();
 
-  if (!daoAddress || !getSubgraphUrl()) {
-    return {
-      skipped: true,
-      syncedActivities: 0,
-      syncedAt,
-    };
+  if (!daoAddress) {
+    throw new Error("DAO_CONTRACT_ADDRESS is required to sync membership activity");
+  }
+
+  if (!getSubgraphUrl()) {
+    throw new Error("DAOHAUS_SUBGRAPH_URL is required to sync membership activity");
   }
 
   const graph = await fetchMembershipGraph(daoAddress);

@@ -362,24 +362,28 @@ export async function markQuarterSyncStepRunning({
   const updateByStep = {
     finalize: {
       currentStep: "finalize" as const,
+      finalizeCompletedAt: null,
       finalizeError: null,
       finalizeStartedAt: now,
       finalizeStatus: "running" as const,
     },
     membership: {
       currentStep: "membership" as const,
+      membershipCompletedAt: null,
       membershipError: null,
       membershipStartedAt: now,
       membershipStatus: "running" as const,
     },
     proposals: {
       currentStep: "proposals" as const,
+      proposalsCompletedAt: null,
       proposalsError: null,
       proposalsStartedAt: now,
       proposalsStatus: "running" as const,
     },
     transactions: {
       currentStep: "transactions" as const,
+      transactionsCompletedAt: null,
       transactionsError: null,
       transactionsStartedAt: now,
       transactionsStatus: "running" as const,
@@ -408,30 +412,48 @@ export async function markQuarterSyncStepRunning({
 }
 
 export async function markQuarterSyncStepFailed({
+  counts,
   error,
   quarterId,
   runId,
   step,
 }: {
+  counts?: Partial<
+    Pick<
+      QuarterSyncStatus,
+      | "importedTransactions"
+      | "importedTransfers"
+      | "membershipActivities"
+      | "proposalLinkedTransactions"
+      | "proposalMatches"
+      | "scannedTransfers"
+      | "syncErrorCount"
+    >
+  >;
   error: string;
   quarterId: string;
   runId: string;
   step: QuarterSyncStep;
 }) {
+  const now = new Date();
   const updateByStep = {
     finalize: {
+      finalizeCompletedAt: now,
       finalizeError: error,
       finalizeStatus: "failed" as const,
     },
     membership: {
+      membershipCompletedAt: now,
       membershipError: error,
       membershipStatus: "failed" as const,
     },
     proposals: {
+      proposalsCompletedAt: now,
       proposalsError: error,
       proposalsStatus: "failed" as const,
     },
     transactions: {
+      transactionsCompletedAt: now,
       transactionsError: error,
       transactionsStatus: "failed" as const,
     },
@@ -443,6 +465,7 @@ export async function markQuarterSyncStepFailed({
       currentStep: step,
       overallStatus: "failed",
       ...updateByStep[step],
+      ...counts,
     })
     .where(
       and(

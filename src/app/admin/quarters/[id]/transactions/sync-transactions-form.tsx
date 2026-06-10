@@ -140,7 +140,6 @@ export function SyncTransactionsForm({
           }
 
           setStatus(nextStatus);
-          router.refresh();
 
           const stepError = getError(nextStatus);
           if (nextStatus.overallStatus === "failed" && stepError) {
