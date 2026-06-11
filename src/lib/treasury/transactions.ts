@@ -151,8 +151,16 @@ function getRpcUrl(chainId: number) {
 
   const alchemyNetwork = ALCHEMY_NETWORK_BY_CHAIN_ID.get(chainId);
 
-  if (alchemyNetwork && process.env.ALCHEMY_API_KEY) {
-    return `https://${alchemyNetwork}.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`;
+  if (alchemyNetwork) {
+    const apiKey = process.env.ALCHEMY_API_KEY;
+
+    if (!apiKey) {
+      throw new Error(
+        `ALCHEMY_API_KEY is required for operator chain ${chainId}`,
+      );
+    }
+
+    return `https://${alchemyNetwork}.g.alchemy.com/v2/${apiKey}`;
   }
 
   return null;

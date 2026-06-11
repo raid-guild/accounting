@@ -85,9 +85,15 @@ function formatUsd(value: string | null) {
   }).format(number);
 }
 
-function LookupSubmitButton({ pending }: { pending: boolean }) {
+function LookupSubmitButton({
+  disabled,
+  pending,
+}: {
+  disabled: boolean;
+  pending: boolean;
+}) {
   return (
-    <Button type="submit" disabled={pending} aria-busy={pending}>
+    <Button type="submit" disabled={disabled || pending} aria-busy={pending}>
       <Search
         data-icon="inline-start"
         className={pending ? "animate-pulse" : ""}
@@ -157,6 +163,7 @@ export function TransactionLookupPanel({
     lookupRaidTransaction,
     INITIAL_STATE,
   );
+  const hasChains = chains.length > 0;
   const result = state.result;
 
   return (
@@ -187,9 +194,15 @@ export function TransactionLookupPanel({
           <select
             name="chainId"
             className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-            defaultValue={chains[0]?.id}
+            defaultValue={chains[0]?.id ?? ""}
+            disabled={!hasChains}
             required
           >
+            {!hasChains ? (
+              <option value="" disabled>
+                No chains available
+              </option>
+            ) : null}
             {chains.map((chain) => (
               <option key={chain.id} value={chain.id}>
                 {chain.name}
@@ -211,7 +224,7 @@ export function TransactionLookupPanel({
           />
         </label>
         <div className="flex items-end">
-          <LookupSubmitButton pending={pending} />
+          <LookupSubmitButton disabled={!hasChains} pending={pending} />
         </div>
       </form>
 
@@ -274,10 +287,7 @@ export function TransactionLookupPanel({
             {result.transfers.length > 0 ? (
               <div className="grid gap-3">
                 {result.transfers.map((transfer, index) => (
-                  <TransferRow
-                    key={`${transfer.transferType}:${transfer.tokenAddress ?? "native"}:${transfer.fromAddress}:${transfer.toAddress}:${transfer.rawAmount}:${index}`}
-                    transfer={transfer}
-                  />
+                  <TransferRow key={index} transfer={transfer} />
                 ))}
               </div>
             ) : (

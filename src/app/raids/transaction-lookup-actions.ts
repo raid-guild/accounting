@@ -15,11 +15,12 @@ const USER_FACING_ERRORS = new Set([
   "ALCHEMY_API_KEY is required to look up this transaction",
   "Choose a supported chain",
   "Enter a valid transaction hash",
-  "GNOSIS_RPC_URL is required to look up this transaction",
   "Raid accounting access required",
   "Transaction not found",
   "Unsupported lookup chain",
 ]);
+const RPC_CONFIG_ERROR_PATTERN =
+  /^[A-Z][A-Z0-9_]* is required to look up this transaction$/;
 
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -46,8 +47,13 @@ async function requireRaidAccountingAccess() {
 }
 
 function getErrorMessage(error: unknown) {
-  if (error instanceof Error && USER_FACING_ERRORS.has(error.message)) {
-    return error.message;
+  if (error instanceof Error) {
+    if (
+      USER_FACING_ERRORS.has(error.message) ||
+      RPC_CONFIG_ERROR_PATTERN.test(error.message)
+    ) {
+      return error.message;
+    }
   }
 
   return "Transaction lookup failed. Check the selected chain and try again.";

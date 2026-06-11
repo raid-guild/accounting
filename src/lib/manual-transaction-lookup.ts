@@ -10,9 +10,12 @@ import {
   http,
   isAddress,
   parseAbiItem,
+  TransactionNotFoundError,
+  TransactionReceiptNotFoundError,
   type Address,
   type Chain,
   type Hex,
+  type PublicClient,
 } from "viem";
 import { arbitrum, base, gnosis, mainnet, optimism } from "viem/chains";
 
@@ -109,6 +112,13 @@ type TokenMetadata = {
   symbol: string;
 };
 
+type ParsedTransferLog = {
+  fromAddress: Address;
+  rawAmount: bigint;
+  toAddress: Address;
+  tokenAddress: Address;
+};
+
 export function listManualLookupChains(): ManualLookupChain[] {
   return MANUAL_LOOKUP_CHAINS.map(({ chain }) => ({
     id: chain.id,
@@ -142,7 +152,9 @@ function getRpcUrl(config: ManualLookupChainConfig) {
   const rpcUrl = config.rpcEnv ? process.env[config.rpcEnv] : undefined;
 
   if (!rpcUrl) {
-    throw new Error("GNOSIS_RPC_URL is required to look up this transaction");
+    throw new Error(
+      `${config.rpcEnv || "RPC_URL"} is required to look up this transaction`,
+    );
   }
 
   return rpcUrl;
@@ -199,7 +211,7 @@ async function getTokenMetadata({
   client,
 }: {
   address: Address;
-  client: ReturnType<typeof createPublicClient>;
+  client: PublicClient;
 }): Promise<TokenMetadata> {
   const [symbol, name, decimals] = await Promise.all([
     client
@@ -218,6 +230,30 @@ async function getTokenMetadata({
     name: String(name),
     symbol: String(symbol),
   };
+}
+
+async function getTransactionData({
+  client,
+  txHash,
+}: {
+  client: PublicClient;
+  txHash: Hex;
+}) {
+  try {
+    return await Promise.all([
+      client.getTransaction({ hash: txHash }),
+      client.getTransactionReceipt({ hash: txHash }),
+    ]);
+  } catch (error) {
+    if (
+      error instanceof TransactionNotFoundError ||
+      error instanceof TransactionReceiptNotFoundError
+    ) {
+      throw new Error("Transaction not found");
+    }
+
+    throw error;
+  }
 }
 
 function classifyTransfers(
@@ -255,10 +291,10 @@ export async function lookupManualTransaction({
   const config = getChainConfig(chainId);
   const normalizedTxHash = normalizeHash(txHash);
   const client = getPublicClient(config);
-  const [transaction, receipt] = await Promise.all([
-    client.getTransaction({ hash: normalizedTxHash }),
-    client.getTransactionReceipt({ hash: normalizedTxHash }),
-  ]);
+  const [transaction, receipt] = await getTransactionData({
+    client,
+    txHash: normalizedTxHash,
+  });
 
   if (!transaction || !receipt) {
     throw new Error("Transaction not found");
@@ -278,6 +314,7 @@ export async function lookupManualTransaction({
       return null;
     }
   });
+  const parsedTransferLogs: ParsedTransferLog[] = [];
   const transfers: ManualLookupTransfer[] = [];
 
   if (transaction.value > BigInt(0) && transaction.to) {
@@ -318,18 +355,42 @@ export async function lookupManualTransaction({
       continue;
     }
 
-    const tokenAddress = getAddress(parsedLog.log.address);
-    const metadata = await getTokenMetadata({ address: tokenAddress, client });
-    const amount = formatUnits(value, metadata.decimals);
+    parsedTransferLogs.push({
+      fromAddress: from,
+      rawAmount: value,
+      toAddress: to,
+      tokenAddress: getAddress(parsedLog.log.address),
+    });
+  }
+
+  const tokenMetadataEntries = await Promise.all(
+    [...new Set(parsedTransferLogs.map((log) => log.tokenAddress))].map(
+      async (tokenAddress) =>
+        [
+          tokenAddress,
+          await getTokenMetadata({ address: tokenAddress, client }),
+        ] as const,
+    ),
+  );
+  const metadataByTokenAddress = new Map(tokenMetadataEntries);
+
+  for (const parsedTransferLog of parsedTransferLogs) {
+    const metadata = metadataByTokenAddress.get(parsedTransferLog.tokenAddress);
+
+    if (!metadata) {
+      continue;
+    }
+
+    const amount = formatUnits(parsedTransferLog.rawAmount, metadata.decimals);
 
     transfers.push({
       amount,
       assetName: metadata.name,
       assetSymbol: metadata.symbol,
-      fromAddress: from,
-      rawAmount: value.toString(),
-      tokenAddress,
-      toAddress: to,
+      fromAddress: parsedTransferLog.fromAddress,
+      rawAmount: parsedTransferLog.rawAmount.toString(),
+      tokenAddress: parsedTransferLog.tokenAddress,
+      toAddress: parsedTransferLog.toAddress,
       transferType: "erc20",
       usdAmount: getStableUsdAmount({ amount, symbol: metadata.symbol }),
     });
