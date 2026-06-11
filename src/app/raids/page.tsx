@@ -45,6 +45,8 @@ import {
   RaidEntityCreateForm,
 } from "@/app/raids/raid-management-forms";
 import { RaidManagementToast } from "@/app/raids/raid-management-toast";
+import { TransactionLookupPanel } from "@/app/raids/transaction-lookup-panel";
+import { listManualLookupChains } from "@/lib/manual-transaction-lookup";
 
 type FormAction = (formData: FormData) => Promise<void>;
 type RaidFlow = "client" | "raid" | "subcontractor";
@@ -898,6 +900,7 @@ export default async function RaidsPage({
     listRaids(),
   ]);
   const accountingOverview = await getRaidAccountingOverview(raids);
+  const lookupChains = listManualLookupChains();
   const activeClients = entities.filter(
     (entity) => entity.type === "client" && !entity.archivedAt,
   );
@@ -941,6 +944,7 @@ export default async function RaidsPage({
 
       <section className="container-custom grid gap-8 py-8 md:py-12">
         <FlowLauncher />
+        <TransactionLookupPanel chains={lookupChains} />
         <SelectedFlow activeClients={activeClients} flow={flow} />
         <TopClientsTable clients={accountingOverview.clients} />
         <RaidAccountingTable summaries={accountingOverview.raids} />
