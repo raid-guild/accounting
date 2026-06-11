@@ -32,6 +32,10 @@ const DEFAULT_SAFE_TRANSACTION_SERVICE_URL =
 const DEFAULT_PAGE_LIMIT = 100;
 const DEFAULT_MAX_PAGES = 3;
 const DEFAULT_OPERATOR_LOG_BLOCK_CHUNK_SIZE = BigInt(50000);
+const ALCHEMY_NETWORK_BY_CHAIN_ID = new Map<number, string>([
+  [mainnet.id, "eth-mainnet"],
+  [base.id, "base-mainnet"],
+]);
 const STABLE_ASSET_SYMBOLS = new Set(["USDC", "XDAI", "WXDAI"]);
 const ERC20_TRANSFER_EVENT = parseAbiItem(
   "event Transfer(address indexed from, address indexed to, uint256 value)",
@@ -145,12 +149,10 @@ function getRpcUrl(chainId: number) {
     return process.env.GNOSIS_RPC_URL;
   }
 
-  if (chainId === mainnet.id) {
-    return process.env.ETHEREUM_RPC_URL ?? process.env.MAINNET_RPC_URL;
-  }
+  const alchemyNetwork = ALCHEMY_NETWORK_BY_CHAIN_ID.get(chainId);
 
-  if (chainId === base.id) {
-    return process.env.BASE_RPC_URL;
+  if (alchemyNetwork && process.env.ALCHEMY_API_KEY) {
+    return `https://${alchemyNetwork}.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`;
   }
 
   return null;
