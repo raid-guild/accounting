@@ -77,6 +77,22 @@ export type TreasuryTransferClassificationView = {
   usdAmount: string | null;
 };
 
+export type ManualLedgerEntryClassificationView = {
+  assetAmount: string;
+  assetSymbol: string;
+  category: LedgerCategory;
+  chainId: number | null;
+  counterpartyEntityId: string | null;
+  executedAt: string;
+  id: string;
+  notes: string | null;
+  quarterId: string | null;
+  raidId: string | null;
+  source: "manual";
+  txHash: string | null;
+  usdAmount: string;
+};
+
 export const CLASSIFICATION_CATEGORIES = ledgerCategoryEnum.enumValues;
 export const IMPORTED_TRANSFER_CLASSIFICATION_CATEGORIES =
   ledgerCategoryEnum.enumValues.filter(
@@ -345,6 +361,39 @@ export async function listTreasuryTransferClassifications({
   ]);
 
   return rows.map((row) => mapTransferRow({ ...row, labels }));
+}
+
+export async function listManualLedgerEntryClassifications({
+  quarterId,
+}: {
+  quarterId: string;
+}): Promise<ManualLedgerEntryClassificationView[]> {
+  const rows = await getDb()
+    .select()
+    .from(ledgerEntries)
+    .where(
+      and(
+        eq(ledgerEntries.quarterId, quarterId),
+        eq(ledgerEntries.source, "manual"),
+      ),
+    )
+    .orderBy(asc(ledgerEntries.occurredAt));
+
+  return rows.map((entry) => ({
+    assetAmount: entry.assetAmount,
+    assetSymbol: entry.assetSymbol,
+    category: entry.category,
+    chainId: entry.chainId,
+    counterpartyEntityId: entry.counterpartyEntityId,
+    executedAt: entry.occurredAt.toISOString(),
+    id: entry.id,
+    notes: decryptNullableField(entry.notesEncrypted),
+    quarterId: entry.quarterId,
+    raidId: entry.raidId,
+    source: "manual",
+    txHash: entry.txHash,
+    usdAmount: entry.usdAmount,
+  }));
 }
 
 export async function getQuarterIdForDate(date: Date) {

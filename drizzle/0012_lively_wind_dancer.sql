@@ -1,0 +1,2 @@
+ALTER TABLE "ledger_entries" ADD COLUMN "source_external_id" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "ledger_entries_source_external_id_unique" ON "ledger_entries" USING btree ("source_external_id");

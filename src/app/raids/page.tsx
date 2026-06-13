@@ -12,8 +12,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { and, desc, eq } from "drizzle-orm";
 
 import { Button } from "@/components/ui/button";
+import { getDb } from "@/db";
+import { ledgerEntries, quarters } from "@/db/schema";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
 import {
   listEntitiesByTypes,
@@ -45,11 +48,13 @@ import {
   RaidEntityCreateForm,
 } from "@/app/raids/raid-management-forms";
 import { RaidManagementToast } from "@/app/raids/raid-management-toast";
+import { removeManualRaidRevenueFromForm } from "@/app/raids/transaction-lookup-actions";
 import { TransactionLookupPanel } from "@/app/raids/transaction-lookup-panel";
 import { listManualLookupChains } from "@/lib/manual-transaction-lookup";
 
 type FormAction = (formData: FormData) => Promise<void>;
 type RaidFlow = "client" | "raid" | "subcontractor";
+type RaidModal = `add-${RaidFlow}`;
 type TeamPayoutStatus = RaidAccountingSummary["status"];
 type RaidToastError =
   | "client-has-raids"
@@ -58,17 +63,60 @@ type RaidToastError =
   | "invalid-chain"
   | "missing-address";
 type RaidToastSubject = "address" | RaidFlow;
+type ManualRaidRevenueView = {
+  assetAmount: string;
+  assetSymbol: string;
+  chainId: number | null;
+  id: string;
+  occurredAt: Date;
+  quarterId: string;
+  quarterLabel: string;
+  quarterStatus: typeof quarters.$inferSelect.status;
+  raidId: string | null;
+  txHash: string | null;
+  usdAmount: string;
+};
 
 function formatAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function formatTimestamp(value: Date) {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(value);
+}
+
+function formatUsdAmount(value: string) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return value;
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "currency",
+  }).format(number);
 }
 
 function getEntityLabel(type: RaidRelatedEntityType) {
   return type === "client" ? "Client" : "Subcontractor";
 }
 
-function getFlowHref(flow: RaidFlow) {
-  return `/raids?flow=${flow}`;
+function getAddModalHref(flow: RaidFlow) {
+  return `/raids?modal=add-${flow}`;
+}
+
+function getEntityHref(entityId: string) {
+  return `/raids?entity=${entityId}`;
+}
+
+function getRaidHref(raidId: string) {
+  return `/raids?raid=${raidId}`;
 }
 
 const TEAM_PAYOUT_STATUS_COPY: Record<
@@ -103,6 +151,34 @@ function TeamPayoutStatusBadge({ status }: { status: TeamPayoutStatus }) {
       {copy.label}
     </span>
   );
+}
+
+async function listManualRaidRevenues(): Promise<ManualRaidRevenueView[]> {
+  const rows = await getDb()
+    .select({
+      assetAmount: ledgerEntries.assetAmount,
+      assetSymbol: ledgerEntries.assetSymbol,
+      chainId: ledgerEntries.chainId,
+      id: ledgerEntries.id,
+      occurredAt: ledgerEntries.occurredAt,
+      quarterId: quarters.id,
+      quarterLabel: quarters.label,
+      quarterStatus: quarters.status,
+      raidId: ledgerEntries.raidId,
+      txHash: ledgerEntries.txHash,
+      usdAmount: ledgerEntries.usdAmount,
+    })
+    .from(ledgerEntries)
+    .innerJoin(quarters, eq(ledgerEntries.quarterId, quarters.id))
+    .where(
+      and(
+        eq(ledgerEntries.source, "manual"),
+        eq(ledgerEntries.category, "raid_revenue"),
+      ),
+    )
+    .orderBy(desc(ledgerEntries.occurredAt));
+
+  return rows;
 }
 
 function TextInput({
@@ -155,63 +231,54 @@ function NotesField({ defaultValue }: { defaultValue?: string | null }) {
 }
 
 function FlowButton({
-  description,
   flow,
   icon,
   title,
 }: {
-  description: string;
   flow: RaidFlow;
   icon: ReactNode;
   title: string;
 }) {
   return (
     <Link
-      href={getFlowHref(flow)}
-      className="group rounded-lg border border-border bg-card p-5 shadow-sm transition-all hover:border-primary/40 hover:bg-muted/30"
+      href={getAddModalHref(flow)}
+      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-sm transition-all hover:border-primary/40 hover:bg-muted"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground transition-all group-hover:bg-primary group-hover:text-primary-foreground">
-            {icon}
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-base font-semibold">{title}</h2>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
-              {description}
-            </p>
-          </div>
-        </div>
-        <Plus
-          className="mt-1 size-4 shrink-0 text-muted-foreground"
-          aria-hidden="true"
-        />
-      </div>
+      {icon}
+      {title}
+      <Plus className="size-4 text-muted-foreground" aria-hidden="true" />
     </Link>
   );
 }
 
 function FlowLauncher() {
   return (
-    <section className="grid gap-4 md:grid-cols-3">
-      <FlowButton
-        description="Create a client profile for raid revenue."
-        flow="client"
-        icon={<BriefcaseBusiness className="size-5" aria-hidden="true" />}
-        title="Add Client"
-      />
-      <FlowButton
-        description="Link a raid to an active client."
-        flow="raid"
-        icon={<Swords className="size-5" aria-hidden="true" />}
-        title="Add Raid"
-      />
-      <FlowButton
-        description="Add a payout recipient for raid work."
-        flow="subcontractor"
-        icon={<CircleDollarSign className="size-5" aria-hidden="true" />}
-        title="Add Subcontractor"
-      />
+    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="type-label-sm text-muted-foreground">Raid Records</p>
+          <h2 className="text-lg font-semibold">Manage raid accounting</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <FlowButton
+            flow="client"
+            icon={<BriefcaseBusiness className="size-5" aria-hidden="true" />}
+            title="Add Client"
+          />
+          <FlowButton
+            flow="raid"
+            icon={<Swords className="size-5" aria-hidden="true" />}
+            title="Add Raid"
+          />
+          <FlowButton
+            flow="subcontractor"
+            icon={
+              <CircleDollarSign className="size-5" aria-hidden="true" />
+            }
+            title="Add Subcontractor"
+          />
+        </div>
+      </div>
     </section>
   );
 }
@@ -379,23 +446,9 @@ function CreateEntityFlow({ type }: { type: RaidRelatedEntityType }) {
   const label = getEntityLabel(type);
 
   return (
-    <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-      <div className="flex items-center gap-3">
-        <div className="flex size-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-          {type === "client" ? (
-            <BriefcaseBusiness className="size-5" aria-hidden="true" />
-          ) : (
-            <CircleDollarSign className="size-5" aria-hidden="true" />
-          )}
-        </div>
-        <div>
-          <p className="type-label-sm text-muted-foreground">New {label}</p>
-          <h2 className="text-lg font-semibold">Add {label}</h2>
-        </div>
-      </div>
-
+    <div>
       <RaidEntityCreateForm label={label} type={type} />
-    </section>
+    </div>
   );
 }
 
@@ -453,11 +506,11 @@ function AddAddressForm({ entityId }: { entityId: string }) {
   );
 }
 
-function EntityCard({ entity }: { entity: CoreEntityView }) {
+function EntityDetails({ entity }: { entity: CoreEntityView }) {
   const type = entity.type as RaidRelatedEntityType;
 
   return (
-    <article className="rounded-lg border border-border bg-card p-5 shadow-sm">
+    <div>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
@@ -577,11 +630,11 @@ function EntityCard({ entity }: { entity: CoreEntityView }) {
           </Button>
         </form>
       ) : null}
-    </article>
+    </div>
   );
 }
 
-function EntityList({
+function EntityRows({
   entities,
   emptyLabel,
   title,
@@ -591,7 +644,7 @@ function EntityList({
   title: string;
 }) {
   return (
-    <section>
+    <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2 className="text-lg font-semibold">{title}</h2>
         <span className="type-label-sm text-muted-foreground">
@@ -599,13 +652,13 @@ function EntityList({
         </span>
       </div>
       {entities.length > 0 ? (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-background">
           {entities.map((entity) => (
-            <EntityCard key={entity.id} entity={entity} />
+            <EntityRow key={entity.id} entity={entity} />
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
+        <div className="rounded-lg border border-dashed border-border bg-background p-6 text-sm text-muted-foreground">
           {emptyLabel}
         </div>
       )}
@@ -613,61 +666,151 @@ function EntityList({
   );
 }
 
+function EntityRow({ entity }: { entity: CoreEntityView }) {
+  const type = entity.type as RaidRelatedEntityType;
+
+  return (
+    <Link
+      href={getEntityHref(entity.id)}
+      className="grid gap-3 px-4 py-3 transition-colors hover:bg-muted/50 sm:grid-cols-[minmax(0,1fr)_9rem_7rem]"
+    >
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-medium">{entity.name}</span>
+          {entity.archivedAt ? (
+            <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              Archived
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-1 truncate text-sm text-muted-foreground">
+          {entity.website || getEntityLabel(type)}
+        </p>
+      </div>
+      <div className="text-sm">
+        <p className="type-label-sm text-muted-foreground">Addresses</p>
+        <p className="font-medium">{entity.addresses.length}</p>
+      </div>
+      <div className="text-sm">
+        <p className="type-label-sm text-muted-foreground">Type</p>
+        <p className="font-medium">{getEntityLabel(type)}</p>
+      </div>
+    </Link>
+  );
+}
+
 function CreateRaidFlow({ clients }: { clients: CoreEntityView[] }) {
   return (
-    <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-      <div className="flex items-center gap-3">
-        <div className="flex size-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-          <Swords className="size-5" aria-hidden="true" />
-        </div>
-        <div>
-          <p className="type-label-sm text-muted-foreground">Raid</p>
-          <h2 className="text-lg font-semibold">Add raid</h2>
-        </div>
-      </div>
-
-      <form action={createRaid} className="mt-6 grid gap-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextInput label="Name" name="name" required />
-          <label className="grid gap-2 text-sm font-medium">
-            <span className="type-label-sm text-muted-foreground">Client</span>
-            <select
-              name="clientEntityId"
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-              required
-            >
-              <option value="">Select client</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <NotesField />
-        <div>
-          <Button type="submit" disabled={clients.length === 0}>
-            <Save data-icon="inline-start" />
-            Add Raid
-          </Button>
-          <Link
-            href="/raids"
-            className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg px-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted"
+    <form action={createRaid} className="grid gap-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextInput label="Name" name="name" required />
+        <label className="grid gap-2 text-sm font-medium">
+          <span className="type-label-sm text-muted-foreground">Client</span>
+          <select
+            name="clientEntityId"
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            required
           >
-            Cancel
-          </Link>
+            <option value="">Select client</option>
+            {clients.map((client) => (
+              <option key={client.id} value={client.id}>
+                {client.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <NotesField />
+      <div>
+        <Button type="submit" disabled={clients.length === 0}>
+          <Save data-icon="inline-start" />
+          Add Raid
+        </Button>
+        <Link
+          href="/raids"
+          className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg px-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted"
+        >
+          Cancel
+        </Link>
+      </div>
+    </form>
+  );
+}
+
+function ManualRaidRevenueRows({
+  revenues,
+}: {
+  revenues: ManualRaidRevenueView[];
+}) {
+  return (
+    <section className="mt-4 border-t border-border pt-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-sm font-semibold">Manual Revenue</h4>
+        <span className="type-label-sm text-muted-foreground">
+          {revenues.length} entries
+        </span>
+      </div>
+      {revenues.length > 0 ? (
+        <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-background">
+          {revenues.map((revenue) => (
+            <div
+              key={revenue.id}
+              className="grid gap-3 px-3 py-3 text-sm md:grid-cols-[minmax(0,1fr)_8rem_auto]"
+            >
+              <div className="min-w-0">
+                <p className="font-medium">
+                  {formatUsdAmount(revenue.usdAmount)}
+                </p>
+                <p className="mt-1 truncate text-muted-foreground">
+                  {revenue.assetAmount} {revenue.assetSymbol}
+                  {revenue.txHash ? ` · ${formatAddress(revenue.txHash)}` : ""}
+                </p>
+              </div>
+              <div>
+                <p className="type-label-sm text-muted-foreground">Quarter</p>
+                <p className="font-medium">{revenue.quarterLabel}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatTimestamp(revenue.occurredAt)}
+                </p>
+              </div>
+              <div className="flex items-center md:justify-end">
+                {revenue.quarterStatus === "draft" ? (
+                  <form action={removeManualRaidRevenueFromForm}>
+                    <input
+                      type="hidden"
+                      name="ledgerEntryId"
+                      value={revenue.id}
+                    />
+                    <Button type="submit" variant="destructive" size="sm">
+                      <Trash2 data-icon="inline-start" />
+                      Remove
+                    </Button>
+                  </form>
+                ) : (
+                  <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+                    Locked
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
-      </form>
+      ) : (
+        <p className="rounded-md border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+          No manual revenue saved for this raid yet.
+        </p>
+      )}
     </section>
   );
 }
 
-function RaidCard({
+function RaidDetails({
   clients,
+  revenues,
   raid,
 }: {
   clients: CoreEntityView[];
+  revenues: ManualRaidRevenueView[];
   raid: RaidView;
 }) {
   const clientOptions = clients.some(
@@ -677,7 +820,7 @@ function RaidCard({
     : [...clients, { ...raid.client, name: `${raid.client.name} (archived)` }];
 
   return (
-    <article className="rounded-lg border border-border bg-card p-5 shadow-sm">
+    <div>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="type-label-sm text-muted-foreground">Raid</p>
@@ -698,6 +841,8 @@ function RaidCard({
           {raid.notes}
         </p>
       ) : null}
+
+      <ManualRaidRevenueRows revenues={revenues} />
 
       <details className="mt-4 rounded-md border border-border bg-background">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
@@ -761,23 +906,21 @@ function RaidCard({
           </Button>
         </form>
       ) : null}
-    </article>
+    </div>
   );
 }
 
-function RaidList({
-  clients,
+function RaidRows({
   emptyLabel,
   raids,
   title,
 }: {
-  clients: CoreEntityView[];
   emptyLabel: string;
   raids: RaidView[];
   title: string;
 }) {
   return (
-    <section>
+    <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2 className="text-lg font-semibold">{title}</h2>
         <span className="type-label-sm text-muted-foreground">
@@ -785,17 +928,48 @@ function RaidList({
         </span>
       </div>
       {raids.length > 0 ? (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-background">
           {raids.map((raid) => (
-            <RaidCard key={raid.id} clients={clients} raid={raid} />
+            <RaidRow key={raid.id} raid={raid} />
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
+        <div className="rounded-lg border border-dashed border-border bg-background p-6 text-sm text-muted-foreground">
           {emptyLabel}
         </div>
       )}
     </section>
+  );
+}
+
+function RaidRow({ raid }: { raid: RaidView }) {
+  return (
+    <Link
+      href={getRaidHref(raid.id)}
+      className="grid gap-3 px-4 py-3 transition-colors hover:bg-muted/50 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,0.45fr)_7rem]"
+    >
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate font-medium">{raid.name}</span>
+          {raid.archivedAt ? (
+            <span className="rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+              Shipped
+            </span>
+          ) : null}
+        </div>
+        <p className="mt-1 truncate text-sm text-muted-foreground">
+          {raid.notes || "No notes recorded"}
+        </p>
+      </div>
+      <div className="min-w-0 text-sm">
+        <p className="type-label-sm text-muted-foreground">Client</p>
+        <p className="truncate font-medium">{raid.client.name}</p>
+      </div>
+      <div className="text-sm">
+        <p className="type-label-sm text-muted-foreground">Status</p>
+        <p className="font-medium">{raid.archivedAt ? "Shipped" : "Active"}</p>
+      </div>
+    </Link>
   );
 }
 
@@ -807,6 +981,26 @@ function parseFlow(value: string | string[] | undefined): RaidFlow | null {
   }
 
   return null;
+}
+
+function parseAddModal(value: string | string[] | undefined): RaidModal | null {
+  const modal = Array.isArray(value) ? value[0] : value;
+
+  if (
+    modal === "add-client" ||
+    modal === "add-raid" ||
+    modal === "add-subcontractor"
+  ) {
+    return modal;
+  }
+
+  return null;
+}
+
+function parseId(value: string | string[] | undefined) {
+  const id = Array.isArray(value) ? value[0] : value;
+
+  return id || null;
 }
 
 function parseToastSubject(
@@ -839,19 +1033,148 @@ function parseToastError(
   return null;
 }
 
-function SelectedFlow({
+function ModalShell({
+  children,
+  eyebrow,
+  icon,
+  title,
+}: {
+  children: ReactNode;
+  eyebrow: string;
+  icon: ReactNode;
+  title: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(41,16,10,0.72)] px-4 py-6 backdrop-blur-sm">
+      <Link
+        href="/raids"
+        aria-label="Close modal"
+        className="absolute inset-0"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative z-10 max-h-[min(42rem,calc(100vh-3rem))] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-card p-5 shadow-xl md:p-6"
+      >
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+              {icon}
+            </div>
+            <div className="min-w-0">
+              <p className="type-label-sm text-muted-foreground">{eyebrow}</p>
+              <h2 className="text-lg font-semibold">{title}</h2>
+            </div>
+          </div>
+          <Link
+            href="/raids"
+            className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            Close
+          </Link>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ActiveModal({
   activeClients,
-  flow,
+  addModal,
+  entities,
+  entityId,
+  manualRaidRevenues,
+  raidId,
+  raids,
 }: {
   activeClients: CoreEntityView[];
-  flow: RaidFlow | null;
+  addModal: RaidModal | null;
+  entities: CoreEntityView[];
+  entityId: string | null;
+  manualRaidRevenues: ManualRaidRevenueView[];
+  raidId: string | null;
+  raids: RaidView[];
 }) {
-  if (flow === "client" || flow === "subcontractor") {
-    return <CreateEntityFlow type={flow} />;
+  if (addModal === "add-client") {
+    return (
+      <ModalShell
+        eyebrow="New Client"
+        icon={<BriefcaseBusiness className="size-5" aria-hidden="true" />}
+        title="Add Client"
+      >
+        <CreateEntityFlow type="client" />
+      </ModalShell>
+    );
   }
 
-  if (flow === "raid") {
-    return <CreateRaidFlow clients={activeClients} />;
+  if (addModal === "add-raid") {
+    return (
+      <ModalShell
+        eyebrow="New Raid"
+        icon={<Swords className="size-5" aria-hidden="true" />}
+        title="Add Raid"
+      >
+        <CreateRaidFlow clients={activeClients} />
+      </ModalShell>
+    );
+  }
+
+  if (addModal === "add-subcontractor") {
+    return (
+      <ModalShell
+        eyebrow="New Subcontractor"
+        icon={<CircleDollarSign className="size-5" aria-hidden="true" />}
+        title="Add Subcontractor"
+      >
+        <CreateEntityFlow type="subcontractor" />
+      </ModalShell>
+    );
+  }
+
+  const selectedEntity = entityId
+    ? entities.find((entity) => entity.id === entityId)
+    : null;
+
+  if (selectedEntity) {
+    const type = selectedEntity.type as RaidRelatedEntityType;
+
+    return (
+      <ModalShell
+        eyebrow={getEntityLabel(type)}
+        icon={
+          type === "client" ? (
+            <BriefcaseBusiness className="size-5" aria-hidden="true" />
+          ) : (
+            <CircleDollarSign className="size-5" aria-hidden="true" />
+          )
+        }
+        title={selectedEntity.name}
+      >
+        <EntityDetails entity={selectedEntity} />
+      </ModalShell>
+    );
+  }
+
+  const selectedRaid = raidId ? raids.find((raid) => raid.id === raidId) : null;
+
+  if (selectedRaid) {
+    return (
+      <ModalShell
+        eyebrow="Raid"
+        icon={<Swords className="size-5" aria-hidden="true" />}
+        title={selectedRaid.name}
+      >
+        <RaidDetails
+          clients={activeClients}
+          revenues={manualRaidRevenues.filter(
+            (revenue) => revenue.raidId === selectedRaid.id,
+          )}
+          raid={selectedRaid}
+        />
+      </ModalShell>
+    );
   }
 
   return null;
@@ -863,8 +1186,11 @@ export default async function RaidsPage({
   searchParams?: Promise<{
     added?: string | string[];
     deleted?: string | string[];
+    entity?: string | string[];
     error?: string | string[];
     flow?: string | string[];
+    modal?: string | string[];
+    raid?: string | string[];
   }>;
 }) {
   const session = await getAuthSession();
@@ -895,9 +1221,10 @@ export default async function RaidsPage({
     );
   }
 
-  const [entities, raids] = await Promise.all([
+  const [entities, raids, manualRaidRevenues] = await Promise.all([
     listEntitiesByTypes(["client", "subcontractor"]),
     listRaids(),
+    listManualRaidRevenues(),
   ]);
   const accountingOverview = await getRaidAccountingOverview(raids);
   const lookupChains = listManualLookupChains();
@@ -912,6 +1239,10 @@ export default async function RaidsPage({
   const archivedRaids = raids.filter((raid) => raid.archivedAt);
   const params = await searchParams;
   const flow = parseFlow(params?.flow);
+  const addModal =
+    parseAddModal(params?.modal) ?? (flow ? (`add-${flow}` as RaidModal) : null);
+  const entityId = parseId(params?.entity);
+  const raidId = parseId(params?.raid);
   const added = parseToastSubject(params?.added);
   const deleted = parseToastSubject(params?.deleted);
   const error = parseToastError(params?.error);
@@ -944,38 +1275,44 @@ export default async function RaidsPage({
 
       <section className="container-custom grid gap-8 py-8 md:py-12">
         <FlowLauncher />
-        <TransactionLookupPanel chains={lookupChains} />
-        <SelectedFlow activeClients={activeClients} flow={flow} />
+        <TransactionLookupPanel chains={lookupChains} raids={raids} />
         <TopClientsTable clients={accountingOverview.clients} />
         <RaidAccountingTable summaries={accountingOverview.raids} />
-        <RaidList
-          clients={activeClients}
+        <RaidRows
           emptyLabel="No active raids yet."
           raids={activeRaids}
           title="Active raids"
         />
-        <EntityList
+        <EntityRows
           emptyLabel="No active clients yet."
           entities={activeClients}
           title="Clients"
         />
-        <EntityList
+        <EntityRows
           emptyLabel="No active subcontractors yet."
           entities={activeSubcontractors}
           title="Subcontractors"
         />
-        <RaidList
-          clients={activeClients}
+        <RaidRows
           emptyLabel="No archived raids."
           raids={archivedRaids}
           title="Archived raids"
         />
-        <EntityList
+        <EntityRows
           emptyLabel="No archived clients or subcontractors."
           entities={archivedEntities}
           title="Archived entities"
         />
       </section>
+      <ActiveModal
+        activeClients={activeClients}
+        addModal={addModal}
+        entities={entities}
+        entityId={entityId}
+        manualRaidRevenues={manualRaidRevenues}
+        raidId={raidId}
+        raids={raids}
+      />
     </main>
   );
 }
