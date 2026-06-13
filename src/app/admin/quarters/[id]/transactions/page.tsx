@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { classifyQuarterTransfer } from "@/app/admin/quarters/[id]/transactions/actions";
+import { RemoveManualRevenueForm } from "@/app/raids/remove-manual-revenue-form";
 import { QuarterWorkflowProgress } from "@/components/quarters/quarter-workflow-progress";
 import { SyncTransactionsForm } from "@/app/admin/quarters/[id]/transactions/sync-transactions-form";
 import { TransactionReviewToast } from "@/app/admin/quarters/[id]/transactions/transaction-review-toast";
@@ -32,10 +33,12 @@ import {
   getCategoryLabel,
   IMPORTED_TRANSFER_CLASSIFICATION_CATEGORIES,
   listClassificationOptions,
+  listManualLedgerEntryClassifications,
   listTreasuryTransferClassifications,
   type ClassificationEntityOption,
   type ClassificationOptions,
   type LedgerCategory,
+  type ManualLedgerEntryClassificationView,
   type TreasuryTransferDaoProposal,
   type TreasuryTransferClassificationView,
 } from "@/lib/transaction-classification";
@@ -651,6 +654,97 @@ function TransferCard({
   );
 }
 
+function ManualLedgerEntryCard({
+  entry,
+  options,
+  quarter,
+}: {
+  entry: ManualLedgerEntryClassificationView;
+  options: ClassificationOptions;
+  quarter: QuarterSummary;
+}) {
+  const transactionExplorerUrl =
+    entry.chainId && entry.txHash
+      ? getTransactionExplorerUrl({
+          chainId: entry.chainId,
+          txHash: entry.txHash,
+        })
+      : null;
+  const linkedEntity = options.entities.find(
+    (entity) => entity.id === entry.counterpartyEntityId,
+  );
+  const linkedRaid = options.raids.find((raid) => raid.id === entry.raidId);
+
+  return (
+    <article className="rounded-lg border border-emerald-600/20 bg-card px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-600/20 bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-800">
+              <BadgeCheck className="size-3" aria-hidden="true" />
+              Classified
+            </span>
+            <span className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
+              Manual Entry
+            </span>
+            <span className="text-xs font-medium text-muted-foreground">
+              {getCategoryLabel(entry.category)}
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 className="text-sm font-semibold">
+              {formatTokenAmount(entry.assetAmount)} {entry.assetSymbol}
+              <span className="text-muted-foreground">
+                {" "}
+                · {formatCurrency(entry.usdAmount)}
+              </span>
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Manual Accounting · {formatTimestamp(entry.executedAt)}
+            </p>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {linkedEntity ? (
+              <span>
+                {getEntityTypeLabel(linkedEntity.type)}:{" "}
+                <span className="font-medium text-foreground">
+                  {linkedEntity.label}
+                </span>
+              </span>
+            ) : null}
+            {linkedRaid ? (
+              <span>
+                Raid:{" "}
+                <span className="font-medium text-foreground">
+                  {linkedRaid.name}
+                </span>
+              </span>
+            ) : null}
+            {entry.notes ? <span>Notes: {entry.notes}</span> : null}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {transactionExplorerUrl && entry.txHash ? (
+            <a
+              href={transactionExplorerUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {formatHash(entry.txHash)}
+              <ExternalLink className="size-3" aria-hidden="true" />
+              <span className="sr-only">Open transaction explorer</span>
+            </a>
+          ) : null}
+          {quarter.status === "draft" && entry.category === "raid_revenue" ? (
+            <RemoveManualRevenueForm ledgerEntryId={entry.id} />
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function AdminGate() {
   return (
     <main className="container-custom py-10">
@@ -702,15 +796,17 @@ export default async function QuarterTransactionsPage({
     );
   }
 
-  const [options, transfers, summary, quarterSyncStatus] = await Promise.all([
-    listClassificationOptions(),
-    listTreasuryTransferClassifications({
-      quarter,
-      status: "all",
-    }),
-    getQuarterClassificationSummary(quarter),
-    getQuarterSyncStatus(quarter.id),
-  ]);
+  const [options, transfers, manualEntries, summary, quarterSyncStatus] =
+    await Promise.all([
+      listClassificationOptions(),
+      listTreasuryTransferClassifications({
+        quarter,
+        status: "all",
+      }),
+      listManualLedgerEntryClassifications({ quarterId: quarter.id }),
+      getQuarterClassificationSummary(quarter),
+      getQuarterSyncStatus(quarter.id),
+    ]);
   const toastSyncStatus =
     query.synced === "1"
       ? "complete"
@@ -817,6 +913,24 @@ export default async function QuarterTransactionsPage({
         ) : null}
 
         <section className="grid gap-4">
+          {manualEntries.length > 0 ? (
+            <div className="grid gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold">Manual Ledger Entries</h2>
+                <span className="type-label-sm text-muted-foreground">
+                  {manualEntries.length} entries
+                </span>
+              </div>
+              {manualEntries.map((entry) => (
+                <ManualLedgerEntryCard
+                  key={entry.id}
+                  entry={entry}
+                  options={options}
+                  quarter={quarter}
+                />
+              ))}
+            </div>
+          ) : null}
           {transfers.length > 0 ? (
             transfers.map((transfer) => (
               <TransferCard
@@ -826,11 +940,11 @@ export default async function QuarterTransactionsPage({
                 transfer={transfer}
               />
             ))
-          ) : (
+          ) : manualEntries.length === 0 ? (
             <div className="rounded-lg border border-dashed border-border bg-card p-8 text-sm text-muted-foreground">
               No imported treasury transfers found for this quarter.
             </div>
-          )}
+          ) : null}
         </section>
       </section>
     </main>

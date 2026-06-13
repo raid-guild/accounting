@@ -3,26 +3,41 @@
 import {
   AlertTriangle,
   ArrowRight,
+  BadgeDollarSign,
   ExternalLink,
   Search,
-  ShieldQuestion,
+  Save,
+  Trash2,
 } from "lucide-react";
-import { useActionState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
 import {
   lookupRaidTransaction,
+  removeManualRaidRevenue,
+  saveManualRaidRevenue,
+  type SavedManualRevenue,
   type TransactionLookupState,
 } from "@/app/raids/transaction-lookup-actions";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
+import type { RaidView } from "@/lib/core-entities";
 import type {
   ManualLookupChain,
   ManualLookupClassification,
   ManualLookupTransfer,
+  ManualTransactionLookupResult,
 } from "@/lib/manual-transaction-lookup";
 
 const INITIAL_STATE: TransactionLookupState = {
   error: null,
   result: null,
+  saved: false,
+  savedEntry: null,
+};
+
+const REMOVE_INITIAL_STATE = {
+  error: null,
+  removed: false,
 };
 
 const CLASSIFICATION_COPY: Record<
@@ -103,6 +118,48 @@ function LookupSubmitButton({
   );
 }
 
+function SaveSubmitButton({
+  disabled,
+  pending,
+}: {
+  disabled: boolean;
+  pending: boolean;
+}) {
+  return (
+    <Button type="submit" disabled={disabled || pending} aria-busy={pending}>
+      <Save
+        data-icon="inline-start"
+        className={pending ? "animate-pulse" : ""}
+      />
+      {pending ? "Saving..." : "Save Raid Revenue"}
+    </Button>
+  );
+}
+
+function RemoveRevenueButton({
+  disabled,
+  pending,
+}: {
+  disabled: boolean;
+  pending: boolean;
+}) {
+  return (
+    <Button
+      type="submit"
+      variant="destructive"
+      size="sm"
+      disabled={disabled || pending}
+      aria-busy={pending}
+    >
+      <Trash2
+        data-icon="inline-start"
+        className={pending ? "animate-pulse" : ""}
+      />
+      {pending ? "Removing..." : "Remove Revenue"}
+    </Button>
+  );
+}
+
 function ClassificationBadge({
   classification,
 }: {
@@ -154,30 +211,211 @@ function TransferRow({ transfer }: { transfer: ManualLookupTransfer }) {
   );
 }
 
+function SavedRevenuePanel({ savedEntry }: { savedEntry: SavedManualRevenue }) {
+  const { showToast } = useToast();
+  const [removeState, removeAction, removePending] = useActionState(
+    removeManualRaidRevenue,
+    REMOVE_INITIAL_STATE,
+  );
+
+  useEffect(() => {
+    if (removeState.removed) {
+      showToast("Raid revenue removed.");
+    }
+  }, [removeState.removed, showToast]);
+
+  if (removeState.removed) {
+    return (
+      <div className="rounded-md border border-border bg-background px-4 py-3 text-sm font-medium text-muted-foreground">
+        Revenue removed from the quarter ledger.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-3 rounded-md border border-emerald-600/20 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-900">
+      <div>
+        <p className="font-medium">Revenue saved to the quarter ledger.</p>
+        <p className="mt-1 text-emerald-900/80">
+          Saved to {savedEntry.quarterLabel}.
+        </p>
+      </div>
+      {savedEntry.canRemove ? (
+        <form action={removeAction}>
+          <input type="hidden" name="ledgerEntryId" value={savedEntry.id} />
+          <RemoveRevenueButton disabled={false} pending={removePending} />
+        </form>
+      ) : (
+        <p className="rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-amber-900">
+          Revenue can only be removed while the quarter is draft.
+        </p>
+      )}
+      {removeState.error ? (
+        <div className="flex gap-3 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <p>{removeState.error}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RevenueSaveForm({
+  onSaved,
+  raids,
+  result,
+}: {
+  onSaved: (savedEntry: SavedManualRevenue) => void;
+  raids: RaidView[];
+  result: ManualTransactionLookupResult;
+}) {
+  const { showToast } = useToast();
+  const [saveState, saveAction, savePending] = useActionState(
+    saveManualRaidRevenue,
+    INITIAL_STATE,
+  );
+  const [selectedTransferIndex, setSelectedTransferIndex] = useState("0");
+  const [usdAmount, setUsdAmount] = useState(
+    result.transfers[0]?.usdAmount ?? "",
+  );
+  const selectedTransfer = result.transfers[Number(selectedTransferIndex)];
+  const hasTransfers = result.transfers.length > 0;
+  const hasRaids = raids.length > 0;
+
+  useEffect(() => {
+    if (saveState.savedEntry) {
+      showToast("Raid revenue saved.");
+      onSaved(saveState.savedEntry);
+    }
+  }, [onSaved, saveState.savedEntry, showToast]);
+
+  return (
+    <form
+      action={saveAction}
+      className="grid gap-4 rounded-md border border-border bg-background p-4"
+    >
+      <input type="hidden" name="chainId" value={result.chainId} />
+      <input type="hidden" name="txHash" value={result.txHash} />
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="grid gap-2 text-sm font-medium">
+          <span className="type-label-sm text-muted-foreground">
+            Revenue Transfer
+          </span>
+          <select
+            name="transferIndex"
+            value={selectedTransferIndex}
+            onChange={(event) => {
+              const nextIndex = event.target.value;
+              const nextTransfer = result.transfers[Number(nextIndex)];
+
+              setSelectedTransferIndex(nextIndex);
+              setUsdAmount(nextTransfer?.usdAmount ?? "");
+            }}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            disabled={!hasTransfers}
+            required
+          >
+            {result.transfers.map((transfer, index) => (
+              <option key={index} value={index}>
+                {formatAmount(transfer)} from{" "}
+                {formatAddress(transfer.fromAddress)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-2 text-sm font-medium">
+          <span className="type-label-sm text-muted-foreground">Raid</span>
+          <select
+            name="raidId"
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            disabled={!hasRaids}
+            required
+          >
+            <option value="">
+              {hasRaids ? "Choose raid" : "No raids available"}
+            </option>
+            {raids.map((raid) => (
+              <option key={raid.id} value={raid.id}>
+                {raid.name} · {raid.client.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="grid gap-2 text-sm font-medium">
+          <span className="type-label-sm text-muted-foreground">
+            USD Amount
+          </span>
+          <input
+            name="usdAmount"
+            value={usdAmount}
+            onChange={(event) => setUsdAmount(event.target.value)}
+            inputMode="decimal"
+            placeholder="0.00"
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            required
+          />
+        </label>
+        <div className="rounded-md border border-border bg-card p-3 text-sm">
+          <p className="type-label-sm text-muted-foreground">
+            Selected Receipt
+          </p>
+          <p className="mt-1 font-medium">
+            {selectedTransfer ? formatAmount(selectedTransfer) : "-"}
+          </p>
+        </div>
+      </div>
+      <label className="grid gap-2 text-sm font-medium">
+        <span className="type-label-sm text-muted-foreground">Notes</span>
+        <textarea
+          name="notes"
+          className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+        />
+      </label>
+      {saveState.error ? (
+        <div className="flex gap-3 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <p>{saveState.error}</p>
+        </div>
+      ) : null}
+      <div>
+        <SaveSubmitButton
+          disabled={!hasTransfers || !hasRaids}
+          pending={savePending}
+        />
+      </div>
+    </form>
+  );
+}
+
 export function TransactionLookupPanel({
   chains,
+  raids,
 }: {
   chains: ManualLookupChain[];
+  raids: RaidView[];
 }) {
-  const [state, action, pending] = useActionState(
+  const [lookupState, lookupAction, lookupPending] = useActionState(
     lookupRaidTransaction,
     INITIAL_STATE,
   );
   const hasChains = chains.length > 0;
-  const result = state.result;
+  const result = lookupState.result;
+  const [savedEntry, setSavedEntry] = useState<SavedManualRevenue | null>(null);
 
   return (
     <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-            <ShieldQuestion className="size-5" aria-hidden="true" />
+            <BadgeDollarSign className="size-5" aria-hidden="true" />
           </div>
           <div>
             <p className="type-label-sm text-muted-foreground">
               Manual Raid Accounting
             </p>
-            <h2 className="text-lg font-semibold">Lookup Transaction</h2>
+            <h2 className="text-lg font-semibold">Add Raid Revenue</h2>
           </div>
         </div>
         {result ? (
@@ -186,7 +424,8 @@ export function TransactionLookupPanel({
       </div>
 
       <form
-        action={action}
+        action={lookupAction}
+        onSubmit={() => setSavedEntry(null)}
         className="mt-5 grid gap-4 md:grid-cols-[180px_1fr_auto]"
       >
         <label className="grid gap-2 text-sm font-medium">
@@ -224,18 +463,22 @@ export function TransactionLookupPanel({
           />
         </label>
         <div className="flex items-end">
-          <LookupSubmitButton disabled={!hasChains} pending={pending} />
+          <LookupSubmitButton disabled={!hasChains} pending={lookupPending} />
         </div>
       </form>
 
-      {state.error ? (
+      {lookupState.error ? (
         <div className="mt-4 flex gap-3 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <p>{state.error}</p>
+          <p>{lookupState.error}</p>
         </div>
       ) : null}
 
-      {result ? (
+      {savedEntry ? (
+        <div className="mt-5 border-t border-border pt-5">
+          <SavedRevenuePanel savedEntry={savedEntry} />
+        </div>
+      ) : result ? (
         <div className="mt-5 grid gap-4 border-t border-border pt-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -296,6 +539,13 @@ export function TransactionLookupPanel({
               </div>
             )}
           </div>
+
+          <RevenueSaveForm
+            key={`${result.chainId}:${result.txHash}`}
+            onSaved={setSavedEntry}
+            raids={raids}
+            result={result}
+          />
         </div>
       ) : null}
     </section>

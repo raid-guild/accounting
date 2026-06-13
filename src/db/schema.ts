@@ -515,6 +515,7 @@ export const ledgerEntries = pgTable(
       onDelete: "set null",
     }),
     source: ledgerSourceEnum("source").notNull(),
+    sourceExternalId: text("source_external_id"),
     category: ledgerCategoryEnum("category").default("uncategorized").notNull(),
     verificationStatus: verificationStatusEnum("verification_status")
       .default("verified")
@@ -551,6 +552,9 @@ export const ledgerEntries = pgTable(
   (table) => [
     index("ledger_entries_quarter_id_idx").on(table.quarterId),
     index("ledger_entries_category_idx").on(table.category),
+    uniqueIndex("ledger_entries_source_external_id_unique").on(
+      table.sourceExternalId,
+    ),
     index("ledger_entries_tx_hash_idx").on(table.txHash),
     uniqueIndex("ledger_entries_treasury_transfer_unique").on(
       table.treasuryTransactionTransferId,
