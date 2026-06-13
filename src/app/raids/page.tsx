@@ -48,7 +48,7 @@ import {
   RaidEntityCreateForm,
 } from "@/app/raids/raid-management-forms";
 import { RaidManagementToast } from "@/app/raids/raid-management-toast";
-import { removeManualRaidRevenueFromForm } from "@/app/raids/transaction-lookup-actions";
+import { RemoveManualRevenueForm } from "@/app/raids/remove-manual-revenue-form";
 import { TransactionLookupPanel } from "@/app/raids/transaction-lookup-panel";
 import { listManualLookupChains } from "@/lib/manual-transaction-lookup";
 
@@ -153,7 +153,13 @@ function TeamPayoutStatusBadge({ status }: { status: TeamPayoutStatus }) {
   );
 }
 
-async function listManualRaidRevenues(): Promise<ManualRaidRevenueView[]> {
+async function listManualRaidRevenues(
+  raidId: string | null,
+): Promise<ManualRaidRevenueView[]> {
+  if (!raidId) {
+    return [];
+  }
+
   const rows = await getDb()
     .select({
       assetAmount: ledgerEntries.assetAmount,
@@ -174,6 +180,7 @@ async function listManualRaidRevenues(): Promise<ManualRaidRevenueView[]> {
       and(
         eq(ledgerEntries.source, "manual"),
         eq(ledgerEntries.category, "raid_revenue"),
+        eq(ledgerEntries.raidId, raidId),
       ),
     )
     .orderBy(desc(ledgerEntries.occurredAt));
@@ -775,17 +782,7 @@ function ManualRaidRevenueRows({
               </div>
               <div className="flex items-center md:justify-end">
                 {revenue.quarterStatus === "draft" ? (
-                  <form action={removeManualRaidRevenueFromForm}>
-                    <input
-                      type="hidden"
-                      name="ledgerEntryId"
-                      value={revenue.id}
-                    />
-                    <Button type="submit" variant="destructive" size="sm">
-                      <Trash2 data-icon="inline-start" />
-                      Remove
-                    </Button>
-                  </form>
+                  <RemoveManualRevenueForm ledgerEntryId={revenue.id} />
                 ) : (
                   <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
                     Locked
@@ -1221,10 +1218,16 @@ export default async function RaidsPage({
     );
   }
 
+  const params = await searchParams;
+  const flow = parseFlow(params?.flow);
+  const addModal =
+    parseAddModal(params?.modal) ?? (flow ? (`add-${flow}` as RaidModal) : null);
+  const entityId = parseId(params?.entity);
+  const raidId = parseId(params?.raid);
   const [entities, raids, manualRaidRevenues] = await Promise.all([
     listEntitiesByTypes(["client", "subcontractor"]),
     listRaids(),
-    listManualRaidRevenues(),
+    listManualRaidRevenues(raidId),
   ]);
   const accountingOverview = await getRaidAccountingOverview(raids);
   const lookupChains = listManualLookupChains();
@@ -1237,12 +1240,6 @@ export default async function RaidsPage({
   const archivedEntities = entities.filter((entity) => entity.archivedAt);
   const activeRaids = raids.filter((raid) => !raid.archivedAt);
   const archivedRaids = raids.filter((raid) => raid.archivedAt);
-  const params = await searchParams;
-  const flow = parseFlow(params?.flow);
-  const addModal =
-    parseAddModal(params?.modal) ?? (flow ? (`add-${flow}` as RaidModal) : null);
-  const entityId = parseId(params?.entity);
-  const raidId = parseId(params?.raid);
   const added = parseToastSubject(params?.added);
   const deleted = parseToastSubject(params?.deleted);
   const error = parseToastError(params?.error);

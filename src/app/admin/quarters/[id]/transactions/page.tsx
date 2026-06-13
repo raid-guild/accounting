@@ -8,14 +8,13 @@ import {
   FileText,
   Save,
   Tags,
-  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { classifyQuarterTransfer } from "@/app/admin/quarters/[id]/transactions/actions";
-import { removeManualRaidRevenueFromForm } from "@/app/raids/transaction-lookup-actions";
+import { RemoveManualRevenueForm } from "@/app/raids/remove-manual-revenue-form";
 import { QuarterWorkflowProgress } from "@/components/quarters/quarter-workflow-progress";
 import { SyncTransactionsForm } from "@/app/admin/quarters/[id]/transactions/sync-transactions-form";
 import { TransactionReviewToast } from "@/app/admin/quarters/[id]/transactions/transaction-review-toast";
@@ -738,13 +737,7 @@ function ManualLedgerEntryCard({
             </a>
           ) : null}
           {quarter.status === "draft" && entry.category === "raid_revenue" ? (
-            <form action={removeManualRaidRevenueFromForm}>
-              <input type="hidden" name="ledgerEntryId" value={entry.id} />
-              <Button type="submit" variant="destructive" size="sm">
-                <Trash2 data-icon="inline-start" />
-                Remove
-              </Button>
-            </form>
+            <RemoveManualRevenueForm ledgerEntryId={entry.id} />
           ) : null}
         </div>
       </div>

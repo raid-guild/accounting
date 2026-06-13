@@ -446,14 +446,3 @@ export async function removeManualRaidRevenue(
     return { error: getErrorMessage(error), removed: false };
   }
 }
-
-export async function removeManualRaidRevenueFromForm(formData: FormData) {
-  const state = await removeManualRaidRevenue(
-    { error: null, removed: false },
-    formData,
-  );
-
-  if (state.error) {
-    throw new Error(state.error);
-  }
-}
