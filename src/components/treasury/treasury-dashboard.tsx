@@ -197,7 +197,7 @@ export function TreasuryDashboard({
 
   return (
     <section className="container-custom py-8 md:py-12">
-      <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+      <div className="grid items-stretch gap-6 lg:grid-cols-[0.95fr_1.05fr]">
         <section
           className={`rounded-lg border border-border bg-card p-6 shadow-sm transition-all duration-500 ${
             justUpdated ? "ring-2 ring-primary/30" : ""
@@ -249,38 +249,31 @@ export function TreasuryDashboard({
         </section>
 
         <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-              <WalletCards className="size-5" aria-hidden="true" />
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex size-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+                <WalletCards className="size-5" aria-hidden="true" />
+              </div>
+              <div>
+                <p className="type-label-sm text-muted-foreground">Account</p>
+                <h2 className="text-lg font-semibold">Included accounts</h2>
+              </div>
             </div>
-            <div>
-              <p className="type-label-sm text-muted-foreground">Account</p>
-              <h2 className="text-lg font-semibold">Included accounts</h2>
-            </div>
+            <span className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
+              {snapshot.accounts.length} accounts
+            </span>
           </div>
 
-          <div className="mt-6 divide-y divide-border border-t border-border">
+          <div className="mt-5 grid gap-2 sm:grid-cols-2">
             {snapshot.accounts.map((account) => (
-              <div key={account.id} className="py-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">
-                      {account.name}
-                    </p>
-                    {account.address ? (
-                      <div className="mt-2 inline-flex max-w-full items-center gap-2">
-                        <code className="min-w-0 truncate text-xs font-medium text-muted-foreground">
-                          {formatAddress(account.address)}
-                        </code>
-                        <CopyAddressButton address={account.address} />
-                      </div>
-                    ) : (
-                      <p className="mt-2 text-xs font-medium text-muted-foreground">
-                        Address not configured
-                      </p>
-                    )}
-                  </div>
-
+              <div
+                key={account.id}
+                className="rounded-md border border-border bg-background px-3 py-3"
+              >
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <p className="min-w-0 truncate text-sm font-semibold">
+                    {account.name}
+                  </p>
                   <p
                     className={`shrink-0 text-right text-sm font-semibold transition-opacity duration-500 ${
                       isPopulating ? "opacity-40" : "opacity-100"
@@ -289,6 +282,18 @@ export function TreasuryDashboard({
                     {formatCurrency(account.totalUsd)}
                   </p>
                 </div>
+                {account.address ? (
+                  <div className="mt-2 inline-flex max-w-full items-center gap-2">
+                    <code className="min-w-0 truncate text-xs font-medium text-muted-foreground">
+                      {formatAddress(account.address)}
+                    </code>
+                    <CopyAddressButton address={account.address} />
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs font-medium text-muted-foreground">
+                    Address not configured
+                  </p>
+                )}
               </div>
             ))}
           </div>
