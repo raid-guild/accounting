@@ -4,7 +4,9 @@ import {
   BarChart3,
   BriefcaseBusiness,
   CircleDollarSign,
+  HandCoins,
   Plus,
+  ReceiptText,
   RotateCcw,
   Save,
   Swords,
@@ -12,7 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { Button } from "@/components/ui/button";
 import { getDb } from "@/db";
@@ -48,13 +50,15 @@ import {
   RaidEntityCreateForm,
 } from "@/app/raids/raid-management-forms";
 import { RaidManagementToast } from "@/app/raids/raid-management-toast";
-import { RemoveManualRevenueForm } from "@/app/raids/remove-manual-revenue-form";
+import { RemoveManualLedgerEntryForm } from "@/app/raids/remove-manual-revenue-form";
 import { TransactionLookupPanel } from "@/app/raids/transaction-lookup-panel";
 import { listManualLookupChains } from "@/lib/manual-transaction-lookup";
+import type { ManualRaidLedgerKind } from "@/app/raids/transaction-lookup-actions";
 
 type FormAction = (formData: FormData) => Promise<void>;
 type RaidFlow = "client" | "raid" | "subcontractor";
 type RaidModal = `add-${RaidFlow}`;
+type ManualAccountingModal = `manual-${ManualRaidLedgerKind}`;
 type TeamPayoutStatus = RaidAccountingSummary["status"];
 type RaidToastError =
   | "client-has-raids"
@@ -63,11 +67,13 @@ type RaidToastError =
   | "invalid-chain"
   | "missing-address";
 type RaidToastSubject = "address" | RaidFlow;
-type ManualRaidRevenueView = {
+type ManualRaidLedgerEntryView = {
   assetAmount: string;
   assetSymbol: string;
   chainId: number | null;
+  counterpartyEntityId: string | null;
   id: string;
+  kind: ManualRaidLedgerKind;
   occurredAt: Date;
   quarterId: string;
   quarterLabel: string;
@@ -109,6 +115,10 @@ function getEntityLabel(type: RaidRelatedEntityType) {
 
 function getAddModalHref(flow: RaidFlow) {
   return `/raids?modal=add-${flow}`;
+}
+
+function getManualAccountingModalHref(kind: ManualRaidLedgerKind) {
+  return `/raids?modal=manual-${kind}`;
 }
 
 function getEntityHref(entityId: string) {
@@ -153,9 +163,9 @@ function TeamPayoutStatusBadge({ status }: { status: TeamPayoutStatus }) {
   );
 }
 
-async function listManualRaidRevenues(
+async function listManualRaidLedgerEntries(
   raidId: string | null,
-): Promise<ManualRaidRevenueView[]> {
+): Promise<ManualRaidLedgerEntryView[]> {
   if (!raidId) {
     return [];
   }
@@ -165,6 +175,8 @@ async function listManualRaidRevenues(
       assetAmount: ledgerEntries.assetAmount,
       assetSymbol: ledgerEntries.assetSymbol,
       chainId: ledgerEntries.chainId,
+      category: ledgerEntries.category,
+      counterpartyEntityId: ledgerEntries.counterpartyEntityId,
       id: ledgerEntries.id,
       occurredAt: ledgerEntries.occurredAt,
       quarterId: quarters.id,
@@ -179,13 +191,19 @@ async function listManualRaidRevenues(
     .where(
       and(
         eq(ledgerEntries.source, "manual"),
-        eq(ledgerEntries.category, "raid_revenue"),
+        inArray(ledgerEntries.category, [
+          "raid_revenue",
+          "subcontractor_payout",
+        ]),
         eq(ledgerEntries.raidId, raidId),
       ),
     )
     .orderBy(desc(ledgerEntries.occurredAt));
 
-  return rows;
+  return rows.map(({ category, ...row }) => ({
+    ...row,
+    kind: category === "subcontractor_payout" ? "payout" : "revenue",
+  }));
 }
 
 function TextInput({
@@ -284,6 +302,22 @@ function FlowLauncher() {
             }
             title="Add Subcontractor"
           />
+          <Link
+            href={getManualAccountingModalHref("revenue")}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-sm transition-all hover:border-primary/40 hover:bg-muted"
+          >
+            <ReceiptText className="size-5" aria-hidden="true" />
+            Add Revenue
+            <Plus className="size-4 text-muted-foreground" aria-hidden="true" />
+          </Link>
+          <Link
+            href={getManualAccountingModalHref("payout")}
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-sm transition-all hover:border-primary/40 hover:bg-muted"
+          >
+            <HandCoins className="size-5" aria-hidden="true" />
+            Add Payout
+            <Plus className="size-4 text-muted-foreground" aria-hidden="true" />
+          </Link>
         </div>
       </div>
     </section>
@@ -744,45 +778,69 @@ function CreateRaidFlow({ clients }: { clients: CoreEntityView[] }) {
   );
 }
 
-function ManualRaidRevenueRows({
-  revenues,
+function ManualRaidLedgerRows({
+  entries,
+  kind,
+  counterparties,
 }: {
-  revenues: ManualRaidRevenueView[];
+  counterparties?: CoreEntityView[];
+  entries: ManualRaidLedgerEntryView[];
+  kind: ManualRaidLedgerKind;
 }) {
+  const title = kind === "payout" ? "Manual Payouts" : "Manual Revenue";
+  const emptyLabel =
+    kind === "payout"
+      ? "No manual payouts saved for this raid yet."
+      : "No manual revenue saved for this raid yet.";
+
   return (
     <section className="mt-4 border-t border-border pt-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h4 className="text-sm font-semibold">Manual Revenue</h4>
+        <h4 className="text-sm font-semibold">{title}</h4>
         <span className="type-label-sm text-muted-foreground">
-          {revenues.length} entries
+          {entries.length} entries
         </span>
       </div>
-      {revenues.length > 0 ? (
+      {entries.length > 0 ? (
         <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-background">
-          {revenues.map((revenue) => (
+          {entries.map((entry) => {
+            const counterparty = counterparties?.find(
+              (entity) => entity.id === entry.counterpartyEntityId,
+            );
+
+            return (
             <div
-              key={revenue.id}
+              key={entry.id}
               className="grid gap-3 px-3 py-3 text-sm md:grid-cols-[minmax(0,1fr)_8rem_auto]"
             >
               <div className="min-w-0">
                 <p className="font-medium">
-                  {formatUsdAmount(revenue.usdAmount)}
+                  {formatUsdAmount(entry.usdAmount)}
                 </p>
                 <p className="mt-1 truncate text-muted-foreground">
-                  {revenue.assetAmount} {revenue.assetSymbol}
-                  {revenue.txHash ? ` · ${formatAddress(revenue.txHash)}` : ""}
+                  {entry.assetAmount} {entry.assetSymbol}
+                  {entry.txHash ? ` · ${formatAddress(entry.txHash)}` : ""}
                 </p>
+                {counterparty ? (
+                  <p className="mt-1 truncate text-xs text-muted-foreground">
+                    {kind === "payout" ? "Paid to" : "Linked to"}{" "}
+                    {counterparty.name}
+                  </p>
+                ) : null}
               </div>
               <div>
                 <p className="type-label-sm text-muted-foreground">Quarter</p>
-                <p className="font-medium">{revenue.quarterLabel}</p>
+                <p className="font-medium">{entry.quarterLabel}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {formatTimestamp(revenue.occurredAt)}
+                  {formatTimestamp(entry.occurredAt)}
                 </p>
               </div>
               <div className="flex items-center md:justify-end">
-                {revenue.quarterStatus === "draft" ? (
-                  <RemoveManualRevenueForm ledgerEntryId={revenue.id} />
+                {entry.quarterStatus === "draft" ? (
+                  <RemoveManualLedgerEntryForm
+                    kind={entry.kind}
+                    ledgerEntryId={entry.id}
+                  />
                 ) : (
                   <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
                     Locked
@@ -790,11 +848,12 @@ function ManualRaidRevenueRows({
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <p className="rounded-md border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-          No manual revenue saved for this raid yet.
+          {emptyLabel}
         </p>
       )}
     </section>
@@ -803,12 +862,14 @@ function ManualRaidRevenueRows({
 
 function RaidDetails({
   clients,
-  revenues,
+  ledgerEntries,
   raid,
+  subcontractors,
 }: {
   clients: CoreEntityView[];
-  revenues: ManualRaidRevenueView[];
+  ledgerEntries: ManualRaidLedgerEntryView[];
   raid: RaidView;
+  subcontractors: CoreEntityView[];
 }) {
   const clientOptions = clients.some(
     (client) => client.id === raid.clientEntityId,
@@ -839,7 +900,15 @@ function RaidDetails({
         </p>
       ) : null}
 
-      <ManualRaidRevenueRows revenues={revenues} />
+      <ManualRaidLedgerRows
+        entries={ledgerEntries.filter((entry) => entry.kind === "revenue")}
+        kind="revenue"
+      />
+      <ManualRaidLedgerRows
+        counterparties={subcontractors}
+        entries={ledgerEntries.filter((entry) => entry.kind === "payout")}
+        kind="payout"
+      />
 
       <details className="mt-4 rounded-md border border-border bg-background">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
@@ -994,6 +1063,18 @@ function parseAddModal(value: string | string[] | undefined): RaidModal | null {
   return null;
 }
 
+function parseManualAccountingModal(
+  value: string | string[] | undefined,
+): ManualAccountingModal | null {
+  const modal = Array.isArray(value) ? value[0] : value;
+
+  if (modal === "manual-revenue" || modal === "manual-payout") {
+    return modal;
+  }
+
+  return null;
+}
+
 function parseId(value: string | string[] | undefined) {
   const id = Array.isArray(value) ? value[0] : value;
 
@@ -1082,18 +1163,51 @@ function ActiveModal({
   addModal,
   entities,
   entityId,
-  manualRaidRevenues,
+  manualRaidLedgerEntries,
+  manualModal,
   raidId,
   raids,
+  lookupChains,
+  activeSubcontractors,
+  subcontractors,
 }: {
   activeClients: CoreEntityView[];
   addModal: RaidModal | null;
+  activeSubcontractors: CoreEntityView[];
   entities: CoreEntityView[];
   entityId: string | null;
-  manualRaidRevenues: ManualRaidRevenueView[];
+  lookupChains: ReturnType<typeof listManualLookupChains>;
+  manualRaidLedgerEntries: ManualRaidLedgerEntryView[];
+  manualModal: ManualAccountingModal | null;
   raidId: string | null;
   raids: RaidView[];
+  subcontractors: CoreEntityView[];
 }) {
+  if (manualModal) {
+    const kind = manualModal === "manual-payout" ? "payout" : "revenue";
+
+    return (
+      <ModalShell
+        eyebrow="Manual Raid Accounting"
+        icon={
+          kind === "payout" ? (
+            <HandCoins className="size-5" aria-hidden="true" />
+          ) : (
+            <ReceiptText className="size-5" aria-hidden="true" />
+          )
+        }
+        title={kind === "payout" ? "Add Raid Payout" : "Add Raid Revenue"}
+      >
+        <TransactionLookupPanel
+          chains={lookupChains}
+          kind={kind}
+          raids={raids}
+          subcontractors={activeSubcontractors}
+        />
+      </ModalShell>
+    );
+  }
+
   if (addModal === "add-client") {
     return (
       <ModalShell
@@ -1165,10 +1279,11 @@ function ActiveModal({
       >
         <RaidDetails
           clients={activeClients}
-          revenues={manualRaidRevenues.filter(
-            (revenue) => revenue.raidId === selectedRaid.id,
+          ledgerEntries={manualRaidLedgerEntries.filter(
+            (entry) => entry.raidId === selectedRaid.id,
           )}
           raid={selectedRaid}
+          subcontractors={subcontractors}
         />
       </ModalShell>
     );
@@ -1222,17 +1337,21 @@ export default async function RaidsPage({
   const flow = parseFlow(params?.flow);
   const addModal =
     parseAddModal(params?.modal) ?? (flow ? (`add-${flow}` as RaidModal) : null);
+  const manualModal = parseManualAccountingModal(params?.modal);
   const entityId = parseId(params?.entity);
   const raidId = parseId(params?.raid);
-  const [entities, raids, manualRaidRevenues] = await Promise.all([
+  const [entities, raids, manualRaidLedgerEntries] = await Promise.all([
     listEntitiesByTypes(["client", "subcontractor"]),
     listRaids(),
-    listManualRaidRevenues(raidId),
+    listManualRaidLedgerEntries(raidId),
   ]);
   const accountingOverview = await getRaidAccountingOverview(raids);
   const lookupChains = listManualLookupChains();
   const activeClients = entities.filter(
     (entity) => entity.type === "client" && !entity.archivedAt,
+  );
+  const subcontractors = entities.filter(
+    (entity) => entity.type === "subcontractor",
   );
   const activeSubcontractors = entities.filter(
     (entity) => entity.type === "subcontractor" && !entity.archivedAt,
@@ -1272,7 +1391,6 @@ export default async function RaidsPage({
 
       <section className="container-custom grid gap-8 py-8 md:py-12">
         <FlowLauncher />
-        <TransactionLookupPanel chains={lookupChains} raids={raids} />
         <TopClientsTable clients={accountingOverview.clients} />
         <RaidAccountingTable summaries={accountingOverview.raids} />
         <RaidRows
@@ -1304,11 +1422,15 @@ export default async function RaidsPage({
       <ActiveModal
         activeClients={activeClients}
         addModal={addModal}
+        activeSubcontractors={activeSubcontractors}
         entities={entities}
         entityId={entityId}
-        manualRaidRevenues={manualRaidRevenues}
+        lookupChains={lookupChains}
+        manualRaidLedgerEntries={manualRaidLedgerEntries}
+        manualModal={manualModal}
         raidId={raidId}
         raids={raids}
+        subcontractors={subcontractors}
       />
     </main>
   );

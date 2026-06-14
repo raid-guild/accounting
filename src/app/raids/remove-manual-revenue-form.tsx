@@ -3,7 +3,10 @@
 import { Trash2 } from "lucide-react";
 import { useActionState } from "react";
 
-import { removeManualRaidRevenue } from "@/app/raids/transaction-lookup-actions";
+import {
+  removeManualRaidLedgerEntry,
+  type ManualRaidLedgerKind,
+} from "@/app/raids/transaction-lookup-actions";
 import { Button } from "@/components/ui/button";
 
 const INITIAL_STATE = {
@@ -11,20 +14,23 @@ const INITIAL_STATE = {
   removed: false,
 };
 
-export function RemoveManualRevenueForm({
+export function RemoveManualLedgerEntryForm({
+  kind,
   ledgerEntryId,
 }: {
+  kind: ManualRaidLedgerKind;
   ledgerEntryId: string;
 }) {
   const [state, action, pending] = useActionState(
-    removeManualRaidRevenue,
+    removeManualRaidLedgerEntry,
     INITIAL_STATE,
   );
+  const label = kind === "payout" ? "Payout" : "Revenue";
 
   if (state.removed) {
     return (
       <p className="rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground">
-        Revenue removed.
+        {label} removed.
       </p>
     );
   }
@@ -35,7 +41,7 @@ export function RemoveManualRevenueForm({
       onSubmit={(event) => {
         if (
           !window.confirm(
-            "Remove this manual revenue entry? This action cannot be undone.",
+            `Remove this manual ${kind} entry? This action cannot be undone.`,
           )
         ) {
           event.preventDefault();
@@ -43,6 +49,7 @@ export function RemoveManualRevenueForm({
       }}
     >
       <input type="hidden" name="ledgerEntryId" value={ledgerEntryId} />
+      <input type="hidden" name="kind" value={kind} />
       <Button
         type="submit"
         variant="destructive"
