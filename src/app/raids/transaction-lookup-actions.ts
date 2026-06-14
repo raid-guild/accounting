@@ -202,7 +202,7 @@ function assertQuarterCanAcceptManualEntry({
   }
 }
 
-async function getRaidForRevenue(raidId: string) {
+async function getRaidForManualLedgerEntry(raidId: string) {
   if (!raidId) {
     throw new Error("Raid is required");
   }
@@ -320,7 +320,7 @@ export async function saveManualRaidRevenue(
       throw new Error("That transaction transfer is already saved");
     }
 
-    const { client, raid } = await getRaidForRevenue(raidId);
+    const { client, raid } = await getRaidForManualLedgerEntry(raidId);
     const occurredAt = new Date(result.executedAt);
     const quarter = await getOrCreateQuarter(occurredAt);
     assertQuarterCanAcceptManualEntry({
@@ -449,7 +449,7 @@ export async function saveManualRaidPayout(
       throw new Error("That transaction transfer is already saved");
     }
 
-    const { raid } = await getRaidForRevenue(raidId);
+    const { raid } = await getRaidForManualLedgerEntry(raidId);
     const subcontractor = await getSubcontractorForPayout(subcontractorId);
     const occurredAt = new Date(result.executedAt);
     const quarter = await getOrCreateQuarter(occurredAt);

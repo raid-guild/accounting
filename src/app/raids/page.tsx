@@ -200,9 +200,9 @@ async function listManualRaidLedgerEntries(
     )
     .orderBy(desc(ledgerEntries.occurredAt));
 
-  return rows.map((row) => ({
+  return rows.map(({ category, ...row }) => ({
     ...row,
-    kind: row.category === "subcontractor_payout" ? "payout" : "revenue",
+    kind: category === "subcontractor_payout" ? "payout" : "revenue",
   }));
 }
 
