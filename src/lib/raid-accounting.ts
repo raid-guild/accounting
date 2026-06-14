@@ -116,12 +116,12 @@ function getSpoilsStatus({
   revenueCents: bigint;
   spoilsReceivedCents: bigint;
 }): SpoilsStatus {
-  if (revenueCents === ZERO) {
-    return "no_revenue";
-  }
-
   if (spoilsReceivedCents > expectedSpoilsCents) {
     return "over_received";
+  }
+
+  if (revenueCents === ZERO) {
+    return "no_revenue";
   }
 
   if (spoilsReceivedCents === expectedSpoilsCents) {
