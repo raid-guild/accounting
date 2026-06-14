@@ -3,7 +3,6 @@
 import {
   AlertTriangle,
   ArrowRight,
-  BadgeDollarSign,
   ExternalLink,
   Search,
   Save,
@@ -13,14 +12,16 @@ import { useActionState, useEffect, useState } from "react";
 
 import {
   lookupRaidTransaction,
-  removeManualRaidRevenue,
+  removeManualRaidLedgerEntry,
+  saveManualRaidPayout,
   saveManualRaidRevenue,
-  type SavedManualRevenue,
+  type ManualRaidLedgerKind,
+  type SavedManualRaidLedgerEntry,
   type TransactionLookupState,
 } from "@/app/raids/transaction-lookup-actions";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import type { RaidView } from "@/lib/core-entities";
+import type { CoreEntityView, RaidView } from "@/lib/core-entities";
 import type {
   ManualLookupChain,
   ManualLookupClassification,
@@ -120,9 +121,11 @@ function LookupSubmitButton({
 
 function SaveSubmitButton({
   disabled,
+  kind,
   pending,
 }: {
   disabled: boolean;
+  kind: ManualRaidLedgerKind;
   pending: boolean;
 }) {
   return (
@@ -131,16 +134,22 @@ function SaveSubmitButton({
         data-icon="inline-start"
         className={pending ? "animate-pulse" : ""}
       />
-      {pending ? "Saving..." : "Save Raid Revenue"}
+      {pending
+        ? "Saving..."
+        : kind === "payout"
+          ? "Save Raid Payout"
+          : "Save Raid Revenue"}
     </Button>
   );
 }
 
-function RemoveRevenueButton({
+function RemoveEntryButton({
   disabled,
+  kind,
   pending,
 }: {
   disabled: boolean;
+  kind: ManualRaidLedgerKind;
   pending: boolean;
 }) {
   return (
@@ -155,7 +164,11 @@ function RemoveRevenueButton({
         data-icon="inline-start"
         className={pending ? "animate-pulse" : ""}
       />
-      {pending ? "Removing..." : "Remove Revenue"}
+      {pending
+        ? "Removing..."
+        : kind === "payout"
+          ? "Remove Payout"
+          : "Remove Revenue"}
     </Button>
   );
 }
@@ -211,23 +224,28 @@ function TransferRow({ transfer }: { transfer: ManualLookupTransfer }) {
   );
 }
 
-function SavedRevenuePanel({ savedEntry }: { savedEntry: SavedManualRevenue }) {
+function SavedLedgerEntryPanel({
+  savedEntry,
+}: {
+  savedEntry: SavedManualRaidLedgerEntry;
+}) {
   const { showToast } = useToast();
   const [removeState, removeAction, removePending] = useActionState(
-    removeManualRaidRevenue,
+    removeManualRaidLedgerEntry,
     REMOVE_INITIAL_STATE,
   );
+  const label = savedEntry.kind === "payout" ? "Payout" : "Revenue";
 
   useEffect(() => {
     if (removeState.removed) {
-      showToast("Raid revenue removed.");
+      showToast(`Raid ${savedEntry.kind} removed.`);
     }
-  }, [removeState.removed, showToast]);
+  }, [removeState.removed, savedEntry.kind, showToast]);
 
   if (removeState.removed) {
     return (
       <div className="rounded-md border border-border bg-background px-4 py-3 text-sm font-medium text-muted-foreground">
-        Revenue removed from the quarter ledger.
+        {label} removed from the quarter ledger.
       </div>
     );
   }
@@ -235,7 +253,7 @@ function SavedRevenuePanel({ savedEntry }: { savedEntry: SavedManualRevenue }) {
   return (
     <div className="grid gap-3 rounded-md border border-emerald-600/20 bg-emerald-600/10 px-4 py-3 text-sm text-emerald-900">
       <div>
-        <p className="font-medium">Revenue saved to the quarter ledger.</p>
+        <p className="font-medium">{label} saved to the quarter ledger.</p>
         <p className="mt-1 text-emerald-900/80">
           Saved to {savedEntry.quarterLabel}.
         </p>
@@ -243,11 +261,16 @@ function SavedRevenuePanel({ savedEntry }: { savedEntry: SavedManualRevenue }) {
       {savedEntry.canRemove ? (
         <form action={removeAction}>
           <input type="hidden" name="ledgerEntryId" value={savedEntry.id} />
-          <RemoveRevenueButton disabled={false} pending={removePending} />
+          <input type="hidden" name="kind" value={savedEntry.kind} />
+          <RemoveEntryButton
+            disabled={false}
+            kind={savedEntry.kind}
+            pending={removePending}
+          />
         </form>
       ) : (
         <p className="rounded-md border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-amber-900">
-          Revenue can only be removed while the quarter is draft.
+          {label} can only be removed while the quarter is draft.
         </p>
       )}
       {removeState.error ? (
@@ -260,31 +283,43 @@ function SavedRevenuePanel({ savedEntry }: { savedEntry: SavedManualRevenue }) {
   );
 }
 
-function RevenueSaveForm({
+function ManualEntrySaveForm({
+  kind,
   onSaved,
   raids,
   result,
+  subcontractors,
 }: {
-  onSaved: (savedEntry: SavedManualRevenue) => void;
+  kind: ManualRaidLedgerKind;
+  onSaved: (savedEntry: SavedManualRaidLedgerEntry) => void;
   raids: RaidView[];
   result: ManualTransactionLookupResult;
+  subcontractors: CoreEntityView[];
 }) {
   const { showToast } = useToast();
-  const [saveState, saveAction, savePending] = useActionState(
+  const [revenueState, revenueAction, revenuePending] = useActionState(
     saveManualRaidRevenue,
+    INITIAL_STATE,
+  );
+  const [payoutState, payoutAction, payoutPending] = useActionState(
+    saveManualRaidPayout,
     INITIAL_STATE,
   );
   const [selectedTransferIndex, setSelectedTransferIndex] = useState("0");
   const [usdAmount, setUsdAmount] = useState(
     result.transfers[0]?.usdAmount ?? "",
   );
+  const saveState = kind === "payout" ? payoutState : revenueState;
+  const saveAction = kind === "payout" ? payoutAction : revenueAction;
+  const savePending = kind === "payout" ? payoutPending : revenuePending;
   const selectedTransfer = result.transfers[Number(selectedTransferIndex)];
   const hasTransfers = result.transfers.length > 0;
   const hasRaids = raids.length > 0;
+  const hasSubcontractors = subcontractors.length > 0;
 
   useEffect(() => {
     if (saveState.savedEntry) {
-      showToast("Raid revenue saved.");
+      showToast(`Raid ${saveState.savedEntry.kind} saved.`);
       onSaved(saveState.savedEntry);
     }
   }, [onSaved, saveState.savedEntry, showToast]);
@@ -299,7 +334,7 @@ function RevenueSaveForm({
       <div className="grid gap-4 md:grid-cols-2">
         <label className="grid gap-2 text-sm font-medium">
           <span className="type-label-sm text-muted-foreground">
-            Revenue Transfer
+            {kind === "payout" ? "Payout Transfer" : "Revenue Transfer"}
           </span>
           <select
             name="transferIndex"
@@ -342,6 +377,30 @@ function RevenueSaveForm({
           </select>
         </label>
       </div>
+      {kind === "payout" ? (
+        <label className="grid gap-2 text-sm font-medium">
+          <span className="type-label-sm text-muted-foreground">
+            Subcontractor
+          </span>
+          <select
+            name="subcontractorId"
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            disabled={!hasSubcontractors}
+            required
+          >
+            <option value="">
+              {hasSubcontractors
+                ? "Choose subcontractor"
+                : "No subcontractors available"}
+            </option>
+            {subcontractors.map((subcontractor) => (
+              <option key={subcontractor.id} value={subcontractor.id}>
+                {subcontractor.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-2">
         <label className="grid gap-2 text-sm font-medium">
           <span className="type-label-sm text-muted-foreground">
@@ -381,7 +440,12 @@ function RevenueSaveForm({
       ) : null}
       <div>
         <SaveSubmitButton
-          disabled={!hasTransfers || !hasRaids}
+          disabled={
+            !hasTransfers ||
+            !hasRaids ||
+            (kind === "payout" && !hasSubcontractors)
+          }
+          kind={kind}
           pending={savePending}
         />
       </div>
@@ -391,10 +455,14 @@ function RevenueSaveForm({
 
 export function TransactionLookupPanel({
   chains,
+  kind,
   raids,
+  subcontractors,
 }: {
   chains: ManualLookupChain[];
+  kind: ManualRaidLedgerKind;
   raids: RaidView[];
+  subcontractors: CoreEntityView[];
 }) {
   const [lookupState, lookupAction, lookupPending] = useActionState(
     lookupRaidTransaction,
@@ -402,31 +470,21 @@ export function TransactionLookupPanel({
   );
   const hasChains = chains.length > 0;
   const result = lookupState.result;
-  const [savedEntry, setSavedEntry] = useState<SavedManualRevenue | null>(null);
+  const [savedEntry, setSavedEntry] =
+    useState<SavedManualRaidLedgerEntry | null>(null);
 
   return (
-    <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-            <BadgeDollarSign className="size-5" aria-hidden="true" />
-          </div>
-          <div>
-            <p className="type-label-sm text-muted-foreground">
-              Manual Raid Accounting
-            </p>
-            <h2 className="text-lg font-semibold">Add Raid Revenue</h2>
-          </div>
-        </div>
-        {result ? (
+    <section className="grid gap-5">
+      {result ? (
+        <div className="flex justify-end">
           <ClassificationBadge classification={result.classification} />
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <form
         action={lookupAction}
         onSubmit={() => setSavedEntry(null)}
-        className="mt-5 grid gap-4 md:grid-cols-[180px_1fr_auto]"
+        className="grid gap-4 md:grid-cols-[180px_1fr_auto]"
       >
         <label className="grid gap-2 text-sm font-medium">
           <span className="type-label-sm text-muted-foreground">Chain</span>
@@ -475,11 +533,11 @@ export function TransactionLookupPanel({
       ) : null}
 
       {savedEntry ? (
-        <div className="mt-5 border-t border-border pt-5">
-          <SavedRevenuePanel savedEntry={savedEntry} />
+        <div className="border-t border-border pt-5">
+          <SavedLedgerEntryPanel savedEntry={savedEntry} />
         </div>
       ) : result ? (
-        <div className="mt-5 grid gap-4 border-t border-border pt-5">
+        <div className="grid gap-4 border-t border-border pt-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="type-label-sm text-muted-foreground">
@@ -540,11 +598,13 @@ export function TransactionLookupPanel({
             )}
           </div>
 
-          <RevenueSaveForm
-            key={`${result.chainId}:${result.txHash}`}
+          <ManualEntrySaveForm
+            key={`${kind}:${result.chainId}:${result.txHash}`}
+            kind={kind}
             onSaved={setSavedEntry}
             raids={raids}
             result={result}
+            subcontractors={subcontractors}
           />
         </div>
       ) : null}

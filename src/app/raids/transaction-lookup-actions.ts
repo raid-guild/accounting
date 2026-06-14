@@ -18,17 +18,20 @@ export type TransactionLookupState = {
   error: string | null;
   result: ManualTransactionLookupResult | null;
   saved: boolean;
-  savedEntry: SavedManualRevenue | null;
+  savedEntry: SavedManualRaidLedgerEntry | null;
 };
 
-export type SavedManualRevenue = {
+export type SavedManualRaidLedgerEntry = {
   canRemove: boolean;
   id: string;
+  kind: ManualRaidLedgerKind;
   quarterId: string;
   quarterLabel: string;
 };
 
-export type RemoveManualRaidRevenueState = {
+export type ManualRaidLedgerKind = "payout" | "revenue";
+
+export type RemoveManualRaidLedgerEntryState = {
   error: string | null;
   removed: boolean;
 };
@@ -38,7 +41,10 @@ const USER_FACING_ERRORS = new Set([
   "Choose a supported chain",
   "Choose a transaction transfer",
   "Enter a valid transaction hash",
+  "Ledger entry type is required",
   "Only admins can edit a quarter after it is marked ready",
+  "Payout can only be removed while the quarter is draft",
+  "Payout entry not found",
   "Published quarters must be reopened before editing",
   "Quarter not found",
   "Raid accounting access required",
@@ -46,7 +52,9 @@ const USER_FACING_ERRORS = new Set([
   "Raid not found",
   "Revenue can only be removed while the quarter is draft",
   "Revenue entry not found",
-  "That transaction transfer is already saved as revenue",
+  "Subcontractor is required",
+  "Subcontractor not found",
+  "That transaction transfer is already saved",
   "Transaction not found",
   "USD amount must be greater than zero",
   "USD amount must be a positive dollar amount",
@@ -121,6 +129,14 @@ function getTransferIndex(value: string) {
   return index;
 }
 
+function getManualRaidLedgerKind(value: string): ManualRaidLedgerKind {
+  if (value === "payout" || value === "revenue") {
+    return value;
+  }
+
+  throw new Error("Ledger entry type is required");
+}
+
 function getAccountingQuarter(date: Date) {
   const year = date.getUTCFullYear();
   const quarter = Math.floor(date.getUTCMonth() / 3) + 1;
@@ -170,7 +186,7 @@ async function getOrCreateQuarter(occurredAt: Date) {
   return quarter;
 }
 
-function assertQuarterCanAcceptManualRevenue({
+function assertQuarterCanAcceptManualEntry({
   canAdmin,
   status,
 }: {
@@ -203,6 +219,29 @@ async function getRaidForRevenue(raidId: string) {
   }
 
   return row;
+}
+
+async function getSubcontractorForPayout(subcontractorId: string) {
+  if (!subcontractorId) {
+    throw new Error("Subcontractor is required");
+  }
+
+  const [subcontractor] = await getDb()
+    .select()
+    .from(entities)
+    .where(
+      and(
+        eq(entities.id, subcontractorId),
+        eq(entities.type, "subcontractor"),
+      ),
+    )
+    .limit(1);
+
+  if (!subcontractor) {
+    throw new Error("Subcontractor not found");
+  }
+
+  return subcontractor;
 }
 
 function getLedgerAssetAmount(transfer: ManualLookupTransfer) {
@@ -278,13 +317,13 @@ export async function saveManualRaidRevenue(
       .limit(1);
 
     if (existingEntry) {
-      throw new Error("That transaction transfer is already saved as revenue");
+      throw new Error("That transaction transfer is already saved");
     }
 
     const { client, raid } = await getRaidForRevenue(raidId);
     const occurredAt = new Date(result.executedAt);
     const quarter = await getOrCreateQuarter(occurredAt);
-    assertQuarterCanAcceptManualRevenue({
+    assertQuarterCanAcceptManualEntry({
       canAdmin: Boolean(session.permissions?.canAdmin),
       status: quarter.status,
     });
@@ -329,7 +368,7 @@ export async function saveManualRaidRevenue(
       .returning();
 
     if (!entry) {
-      throw new Error("That transaction transfer is already saved as revenue");
+      throw new Error("That transaction transfer is already saved");
     }
 
     await writeAuditEvent({
@@ -360,6 +399,7 @@ export async function saveManualRaidRevenue(
       savedEntry: {
         canRemove: quarter.status === "draft",
         id: entry.id,
+        kind: "revenue",
         quarterId: quarter.id,
         quarterLabel: quarter.label,
       },
@@ -374,16 +414,151 @@ export async function saveManualRaidRevenue(
   }
 }
 
-export async function removeManualRaidRevenue(
-  _previousState: RemoveManualRaidRevenueState,
+export async function saveManualRaidPayout(
+  _previousState: TransactionLookupState,
   formData: FormData,
-): Promise<RemoveManualRaidRevenueState> {
+): Promise<TransactionLookupState> {
+  try {
+    const session = await requireRaidAccountingAccess();
+    const chainId = getChainId(getString(formData, "chainId"));
+    const txHash = getString(formData, "txHash");
+    const transferIndex = getTransferIndex(getString(formData, "transferIndex"));
+    const raidId = getString(formData, "raidId");
+    const subcontractorId = getString(formData, "subcontractorId");
+    const notes = getString(formData, "notes");
+    const usdAmount = getUsdAmount(getString(formData, "usdAmount"));
+    const result = await lookupManualTransaction({ chainId, txHash });
+    const transfer = result.transfers[transferIndex];
+
+    if (!transfer) {
+      throw new Error("Choose a transaction transfer");
+    }
+
+    const sourceExternalId = getSourceExternalId({
+      chainId,
+      transferIndex,
+      txHash: result.txHash,
+    });
+    const [existingEntry] = await getDb()
+      .select({ id: ledgerEntries.id })
+      .from(ledgerEntries)
+      .where(eq(ledgerEntries.sourceExternalId, sourceExternalId))
+      .limit(1);
+
+    if (existingEntry) {
+      throw new Error("That transaction transfer is already saved");
+    }
+
+    const { raid } = await getRaidForRevenue(raidId);
+    const subcontractor = await getSubcontractorForPayout(subcontractorId);
+    const occurredAt = new Date(result.executedAt);
+    const quarter = await getOrCreateQuarter(occurredAt);
+    assertQuarterCanAcceptManualEntry({
+      canAdmin: Boolean(session.permissions?.canAdmin),
+      status: quarter.status,
+    });
+    const sourceMetadata = {
+      blockExplorerUrl: result.blockExplorerUrl,
+      blockNumber: result.blockNumber,
+      chainName: result.chainName,
+      fromAddress: transfer.fromAddress,
+      lookupClassification: result.classification,
+      nativeValue: result.nativeValue,
+      paidAddress: transfer.toAddress,
+      rawAmount: transfer.rawAmount,
+      selectedTransferIndex: transferIndex,
+      senderAddress: result.fromAddress,
+      status: result.status,
+      toAddress: transfer.toAddress,
+      tokenAddress: transfer.tokenAddress,
+      transferType: transfer.transferType,
+      txRecipientAddress: result.toAddress,
+    };
+
+    const [entry] = await getDb()
+      .insert(ledgerEntries)
+      .values({
+        assetAmount: getLedgerAssetAmount(transfer),
+        assetSymbol: transfer.assetSymbol,
+        category: "subcontractor_payout",
+        chainId,
+        counterpartyEntityId: subcontractor.id,
+        notesEncrypted: notes ? encryptField(notes) : null,
+        occurredAt,
+        quarterId: quarter.id,
+        raidId: raid.id,
+        source: "manual",
+        sourceExternalId,
+        sourceMetadata,
+        txHash: result.txHash,
+        usdAmount,
+        verificationStatus: "verified",
+      })
+      .onConflictDoNothing({ target: ledgerEntries.sourceExternalId })
+      .returning();
+
+    if (!entry) {
+      throw new Error("That transaction transfer is already saved");
+    }
+
+    await writeAuditEvent({
+      action: "import",
+      actorWalletAddress: session.address,
+      metadata: {
+        chainId,
+        quarterId: quarter.id,
+        raidId: raid.id,
+        sourceExternalId,
+        subcontractorId: subcontractor.id,
+        transferIndex,
+        txHash: result.txHash,
+      },
+      quarterId: quarter.id,
+      subjectId: entry?.id,
+      subjectTable: "ledger_entries",
+      summary: "Saved manual raid payout",
+    });
+
+    revalidatePath("/raids");
+    revalidatePath("/admin/quarters");
+    revalidatePath(`/admin/quarters/${quarter.id}/transactions`);
+
+    return {
+      error: null,
+      result: null,
+      saved: true,
+      savedEntry: {
+        canRemove: quarter.status === "draft",
+        id: entry.id,
+        kind: "payout",
+        quarterId: quarter.id,
+        quarterLabel: quarter.label,
+      },
+    };
+  } catch (error) {
+    return {
+      error: getErrorMessage(error),
+      result: null,
+      saved: false,
+      savedEntry: null,
+    };
+  }
+}
+
+export async function removeManualRaidLedgerEntry(
+  _previousState: RemoveManualRaidLedgerEntryState,
+  formData: FormData,
+): Promise<RemoveManualRaidLedgerEntryState> {
   try {
     const session = await requireRaidAccountingAccess();
     const id = getString(formData, "ledgerEntryId");
+    const kind = getManualRaidLedgerKind(getString(formData, "kind"));
+    const category =
+      kind === "payout" ? "subcontractor_payout" : "raid_revenue";
+    const label = kind === "payout" ? "Payout" : "Revenue";
 
     if (!id) {
-      throw new Error("Revenue entry not found");
+      throw new Error(`${label} entry not found`);
     }
 
     const [row] = await getDb()
@@ -394,17 +569,19 @@ export async function removeManualRaidRevenue(
         and(
           eq(ledgerEntries.id, id),
           eq(ledgerEntries.source, "manual"),
-          eq(ledgerEntries.category, "raid_revenue"),
+          eq(ledgerEntries.category, category),
         ),
       )
       .limit(1);
 
     if (!row) {
-      throw new Error("Revenue entry not found");
+      throw new Error(`${label} entry not found`);
     }
 
     if (row.quarter.status !== "draft") {
-      throw new Error("Revenue can only be removed while the quarter is draft");
+      throw new Error(
+        `${label} can only be removed while the quarter is draft`,
+      );
     }
 
     const [deletedEntry] = await getDb()
@@ -413,13 +590,13 @@ export async function removeManualRaidRevenue(
         and(
           eq(ledgerEntries.id, row.entry.id),
           eq(ledgerEntries.source, "manual"),
-          eq(ledgerEntries.category, "raid_revenue"),
+          eq(ledgerEntries.category, category),
         ),
       )
       .returning();
 
     if (!deletedEntry) {
-      throw new Error("Revenue entry not found");
+      throw new Error(`${label} entry not found`);
     }
 
     await writeAuditEvent({
@@ -427,6 +604,7 @@ export async function removeManualRaidRevenue(
       actorWalletAddress: session.address,
       metadata: {
         chainId: row.entry.chainId,
+        category,
         raidId: row.entry.raidId,
         sourceExternalId: row.entry.sourceExternalId,
         txHash: row.entry.txHash,
@@ -434,7 +612,7 @@ export async function removeManualRaidRevenue(
       quarterId: row.quarter.id,
       subjectId: row.entry.id,
       subjectTable: "ledger_entries",
-      summary: "Removed manual raid revenue",
+      summary: `Removed manual raid ${kind}`,
     });
 
     revalidatePath("/raids");

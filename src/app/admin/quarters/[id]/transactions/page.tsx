@@ -14,7 +14,7 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { classifyQuarterTransfer } from "@/app/admin/quarters/[id]/transactions/actions";
-import { RemoveManualRevenueForm } from "@/app/raids/remove-manual-revenue-form";
+import { RemoveManualLedgerEntryForm } from "@/app/raids/remove-manual-revenue-form";
 import { QuarterWorkflowProgress } from "@/components/quarters/quarter-workflow-progress";
 import { SyncTransactionsForm } from "@/app/admin/quarters/[id]/transactions/sync-transactions-form";
 import { TransactionReviewToast } from "@/app/admin/quarters/[id]/transactions/transaction-review-toast";
@@ -736,8 +736,17 @@ function ManualLedgerEntryCard({
               <span className="sr-only">Open transaction explorer</span>
             </a>
           ) : null}
-          {quarter.status === "draft" && entry.category === "raid_revenue" ? (
-            <RemoveManualRevenueForm ledgerEntryId={entry.id} />
+          {quarter.status === "draft" &&
+          (entry.category === "raid_revenue" ||
+            entry.category === "subcontractor_payout") ? (
+            <RemoveManualLedgerEntryForm
+              kind={
+                entry.category === "subcontractor_payout"
+                  ? "payout"
+                  : "revenue"
+              }
+              ledgerEntryId={entry.id}
+            />
           ) : null}
         </div>
       </div>
