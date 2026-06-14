@@ -268,6 +268,29 @@ function RaidSelect({
   );
 }
 
+function RipSelect({
+  defaultValue,
+  rips,
+}: {
+  defaultValue: string | null;
+  rips: ClassificationOptions["rips"];
+}) {
+  return (
+    <select
+      name="ripId"
+      defaultValue={defaultValue ?? ""}
+      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+    >
+      <option value="">No RIP link</option>
+      {rips.map((rip) => (
+        <option key={rip.id} value={rip.id}>
+          {rip.title}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function Field({
   children,
   label,
@@ -419,6 +442,16 @@ function ClassificationForm({
           )}
         </Field>
       </div>
+      <Field label="RIP">
+        {isTreasuryCounterparty ? (
+          <div className="flex h-9 items-center rounded-md border border-border bg-secondary px-3 text-sm text-muted-foreground">
+            Not needed for treasury transfers
+            <input type="hidden" name="ripId" value="" />
+          </div>
+        ) : (
+          <RipSelect defaultValue={transfer.ripId} rips={options.rips} />
+        )}
+      </Field>
       <Field label="Notes">
         <textarea
           name="notes"
@@ -459,6 +492,7 @@ function TransferCard({
     (entity) => entity.id === transfer.counterpartyEntityId,
   );
   const linkedRaid = options.raids.find((raid) => raid.id === transfer.raidId);
+  const linkedRip = options.rips.find((rip) => rip.id === transfer.ripId);
 
   if (transfer.ledgerEntryId && transfer.category) {
     return (
@@ -507,6 +541,19 @@ function TransferCard({
                   <span className="font-medium text-foreground">
                     {linkedRaid.name}
                   </span>
+                </span>
+              ) : null}
+              {linkedRip ? (
+                <span>
+                  RIP:{" "}
+                  <a
+                    href={linkedRip.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
+                  >
+                    {linkedRip.title}
+                  </a>
                 </span>
               ) : null}
               <span>
@@ -674,6 +721,7 @@ function ManualLedgerEntryCard({
     (entity) => entity.id === entry.counterpartyEntityId,
   );
   const linkedRaid = options.raids.find((raid) => raid.id === entry.raidId);
+  const linkedRip = options.rips.find((rip) => rip.id === entry.ripId);
 
   return (
     <article className="rounded-lg border border-emerald-600/20 bg-card px-4 py-3 shadow-sm">
@@ -718,6 +766,19 @@ function ManualLedgerEntryCard({
                 <span className="font-medium text-foreground">
                   {linkedRaid.name}
                 </span>
+              </span>
+            ) : null}
+            {linkedRip ? (
+              <span>
+                RIP:{" "}
+                <a
+                  href={linkedRip.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
+                >
+                  {linkedRip.title}
+                </a>
               </span>
             ) : null}
             {entry.notes ? <span>Notes: {entry.notes}</span> : null}

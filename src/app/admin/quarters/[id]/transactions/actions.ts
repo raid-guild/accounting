@@ -33,6 +33,7 @@ import {
   startOrResumeQuarterSync,
   type QuarterSyncStatus,
 } from "@/lib/quarter-sync";
+import { assertRipIsAvailable } from "@/lib/rips";
 import { syncTreasuryTransactions } from "@/lib/treasury/transactions";
 
 function getString(formData: FormData, key: string) {
@@ -444,6 +445,7 @@ export async function classifyQuarterTransfer(formData: FormData) {
     "counterpartyEntityId",
   );
   let raidId = getOptionalString(formData, "raidId");
+  let ripId = getOptionalString(formData, "ripId");
   const notes = getString(formData, "notes");
   const usdAmount = getUsdAmount(getString(formData, "usdAmount"));
 
@@ -464,6 +466,7 @@ export async function classifyQuarterTransfer(formData: FormData) {
     category = "treasury_transfer";
     counterpartyEntityId = null;
     raidId = null;
+    ripId = null;
   }
 
   const source = await getLedgerSourceForTransfer(transfer);
@@ -482,6 +485,15 @@ export async function classifyQuarterTransfer(formData: FormData) {
     }
 
     counterpartyEntityId = null;
+    ripId = null;
+  }
+
+  if (category === "rip_expense") {
+    if (!ripId) {
+      throw new Error("RIP is required for RIP expenses");
+    }
+  } else {
+    ripId = null;
   }
 
   await assertClassificationEntityMatchesCategory({
@@ -489,6 +501,7 @@ export async function classifyQuarterTransfer(formData: FormData) {
     entityId: counterpartyEntityId,
   });
   await assertRaidIsAvailable(raidId);
+  await assertRipIsAvailable(ripId);
 
   const entryValues = {
     assetAmount: transfer.amount,
@@ -500,6 +513,7 @@ export async function classifyQuarterTransfer(formData: FormData) {
     occurredAt: transfer.executedAt,
     quarterId,
     raidId,
+    ripId,
     source,
     sourceMetadata: {
       direction: transfer.direction,
@@ -539,6 +553,7 @@ export async function classifyQuarterTransfer(formData: FormData) {
       category,
       counterpartyEntityId,
       raidId,
+      ripId,
       treasuryCounterparty: treasuryCounterparty
         ? {
             address: treasuryCounterparty.address,
