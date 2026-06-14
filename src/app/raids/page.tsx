@@ -60,6 +60,7 @@ type RaidFlow = "client" | "raid" | "subcontractor";
 type RaidModal = `add-${RaidFlow}`;
 type ManualAccountingModal = `manual-${ManualRaidLedgerKind}`;
 type TeamPayoutStatus = RaidAccountingSummary["status"];
+type SpoilsStatus = RaidAccountingSummary["spoilsStatus"];
 type RaidToastError =
   | "client-has-raids"
   | "duplicate-address"
@@ -73,12 +74,13 @@ type ManualRaidLedgerEntryView = {
   chainId: number | null;
   counterpartyEntityId: string | null;
   id: string;
-  kind: ManualRaidLedgerKind;
+  kind: ManualRaidLedgerKind | "spoils";
   occurredAt: Date;
   quarterId: string;
   quarterLabel: string;
   quarterStatus: typeof quarters.$inferSelect.status;
   raidId: string | null;
+  source: typeof ledgerEntries.$inferSelect.source;
   txHash: string | null;
   usdAmount: string;
 };
@@ -151,6 +153,28 @@ const TEAM_PAYOUT_STATUS_COPY: Record<
   },
 };
 
+const SPOILS_STATUS_COPY: Record<
+  SpoilsStatus,
+  { label: string; tone: string }
+> = {
+  no_revenue: {
+    label: "No Revenue",
+    tone: "border-border bg-muted text-muted-foreground",
+  },
+  over_received: {
+    label: "Over Received",
+    tone: "border-primary/25 bg-primary/10 text-primary",
+  },
+  received: {
+    label: "Received",
+    tone: "border-emerald-600/25 bg-emerald-600/10 text-emerald-800",
+  },
+  spoils_pending: {
+    label: "Spoils Pending",
+    tone: "border-amber-500/30 bg-amber-500/10 text-amber-800",
+  },
+};
+
 function TeamPayoutStatusBadge({ status }: { status: TeamPayoutStatus }) {
   const copy = TEAM_PAYOUT_STATUS_COPY[status];
 
@@ -163,7 +187,19 @@ function TeamPayoutStatusBadge({ status }: { status: TeamPayoutStatus }) {
   );
 }
 
-async function listManualRaidLedgerEntries(
+function SpoilsStatusBadge({ status }: { status: SpoilsStatus }) {
+  const copy = SPOILS_STATUS_COPY[status];
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${copy.tone}`}
+    >
+      {copy.label}
+    </span>
+  );
+}
+
+async function listRaidLedgerEntries(
   raidId: string | null,
 ): Promise<ManualRaidLedgerEntryView[]> {
   if (!raidId) {
@@ -183,6 +219,7 @@ async function listManualRaidLedgerEntries(
       quarterLabel: quarters.label,
       quarterStatus: quarters.status,
       raidId: ledgerEntries.raidId,
+      source: ledgerEntries.source,
       txHash: ledgerEntries.txHash,
       usdAmount: ledgerEntries.usdAmount,
     })
@@ -190,9 +227,9 @@ async function listManualRaidLedgerEntries(
     .innerJoin(quarters, eq(ledgerEntries.quarterId, quarters.id))
     .where(
       and(
-        eq(ledgerEntries.source, "manual"),
         inArray(ledgerEntries.category, [
           "raid_revenue",
+          "raid_spoils",
           "subcontractor_payout",
         ]),
         eq(ledgerEntries.raidId, raidId),
@@ -202,7 +239,12 @@ async function listManualRaidLedgerEntries(
 
   return rows.map(({ category, ...row }) => ({
     ...row,
-    kind: category === "subcontractor_payout" ? "payout" : "revenue",
+    kind:
+      category === "subcontractor_payout"
+        ? "payout"
+        : category === "raid_spoils"
+          ? "spoils"
+          : "revenue",
   }));
 }
 
@@ -353,7 +395,7 @@ function TopClientsTable({ clients }: { clients: ClientRevenueSummary[] }) {
       />
       {clients.length > 0 ? (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
+          <table className="w-full min-w-[820px] text-left text-sm">
             <thead className="border-b border-border text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-3 py-3 font-medium">Client</th>
@@ -361,6 +403,9 @@ function TopClientsTable({ clients }: { clients: ClientRevenueSummary[] }) {
                 <th className="px-3 py-3 text-right font-medium">Raids</th>
                 <th className="px-3 py-3 text-right font-medium">
                   Expected Spoils
+                </th>
+                <th className="px-3 py-3 text-right font-medium">
+                  Spoils Received
                 </th>
                 <th className="px-3 py-3 text-right font-medium">
                   Team Pool
@@ -382,6 +427,9 @@ function TopClientsTable({ clients }: { clients: ClientRevenueSummary[] }) {
                   </td>
                   <td className="px-3 py-3 text-right">
                     {formatAccountingCurrency(client.expectedSpoilsCents)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    {formatAccountingCurrency(client.spoilsReceivedCents)}
                   </td>
                   <td className="px-3 py-3 text-right">
                     {formatAccountingCurrency(client.expectedTeamPoolCents)}
@@ -416,7 +464,7 @@ function RaidAccountingTable({
       />
       {summaries.length > 0 ? (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm">
+          <table className="w-full min-w-[1180px] text-left text-sm">
             <thead className="border-b border-border text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-3 py-3 font-medium">Client</th>
@@ -425,6 +473,13 @@ function RaidAccountingTable({
                 <th className="px-3 py-3 text-right font-medium">
                   Expected Spoils
                 </th>
+                <th className="px-3 py-3 text-right font-medium">
+                  Spoils Received
+                </th>
+                <th className="px-3 py-3 text-right font-medium">
+                  Spoils Due
+                </th>
+                <th className="px-3 py-3 font-medium">Spoils Status</th>
                 <th className="px-3 py-3 text-right font-medium">
                   Team Pool
                 </th>
@@ -456,6 +511,15 @@ function RaidAccountingTable({
                   </td>
                   <td className="px-3 py-3 text-right">
                     {formatAccountingCurrency(summary.expectedSpoilsCents)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    {formatAccountingCurrency(summary.spoilsReceivedCents)}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    {formatAccountingCurrency(summary.remainingSpoilsCents)}
+                  </td>
+                  <td className="px-3 py-3">
+                    <SpoilsStatusBadge status={summary.spoilsStatus} />
                   </td>
                   <td className="px-3 py-3 text-right">
                     {formatAccountingCurrency(summary.expectedTeamPoolCents)}
@@ -785,13 +849,20 @@ function ManualRaidLedgerRows({
 }: {
   counterparties?: CoreEntityView[];
   entries: ManualRaidLedgerEntryView[];
-  kind: ManualRaidLedgerKind;
+  kind: ManualRaidLedgerKind | "spoils";
 }) {
-  const title = kind === "payout" ? "Manual Payouts" : "Manual Revenue";
+  const title =
+    kind === "payout"
+      ? "Raid Payouts"
+      : kind === "spoils"
+        ? "Treasury Spoils"
+        : "Raid Revenue";
   const emptyLabel =
     kind === "payout"
-      ? "No manual payouts saved for this raid yet."
-      : "No manual revenue saved for this raid yet.";
+      ? "No payouts linked to this raid yet."
+      : kind === "spoils"
+        ? "No treasury spoils linked to this raid yet."
+      : "No revenue linked to this raid yet.";
 
   return (
     <section className="mt-4 border-t border-border pt-4">
@@ -836,11 +907,17 @@ function ManualRaidLedgerRows({
                 </p>
               </div>
               <div className="flex items-center md:justify-end">
-                {entry.quarterStatus === "draft" ? (
+                {entry.kind !== "spoils" &&
+                entry.source === "manual" &&
+                entry.quarterStatus === "draft" ? (
                   <RemoveManualLedgerEntryForm
                     kind={entry.kind}
                     ledgerEntryId={entry.id}
                   />
+                ) : entry.kind === "spoils" ? (
+                  <span className="rounded-md border border-emerald-600/20 bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-800">
+                    Linked
+                  </span>
                 ) : (
                   <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
                     Locked
@@ -903,6 +980,10 @@ function RaidDetails({
       <ManualRaidLedgerRows
         entries={ledgerEntries.filter((entry) => entry.kind === "revenue")}
         kind="revenue"
+      />
+      <ManualRaidLedgerRows
+        entries={ledgerEntries.filter((entry) => entry.kind === "spoils")}
+        kind="spoils"
       />
       <ManualRaidLedgerRows
         counterparties={subcontractors}
@@ -1163,9 +1244,9 @@ function ActiveModal({
   addModal,
   entities,
   entityId,
-  manualRaidLedgerEntries,
   manualModal,
   raidId,
+  raidLedgerEntries,
   raids,
   lookupChains,
   activeSubcontractors,
@@ -1177,9 +1258,9 @@ function ActiveModal({
   entities: CoreEntityView[];
   entityId: string | null;
   lookupChains: ReturnType<typeof listManualLookupChains>;
-  manualRaidLedgerEntries: ManualRaidLedgerEntryView[];
   manualModal: ManualAccountingModal | null;
   raidId: string | null;
+  raidLedgerEntries: ManualRaidLedgerEntryView[];
   raids: RaidView[];
   subcontractors: CoreEntityView[];
 }) {
@@ -1279,7 +1360,7 @@ function ActiveModal({
       >
         <RaidDetails
           clients={activeClients}
-          ledgerEntries={manualRaidLedgerEntries.filter(
+          ledgerEntries={raidLedgerEntries.filter(
             (entry) => entry.raidId === selectedRaid.id,
           )}
           raid={selectedRaid}
@@ -1340,10 +1421,10 @@ export default async function RaidsPage({
   const manualModal = parseManualAccountingModal(params?.modal);
   const entityId = parseId(params?.entity);
   const raidId = parseId(params?.raid);
-  const [entities, raids, manualRaidLedgerEntries] = await Promise.all([
+  const [entities, raids, raidLedgerEntries] = await Promise.all([
     listEntitiesByTypes(["client", "subcontractor"]),
     listRaids(),
-    listManualRaidLedgerEntries(raidId),
+    listRaidLedgerEntries(raidId),
   ]);
   const accountingOverview = await getRaidAccountingOverview(raids);
   const lookupChains = listManualLookupChains();
@@ -1426,9 +1507,9 @@ export default async function RaidsPage({
         entities={entities}
         entityId={entityId}
         lookupChains={lookupChains}
-        manualRaidLedgerEntries={manualRaidLedgerEntries}
         manualModal={manualModal}
         raidId={raidId}
+        raidLedgerEntries={raidLedgerEntries}
         raids={raids}
         subcontractors={subcontractors}
       />

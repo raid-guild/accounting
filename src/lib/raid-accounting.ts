@@ -11,10 +11,16 @@ type RaidAccountingStatus =
   | "no_revenue"
   | "overpaid"
   | "payouts_pending";
+type SpoilsStatus =
+  | "no_revenue"
+  | "over_received"
+  | "received"
+  | "spoils_pending";
 
 type RaidLedgerTotals = {
   raidId: string | null;
   revenueUsd: string;
+  spoilsUsd: string;
   subcontractorPayoutUsd: string;
 };
 
@@ -33,7 +39,10 @@ export type RaidAccountingSummary = {
   raidId: string;
   raidName: string;
   remainingPoolCents: bigint;
+  remainingSpoilsCents: bigint;
   revenueCents: bigint;
+  spoilsReceivedCents: bigint;
+  spoilsStatus: SpoilsStatus;
   status: RaidAccountingStatus;
   subcontractorPayoutCents: bigint;
 };
@@ -45,6 +54,7 @@ export type ClientRevenueSummary = {
   expectedTeamPoolCents: bigint;
   raidCount: number;
   revenueCents: bigint;
+  spoilsReceivedCents: bigint;
   subcontractorPayoutCents: bigint;
 };
 
@@ -97,6 +107,30 @@ function getTeamPayoutStatus({
   return "payouts_pending";
 }
 
+function getSpoilsStatus({
+  expectedSpoilsCents,
+  revenueCents,
+  spoilsReceivedCents,
+}: {
+  expectedSpoilsCents: bigint;
+  revenueCents: bigint;
+  spoilsReceivedCents: bigint;
+}): SpoilsStatus {
+  if (spoilsReceivedCents > expectedSpoilsCents) {
+    return "over_received";
+  }
+
+  if (revenueCents === ZERO) {
+    return "no_revenue";
+  }
+
+  if (spoilsReceivedCents === expectedSpoilsCents) {
+    return "received";
+  }
+
+  return "spoils_pending";
+}
+
 function sortByRevenueThenName<
   T extends { clientName?: string; raidName?: string; revenueCents: bigint },
 >(left: T, right: T) {
@@ -128,6 +162,7 @@ async function listRaidLedgerTotals(): Promise<RaidLedgerTotals[]> {
     .select({
       raidId: ledgerEntries.raidId,
       revenueUsd: sql<string>`coalesce(sum(case when ${ledgerEntries.category} = 'raid_revenue' then ${ledgerEntries.usdAmount} else 0 end), 0)`,
+      spoilsUsd: sql<string>`coalesce(sum(case when ${ledgerEntries.category} = 'raid_spoils' then ${ledgerEntries.usdAmount} else 0 end), 0)`,
       subcontractorPayoutUsd: sql<string>`coalesce(sum(case when ${ledgerEntries.category} = 'subcontractor_payout' then ${ledgerEntries.usdAmount} else 0 end), 0)`,
     })
     .from(ledgerEntries)
@@ -136,6 +171,7 @@ async function listRaidLedgerTotals(): Promise<RaidLedgerTotals[]> {
         isNotNull(ledgerEntries.raidId),
         inArray(ledgerEntries.category, [
           "raid_revenue",
+          "raid_spoils",
           "subcontractor_payout",
         ]),
       ),
@@ -164,7 +200,10 @@ export async function getRaidAccountingOverview(
       raidId: raid.id,
       raidName: raid.name,
       remainingPoolCents: ZERO,
+      remainingSpoilsCents: ZERO,
       revenueCents: ZERO,
+      spoilsReceivedCents: ZERO,
+      spoilsStatus: "no_revenue",
       status: "no_revenue",
       subcontractorPayoutCents: ZERO,
     });
@@ -192,7 +231,10 @@ export async function getRaidAccountingOverview(
         raidId: raid.id,
         raidName: raid.name,
         remainingPoolCents: ZERO,
+        remainingSpoilsCents: ZERO,
         revenueCents: ZERO,
+        spoilsReceivedCents: ZERO,
+        spoilsStatus: "no_revenue",
         status: "no_revenue",
         subcontractorPayoutCents: ZERO,
       } satisfies RaidAccountingSummary);
@@ -201,6 +243,7 @@ export async function getRaidAccountingOverview(
     summary.subcontractorPayoutCents = parseUsdCents(
       row.subcontractorPayoutUsd,
     );
+    summary.spoilsReceivedCents = parseUsdCents(row.spoilsUsd);
 
     raidSummaries.set(row.raidId, summary);
   }
@@ -210,12 +253,20 @@ export async function getRaidAccountingOverview(
     const expectedTeamPoolCents = summary.revenueCents - expectedSpoilsCents;
     const remainingPoolCents =
       expectedTeamPoolCents - summary.subcontractorPayoutCents;
+    const remainingSpoilsCents =
+      expectedSpoilsCents - summary.spoilsReceivedCents;
 
     return {
       ...summary,
       expectedSpoilsCents,
       expectedTeamPoolCents,
       remainingPoolCents,
+      remainingSpoilsCents,
+      spoilsStatus: getSpoilsStatus({
+        expectedSpoilsCents,
+        revenueCents: summary.revenueCents,
+        spoilsReceivedCents: summary.spoilsReceivedCents,
+      }),
       status: getTeamPayoutStatus({
         expectedTeamPoolCents,
         revenueCents: summary.revenueCents,
@@ -239,6 +290,7 @@ export async function getRaidAccountingOverview(
         expectedTeamPoolCents: ZERO,
         raidCount: 0,
         revenueCents: ZERO,
+        spoilsReceivedCents: ZERO,
         subcontractorPayoutCents: ZERO,
       } satisfies ClientRevenueSummary);
 
@@ -246,6 +298,7 @@ export async function getRaidAccountingOverview(
     clientSummary.expectedTeamPoolCents += summary.expectedTeamPoolCents;
     clientSummary.raidCount += 1;
     clientSummary.revenueCents += summary.revenueCents;
+    clientSummary.spoilsReceivedCents += summary.spoilsReceivedCents;
     clientSummary.subcontractorPayoutCents += summary.subcontractorPayoutCents;
     clientSummaries.set(summary.clientId, clientSummary);
   }
