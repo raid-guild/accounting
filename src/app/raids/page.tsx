@@ -853,16 +853,16 @@ function ManualRaidLedgerRows({
 }) {
   const title =
     kind === "payout"
-      ? "Manual Payouts"
+      ? "Raid Payouts"
       : kind === "spoils"
         ? "Treasury Spoils"
-        : "Manual Revenue";
+        : "Raid Revenue";
   const emptyLabel =
     kind === "payout"
-      ? "No manual payouts saved for this raid yet."
+      ? "No payouts linked to this raid yet."
       : kind === "spoils"
         ? "No treasury spoils linked to this raid yet."
-      : "No manual revenue saved for this raid yet.";
+      : "No revenue linked to this raid yet.";
 
   return (
     <section className="mt-4 border-t border-border pt-4">
