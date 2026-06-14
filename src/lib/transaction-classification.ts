@@ -19,6 +19,7 @@ import {
 } from "@/db/schema";
 import { decryptField, type EncryptedField } from "@/lib/encryption";
 import { listEntitiesByTypes, listRaids } from "@/lib/core-entities";
+import { listRipOptions, type RipOption } from "@/lib/rips";
 
 export type LedgerCategory = (typeof ledgerCategoryEnum.enumValues)[number];
 export type ClassificationStatus = "classified" | "unclassified" | "all";
@@ -38,6 +39,7 @@ export type ClassificationRaidOption = {
 export type ClassificationOptions = {
   entities: ClassificationEntityOption[];
   raids: ClassificationRaidOption[];
+  rips: RipOption[];
 };
 
 export type TreasuryAccountLabel = {
@@ -70,6 +72,7 @@ export type TreasuryTransferClassificationView = {
   notes: string | null;
   quarterId: string | null;
   raidId: string | null;
+  ripId: string | null;
   toAddress: string;
   toLabel: string | null;
   transferId: string;
@@ -88,6 +91,7 @@ export type ManualLedgerEntryClassificationView = {
   notes: string | null;
   quarterId: string | null;
   raidId: string | null;
+  ripId: string | null;
   source: "manual";
   txHash: string | null;
   usdAmount: string;
@@ -246,6 +250,7 @@ function mapTransferRow({
     notes: decryptNullableField(ledgerEntry?.notesEncrypted),
     quarterId: ledgerEntry?.quarterId ?? null,
     raidId: ledgerEntry?.raidId ?? null,
+    ripId: ledgerEntry?.ripId ?? null,
     toAddress: transfer.toAddress,
     toLabel: toLabel?.label ?? null,
     transferId: transfer.id,
@@ -271,6 +276,10 @@ export function parseClassificationStatus(
 }
 
 export function getCategoryLabel(category: LedgerCategory) {
+  if (category === "rip_expense") {
+    return "RIP Expense";
+  }
+
   return category
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -278,9 +287,10 @@ export function getCategoryLabel(category: LedgerCategory) {
 }
 
 export async function listClassificationOptions(): Promise<ClassificationOptions> {
-  const [entityRows, raidRows] = await Promise.all([
+  const [entityRows, raidRows, ripRows] = await Promise.all([
     listEntitiesByTypes(["client", "provider", "subcontractor"]),
     listRaids(),
+    listRipOptions(),
   ]);
 
   return {
@@ -294,6 +304,7 @@ export async function listClassificationOptions(): Promise<ClassificationOptions
       id: raid.id,
       name: raid.name,
     })),
+    rips: ripRows,
   };
 }
 
@@ -390,6 +401,7 @@ export async function listManualLedgerEntryClassifications({
     notes: decryptNullableField(entry.notesEncrypted),
     quarterId: entry.quarterId,
     raidId: entry.raidId,
+    ripId: entry.ripId,
     source: "manual",
     txHash: entry.txHash,
     usdAmount: entry.usdAmount,

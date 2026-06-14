@@ -46,6 +46,7 @@ export const ledgerCategoryEnum = pgEnum("ledger_category", [
   "raid_revenue",
   "raid_spoils",
   "subcontractor_payout",
+  "rip_expense",
   "provider_expense",
   "member_dues",
   "ragequit",
@@ -508,6 +509,23 @@ export const raids = pgTable(
   ],
 );
 
+export const rips = pgTable(
+  "rips",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    titleEncrypted: jsonb("title_encrypted").notNull(),
+    urlEncrypted: jsonb("url_encrypted").notNull(),
+    createdByWalletAddress: text("created_by_wallet_address"),
+    ...timestamps,
+  },
+  (table) => [
+    index("rips_created_at_idx").on(table.createdAt),
+    index("rips_created_by_wallet_address_idx").on(
+      sql`lower(${table.createdByWalletAddress})`,
+    ),
+  ],
+);
+
 export const ledgerEntries = pgTable(
   "ledger_entries",
   {
@@ -546,6 +564,9 @@ export const ledgerEntries = pgTable(
     raidId: uuid("raid_id").references(() => raids.id, {
       onDelete: "set null",
     }),
+    ripId: uuid("rip_id").references(() => rips.id, {
+      onDelete: "set null",
+    }),
     notesEncrypted: jsonb("notes_encrypted"),
     sourceMetadata: jsonb("source_metadata"),
     ...timestamps,
@@ -561,6 +582,7 @@ export const ledgerEntries = pgTable(
       table.treasuryTransactionTransferId,
     ),
     index("ledger_entries_raid_id_idx").on(table.raidId),
+    index("ledger_entries_rip_id_idx").on(table.ripId),
     index("ledger_entries_occurred_at_idx").on(table.occurredAt),
   ],
 );

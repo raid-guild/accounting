@@ -176,6 +176,7 @@ function MemberHome({
                   <>
                     <AppNavLink href="/membership">Membership</AppNavLink>
                     <AppNavLink href="/proposals">Proposals</AppNavLink>
+                    <AppNavLink href="/rips">RIPs</AppNavLink>
                   </>
                 ) : null}
                 {session.permissions?.canWriteRaidAccounting ? (
