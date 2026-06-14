@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import { ledgerEntries, rips } from "@/db/schema";
@@ -115,22 +115,28 @@ export async function deleteRip(formData: FormData) {
     redirect("/rips?error=missing");
   }
 
-  const [linkedEntryCount] = await getDb()
-    .select({ count: sql<string>`count(${ledgerEntries.id})` })
-    .from(ledgerEntries)
-    .where(eq(ledgerEntries.ripId, ripId));
-
-  if (Number(linkedEntryCount?.count ?? 0) > 0) {
-    redirect("/rips?error=linked");
-  }
-
   const [rip] = await getDb()
     .delete(rips)
-    .where(eq(rips.id, ripId))
+    .where(
+      and(
+        eq(rips.id, ripId),
+        sql`not exists (
+          select 1
+          from ${ledgerEntries}
+          where ${ledgerEntries.ripId} = ${rips.id}
+        )`,
+      ),
+    )
     .returning();
 
   if (!rip) {
-    redirect("/rips?error=missing");
+    const [existingRip] = await getDb()
+      .select({ id: rips.id })
+      .from(rips)
+      .where(eq(rips.id, ripId))
+      .limit(1);
+
+    redirect(existingRip ? "/rips?error=linked" : "/rips?error=missing");
   }
 
   await writeAuditEvent({
