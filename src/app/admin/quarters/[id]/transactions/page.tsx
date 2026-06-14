@@ -13,7 +13,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { classifyQuarterTransfer } from "@/app/admin/quarters/[id]/transactions/actions";
+import { BankCsvImportPanel } from "@/app/admin/quarters/[id]/transactions/bank-csv-import-panel";
+import {
+  classifyQuarterTransfer,
+  updateLedgerEntryClassification,
+} from "@/app/admin/quarters/[id]/transactions/actions";
 import { RemoveManualLedgerEntryForm } from "@/app/raids/remove-manual-revenue-form";
 import { QuarterWorkflowProgress } from "@/components/quarters/quarter-workflow-progress";
 import { SyncTransactionsForm } from "@/app/admin/quarters/[id]/transactions/sync-transactions-form";
@@ -722,6 +726,8 @@ function ManualLedgerEntryCard({
   );
   const linkedRaid = options.raids.find((raid) => raid.id === entry.raidId);
   const linkedRip = options.rips.find((rip) => rip.id === entry.ripId);
+  const sourceLabel =
+    entry.source === "bank_csv" ? "Bank CSV" : "Manual Entry";
 
   return (
     <article className="rounded-lg border border-emerald-600/20 bg-card px-4 py-3 shadow-sm">
@@ -733,7 +739,7 @@ function ManualLedgerEntryCard({
               Classified
             </span>
             <span className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
-              Manual Entry
+              {sourceLabel}
             </span>
             <span className="text-xs font-medium text-muted-foreground">
               {getCategoryLabel(entry.category)}
@@ -748,7 +754,7 @@ function ManualLedgerEntryCard({
               </span>
             </h2>
             <p className="text-xs text-muted-foreground">
-              Manual Accounting · {formatTimestamp(entry.executedAt)}
+              {sourceLabel} · {formatTimestamp(entry.executedAt)}
             </p>
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -798,6 +804,7 @@ function ManualLedgerEntryCard({
             </a>
           ) : null}
           {quarter.status === "draft" &&
+          entry.source === "manual" &&
           (entry.category === "raid_revenue" ||
             entry.category === "subcontractor_payout") ? (
             <RemoveManualLedgerEntryForm
@@ -811,7 +818,79 @@ function ManualLedgerEntryCard({
           ) : null}
         </div>
       </div>
+      {quarter.status !== "published" ? (
+        <details className="mt-4 border-t border-border pt-4">
+          <summary className="inline-flex h-9 cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:text-foreground">
+            <Pencil className="size-4" aria-hidden="true" />
+            Edit
+          </summary>
+          <LedgerEntryEditForm
+            entry={entry}
+            options={options}
+            quarterId={quarter.id}
+          />
+        </details>
+      ) : null}
     </article>
+  );
+}
+
+function LedgerEntryEditForm({
+  entry,
+  options,
+  quarterId,
+}: {
+  entry: ManualLedgerEntryClassificationView;
+  options: ClassificationOptions;
+  quarterId: string;
+}) {
+  return (
+    <form
+      action={updateLedgerEntryClassification}
+      className="mt-4 grid gap-4 text-sm md:grid-cols-2"
+    >
+      <input type="hidden" name="quarterId" value={quarterId} />
+      <input type="hidden" name="ledgerEntryId" value={entry.id} />
+      <Field label="Category">
+        <CategorySelect defaultValue={entry.category} />
+      </Field>
+      <Field label="USD Amount">
+        <input
+          name="usdAmount"
+          defaultValue={formatUsdAmount(entry.usdAmount)}
+          inputMode="decimal"
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          required
+        />
+      </Field>
+      <Field label="Counterparty">
+        <EntitySelect
+          defaultValue={entry.counterpartyEntityId}
+          entities={options.entities}
+        />
+      </Field>
+      <Field label="Raid">
+        <RaidSelect defaultValue={entry.raidId} raids={options.raids} />
+      </Field>
+      <Field label="RIP">
+        <RipSelect defaultValue={entry.ripId} rips={options.rips} />
+      </Field>
+      <label className="grid gap-2 text-sm font-medium md:col-span-2">
+        <span className="type-label-sm text-muted-foreground">Notes</span>
+        <textarea
+          name="notes"
+          defaultValue={entry.notes ?? ""}
+          rows={3}
+          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+        />
+      </label>
+      <div className="md:col-span-2">
+        <Button type="submit">
+          <Save data-icon="inline-start" />
+          Save Classification
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -953,6 +1032,7 @@ export default async function QuarterTransactionsPage({
             />
           </div>
           <QuarterWorkflowProgress steps={workflowSteps} />
+          <BankCsvImportPanel quarterId={quarter.id} />
         </div>
 
         {summary.unclassifiedTransfers > 0 ? (
@@ -986,7 +1066,7 @@ export default async function QuarterTransactionsPage({
           {manualEntries.length > 0 ? (
             <div className="grid gap-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold">Manual Ledger Entries</h2>
+                <h2 className="text-sm font-semibold">Ledger Entries</h2>
                 <span className="type-label-sm text-muted-foreground">
                   {manualEntries.length} entries
                 </span>

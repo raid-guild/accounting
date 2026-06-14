@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import {
@@ -14,6 +14,13 @@ import {
 } from "@/db/schema";
 import { writeAuditEvent } from "@/lib/audit";
 import { getAuthSession } from "@/lib/auth/session";
+import {
+  buildBankCsvNote,
+  parseBankCsvConfirmRows,
+  parseBankCsvImport,
+  type BankCsvImportRow,
+  type BankCsvPreviewResult,
+} from "@/lib/bank-csv";
 import { syncDaoProposalsForPeriod } from "@/lib/dao-proposals";
 import { encryptField } from "@/lib/encryption";
 import { syncMembershipActivitiesForPeriod } from "@/lib/membership-activity";
@@ -40,6 +47,12 @@ function getString(formData: FormData, key: string) {
   const value = formData.get(key);
 
   return typeof value === "string" ? value.trim() : "";
+}
+
+function getFile(formData: FormData, key: string) {
+  const value = formData.get(key);
+
+  return value instanceof File && value.size > 0 ? value : null;
 }
 
 function getOptionalString(formData: FormData, key: string) {
@@ -79,6 +92,29 @@ function getUsdAmount(value: string) {
   }
 
   return `${whole}.${cents}`;
+}
+
+function assertQuarterCanAcceptBankImport(quarter: typeof quarters.$inferSelect) {
+  if (quarter.status === "published") {
+    throw new Error("Published quarters must be reopened before importing bank rows");
+  }
+}
+
+async function getExistingSourceExternalIds(sourceExternalIds: string[]) {
+  if (sourceExternalIds.length === 0) {
+    return new Set<string>();
+  }
+
+  const rows = await getDb()
+    .select({ sourceExternalId: ledgerEntries.sourceExternalId })
+    .from(ledgerEntries)
+    .where(inArray(ledgerEntries.sourceExternalId, sourceExternalIds));
+
+  return new Set(
+    rows.flatMap((row) =>
+      row.sourceExternalId ? [row.sourceExternalId] : [],
+    ),
+  );
 }
 
 async function requireAdminSession() {
@@ -132,6 +168,191 @@ async function getTransferInQuarter({
   }
 
   return transfer;
+}
+
+export type BankCsvImportState = {
+  error: string | null;
+  importedCount: number;
+  preview: BankCsvPreviewResult | null;
+};
+
+const BANK_CSV_INITIAL_ERROR = "Bank CSV import failed";
+
+function getBankCsvErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    if (
+      error.message === "Bank import preview is invalid" ||
+      error.message === "Bank import preview has a bad format" ||
+      error.message === "Bank import preview is required" ||
+      error.message.startsWith("Bank import preview row") ||
+      error.message === "Choose a CSV file" ||
+      error.message === "Quarter is required" ||
+      error.message === "Quarter not found" ||
+      error.message.startsWith("CSV is missing") ||
+      error.message.startsWith("Published quarters")
+    ) {
+      return error.message;
+    }
+  }
+
+  return BANK_CSV_INITIAL_ERROR;
+}
+
+export async function previewBankCsvImport(
+  _previousState: BankCsvImportState,
+  formData: FormData,
+): Promise<BankCsvImportState> {
+  try {
+    await requireAdminSession();
+    const quarterId = getString(formData, "quarterId");
+    const csvFile = getFile(formData, "csvFile");
+
+    if (!quarterId) {
+      throw new Error("Quarter is required");
+    }
+
+    if (!csvFile) {
+      throw new Error("Choose a CSV file");
+    }
+
+    const quarter = await getQuarterById(quarterId);
+    assertQuarterCanAcceptBankImport(quarter);
+    const text = await csvFile.text();
+    const previewWithoutDuplicates = parseBankCsvImport({
+      existingSourceExternalIds: new Set(),
+      quarter,
+      text,
+    });
+    const existingSourceExternalIds = await getExistingSourceExternalIds(
+      previewWithoutDuplicates.importedRows.map((row) => row.sourceExternalId),
+    );
+    const preview = parseBankCsvImport({
+      existingSourceExternalIds,
+      quarter,
+      text,
+    });
+
+    return { error: null, importedCount: 0, preview };
+  } catch (error) {
+    return {
+      error: getBankCsvErrorMessage(error),
+      importedCount: 0,
+      preview: null,
+    };
+  }
+}
+
+function getBankCsvSourceMetadata(row: BankCsvImportRow) {
+  return {
+    importKind: row.kind,
+    transactionId: row.transactionId,
+    type: row.type,
+  };
+}
+
+export async function confirmBankCsvImport(
+  _previousState: BankCsvImportState,
+  formData: FormData,
+): Promise<BankCsvImportState> {
+  try {
+    const session = await requireAdminSession();
+    const quarterId = getString(formData, "quarterId");
+    const rows = parseBankCsvConfirmRows(getString(formData, "previewRows"));
+
+    if (!quarterId) {
+      throw new Error("Quarter is required");
+    }
+
+    const quarter = await getQuarterById(quarterId);
+    assertQuarterCanAcceptBankImport(quarter);
+    const { endsAtExclusive, startsAt } = getQuarterSyncPeriod(quarter);
+
+    if (
+      rows.some((row) => {
+        const occurredAt = new Date(row.occurredAt);
+
+        return occurredAt < startsAt || occurredAt >= endsAtExclusive;
+      })
+    ) {
+      throw new Error("Bank import preview is invalid");
+    }
+
+    const existingSourceExternalIds = await getExistingSourceExternalIds(
+      rows.map((row) => row.sourceExternalId),
+    );
+    const insertRows = rows.filter(
+      (row) => !existingSourceExternalIds.has(row.sourceExternalId),
+    );
+
+    if (insertRows.length === 0) {
+      return {
+        error: null,
+        importedCount: 0,
+        preview: {
+          duplicateRows: rows.length,
+          importedRows: [],
+          invalidRows: 0,
+          outsideQuarterRows: 0,
+          skippedFeeRows: 0,
+          skippedStatusRows: 0,
+          totalRows: rows.length,
+        },
+      };
+    }
+
+    const insertedRows = await getDb()
+      .insert(ledgerEntries)
+      .values(
+        insertRows.map((row) => {
+          const note = buildBankCsvNote(row);
+
+          return {
+            assetAmount: row.assetAmount,
+            assetSymbol: row.assetSymbol,
+            category: row.category,
+            notesEncrypted: note ? encryptField(note) : null,
+            occurredAt: new Date(row.occurredAt),
+            quarterId: quarter.id,
+            source: "bank_csv",
+            sourceExternalId: row.sourceExternalId,
+            sourceMetadata: getBankCsvSourceMetadata(row),
+            usdAmount: row.usdAmount,
+            verificationStatus: "verified",
+          } satisfies typeof ledgerEntries.$inferInsert;
+        }),
+      )
+      .onConflictDoNothing({ target: ledgerEntries.sourceExternalId })
+      .returning();
+
+    await writeAuditEvent({
+      action: "import",
+      actorWalletAddress: session.address,
+      metadata: {
+        importedRows: insertedRows.length,
+        quarterId: quarter.id,
+        source: "bank_csv",
+      },
+      quarterId: quarter.id,
+      subjectId: quarter.id,
+      subjectTable: "ledger_entries",
+      summary: "Imported bank CSV rows",
+    });
+
+    revalidatePath("/admin/quarters");
+    revalidatePath(getTransactionsPath(quarter.id));
+
+    return {
+      error: null,
+      importedCount: insertedRows.length,
+      preview: null,
+    };
+  } catch (error) {
+    return {
+      error: getBankCsvErrorMessage(error),
+      importedCount: 0,
+      preview: null,
+    };
+  }
 }
 
 async function getLedgerSourceForTransfer(
@@ -567,6 +788,109 @@ export async function classifyQuarterTransfer(formData: FormData) {
     subjectId: transfer.id,
     subjectTable: "treasury_transaction_transfers",
     summary: "Saved transaction classification",
+  });
+
+  revalidatePath("/admin/quarters");
+  revalidatePath(getTransactionsPath(quarterId));
+
+  const params = new URLSearchParams({
+    classified: "1",
+    classifiedId: crypto.randomUUID(),
+  });
+
+  redirect(`${getTransactionsPath(quarterId)}?${params.toString()}`);
+}
+
+export async function updateLedgerEntryClassification(formData: FormData) {
+  const session = await requireAdminSession();
+  const quarterId = getString(formData, "quarterId");
+  const ledgerEntryId = getString(formData, "ledgerEntryId");
+  const category = getCategory(getString(formData, "category"));
+  let counterpartyEntityId = getOptionalString(
+    formData,
+    "counterpartyEntityId",
+  );
+  let raidId = getOptionalString(formData, "raidId");
+  let ripId = getOptionalString(formData, "ripId");
+  const notes = getString(formData, "notes");
+  const usdAmount = getUsdAmount(getString(formData, "usdAmount"));
+
+  if (!quarterId || !ledgerEntryId) {
+    throw new Error("Quarter and ledger entry are required");
+  }
+
+  const quarter = await getQuarterById(quarterId);
+  assertQuarterCanAcceptBankImport(quarter);
+
+  const [entry] = await getDb()
+    .select()
+    .from(ledgerEntries)
+    .where(
+      and(
+        eq(ledgerEntries.id, ledgerEntryId),
+        eq(ledgerEntries.quarterId, quarterId),
+        inArray(ledgerEntries.source, ["bank_csv", "manual"]),
+      ),
+    )
+    .limit(1);
+
+  if (!entry) {
+    throw new Error("Ledger entry not found");
+  }
+
+  if (category === "treasury_transfer") {
+    counterpartyEntityId = null;
+    raidId = null;
+    ripId = null;
+  }
+
+  if (category === "rip_expense") {
+    if (!ripId) {
+      throw new Error("RIP is required for RIP expenses");
+    }
+    raidId = null;
+  } else {
+    ripId = null;
+  }
+
+  if (category === "raid_spoils" && !raidId) {
+    throw new Error("Raid is required for spoils");
+  }
+
+  await assertClassificationEntityMatchesCategory({
+    category,
+    entityId: counterpartyEntityId,
+  });
+  await assertRaidIsAvailable(raidId);
+  await assertRipIsAvailable(ripId);
+
+  await getDb()
+    .update(ledgerEntries)
+    .set({
+      category,
+      counterpartyEntityId,
+      notesEncrypted: notes ? encryptField(notes) : null,
+      raidId,
+      ripId,
+      usdAmount,
+    })
+    .where(eq(ledgerEntries.id, entry.id));
+
+  await writeAuditEvent({
+    action: "classify",
+    actorWalletAddress: session.address,
+    metadata: {
+      category,
+      counterpartyEntityId,
+      ledgerEntryId: entry.id,
+      raidId,
+      ripId,
+      source: entry.source,
+    },
+    quarterId,
+    subjectId: entry.id,
+    subjectTable: "ledger_entries",
+    summary: "Updated ledger entry classification",
   });
 
   revalidatePath("/admin/quarters");

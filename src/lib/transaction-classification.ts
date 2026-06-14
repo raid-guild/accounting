@@ -1,6 +1,15 @@
 import "server-only";
 
-import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+} from "drizzle-orm";
 import { getAddress, isAddress } from "viem";
 import { gnosis } from "viem/chains";
 
@@ -92,7 +101,7 @@ export type ManualLedgerEntryClassificationView = {
   quarterId: string | null;
   raidId: string | null;
   ripId: string | null;
-  source: "manual";
+  source: "bank_csv" | "manual";
   txHash: string | null;
   usdAmount: string;
 };
@@ -385,7 +394,7 @@ export async function listManualLedgerEntryClassifications({
     .where(
       and(
         eq(ledgerEntries.quarterId, quarterId),
-        eq(ledgerEntries.source, "manual"),
+        inArray(ledgerEntries.source, ["bank_csv", "manual"]),
       ),
     )
     .orderBy(asc(ledgerEntries.occurredAt));
@@ -402,7 +411,7 @@ export async function listManualLedgerEntryClassifications({
     quarterId: entry.quarterId,
     raidId: entry.raidId,
     ripId: entry.ripId,
-    source: "manual",
+    source: entry.source as "bank_csv" | "manual",
     txHash: entry.txHash,
     usdAmount: entry.usdAmount,
   }));
