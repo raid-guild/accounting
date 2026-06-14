@@ -1,6 +1,7 @@
-import { LockKeyhole } from "lucide-react";
+import { ChevronDown, LockKeyhole } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { WalletConnect } from "@/components/auth/wallet-connect";
 import { TreasuryDashboard } from "@/components/treasury/treasury-dashboard";
@@ -28,7 +29,13 @@ async function getSessionState() {
 
 type SessionState = Awaited<ReturnType<typeof getSessionState>>;
 
-function AppNavLink({ children, href }: { children: string; href: string }) {
+function AppNavLink({
+  children,
+  href,
+}: {
+  children: ReactNode;
+  href: string;
+}) {
   return (
     <Link
       href={href}
@@ -36,6 +43,37 @@ function AppNavLink({ children, href }: { children: string; href: string }) {
     >
       {children}
     </Link>
+  );
+}
+
+function AdminNavMenu() {
+  const links = [
+    { href: "/admin/providers", label: "Providers" },
+    { href: "/admin/quarters", label: "Quarters" },
+    { href: "/admin/treasury-accounts", label: "Accounts" },
+  ];
+
+  return (
+    <details className="group relative">
+      <summary className="inline-flex h-8 cursor-pointer list-none items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium text-scroll-200 transition-all hover:bg-scroll-100/10 hover:text-scroll-100 marker:hidden">
+        Admin
+        <ChevronDown
+          className="size-3.5 transition-transform group-open:rotate-180"
+          aria-hidden="true"
+        />
+      </summary>
+      <div className="absolute right-0 top-10 z-20 grid min-w-44 gap-1 overflow-hidden rounded-lg border border-scroll-300/25 bg-moloch-800 p-1 shadow-xl shadow-black/30">
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="flex h-8 items-center rounded-md px-3 text-sm font-medium text-scroll-100 transition-all hover:bg-scroll-100/10"
+          >
+            {link.label}
+          </Link>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -107,7 +145,7 @@ function MemberHome({
   return (
     <main className="min-h-screen bg-background text-foreground">
       <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
-        <div className="container-custom grid min-h-18 gap-3 py-3 lg:grid-cols-[auto_1fr] lg:items-center">
+        <div className="container-custom grid min-h-18 gap-3 py-3 xl:grid-cols-[auto_1fr] xl:items-center">
           <div className="flex min-w-0 items-center gap-3">
             {/* Keep the complementary dimension auto when className controls logo height. */}
             <Image
@@ -126,7 +164,7 @@ function MemberHome({
             </div>
           </div>
 
-          <div className="flex min-w-0 flex-wrap items-center gap-3 lg:justify-end">
+          <div className="flex min-w-0 flex-wrap items-center gap-3 xl:justify-end">
             {session.permissions?.canWriteRaidAccounting ||
             session.permissions?.canAdmin ||
             session.permissions?.canAccess ? (
@@ -144,15 +182,7 @@ function MemberHome({
                   <AppNavLink href="/raids">Raids</AppNavLink>
                 ) : null}
                 {session.permissions?.canAdmin ? (
-                  <AppNavLink href="/admin/providers">Providers</AppNavLink>
-                ) : null}
-                {session.permissions?.canAdmin ? (
-                  <>
-                    <AppNavLink href="/admin/quarters">Quarters</AppNavLink>
-                    <AppNavLink href="/admin/treasury-accounts">
-                      Accounts
-                    </AppNavLink>
-                  </>
+                  <AdminNavMenu />
                 ) : null}
               </nav>
             ) : null}

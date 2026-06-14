@@ -44,6 +44,7 @@ export const ledgerSourceEnum = pgEnum("ledger_source", [
 
 export const ledgerCategoryEnum = pgEnum("ledger_category", [
   "raid_revenue",
+  "raid_spoils",
   "subcontractor_payout",
   "provider_expense",
   "member_dues",

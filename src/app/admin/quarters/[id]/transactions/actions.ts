@@ -466,13 +466,30 @@ export async function classifyQuarterTransfer(formData: FormData) {
     raidId = null;
   }
 
+  const source = await getLedgerSourceForTransfer(transfer);
+
+  if (category === "raid_spoils") {
+    if (!raidId) {
+      throw new Error("Raid is required for spoils");
+    }
+
+    if (transfer.direction !== "inflow") {
+      throw new Error("Spoils must be received by a treasury account");
+    }
+
+    if (source !== "main_safe" && source !== "side_vault") {
+      throw new Error("Spoils must be received by the treasury");
+    }
+
+    counterpartyEntityId = null;
+  }
+
   await assertClassificationEntityMatchesCategory({
     category,
     entityId: counterpartyEntityId,
   });
   await assertRaidIsAvailable(raidId);
 
-  const source = await getLedgerSourceForTransfer(transfer);
   const entryValues = {
     assetAmount: transfer.amount,
     assetSymbol: transfer.assetSymbol,
