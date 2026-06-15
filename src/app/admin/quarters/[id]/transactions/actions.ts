@@ -94,9 +94,11 @@ function getUsdAmount(value: string) {
   return `${whole}.${cents}`;
 }
 
-function assertQuarterCanAcceptBankImport(quarter: typeof quarters.$inferSelect) {
+function assertQuarterCanAcceptLedgerChanges(quarter: typeof quarters.$inferSelect) {
   if (quarter.status === "published") {
-    throw new Error("Published quarters must be reopened before importing bank rows");
+    throw new Error(
+      "Published quarters must be reopened before changing ledger entries",
+    );
   }
 }
 
@@ -216,7 +218,7 @@ export async function previewBankCsvImport(
     }
 
     const quarter = await getQuarterById(quarterId);
-    assertQuarterCanAcceptBankImport(quarter);
+    assertQuarterCanAcceptLedgerChanges(quarter);
     const text = await csvFile.text();
     const previewWithoutDuplicates = parseBankCsvImport({
       existingSourceExternalIds: new Set(),
@@ -264,17 +266,31 @@ export async function confirmBankCsvImport(
     }
 
     const quarter = await getQuarterById(quarterId);
-    assertQuarterCanAcceptBankImport(quarter);
+    assertQuarterCanAcceptLedgerChanges(quarter);
     const { endsAtExclusive, startsAt } = getQuarterSyncPeriod(quarter);
 
-    if (
-      rows.some((row) => {
-        const occurredAt = new Date(row.occurredAt);
+    for (const [index, row] of rows.entries()) {
+      const occurredAt = new Date(row.occurredAt);
 
-        return occurredAt < startsAt || occurredAt >= endsAtExclusive;
-      })
-    ) {
-      throw new Error("Bank import preview is invalid");
+      if (occurredAt < startsAt || occurredAt >= endsAtExclusive) {
+        throw new Error(
+          `Bank import preview row ${index + 1} is outside the quarter`,
+        );
+      }
+
+      if (row.kind !== "bank_transaction") {
+        if (row.category !== "provider_expense") {
+          throw new Error(
+            `Bank import preview row ${index + 1} has an invalid fee category`,
+          );
+        }
+
+        if (row.assetSymbol.toUpperCase() !== "USD") {
+          throw new Error(
+            `Bank import preview row ${index + 1} has an unsupported fee currency`,
+          );
+        }
+      }
     }
 
     const existingSourceExternalIds = await getExistingSourceExternalIds(
@@ -820,7 +836,7 @@ export async function updateLedgerEntryClassification(formData: FormData) {
   }
 
   const quarter = await getQuarterById(quarterId);
-  assertQuarterCanAcceptBankImport(quarter);
+  assertQuarterCanAcceptLedgerChanges(quarter);
 
   const [entry] = await getDb()
     .select()
@@ -853,8 +869,11 @@ export async function updateLedgerEntryClassification(formData: FormData) {
     ripId = null;
   }
 
-  if (category === "raid_spoils" && !raidId) {
-    throw new Error("Raid is required for spoils");
+  if (category === "raid_spoils") {
+    if (!raidId) {
+      throw new Error("Raid is required for spoils");
+    }
+    counterpartyEntityId = null;
   }
 
   await assertClassificationEntityMatchesCategory({
