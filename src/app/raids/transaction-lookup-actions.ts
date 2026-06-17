@@ -13,6 +13,7 @@ import {
   type ManualTransactionLookupResult,
   type ManualLookupTransfer,
 } from "@/lib/manual-transaction-lookup";
+import { getHistoricalUsdPricing } from "@/lib/treasury/pricing";
 
 export type TransactionLookupState = {
   error: string | null;
@@ -34,6 +35,13 @@ export type ManualRaidLedgerKind = "payout" | "revenue";
 export type RemoveManualRaidLedgerEntryState = {
   error: string | null;
   removed: boolean;
+};
+
+export type ManualTransferPriceState = {
+  error: string | null;
+  priceSource: string | null;
+  priceUsd: string | null;
+  usdAmount: string | null;
 };
 
 const USER_FACING_ERRORS = new Set([
@@ -100,6 +108,23 @@ function getErrorMessage(error: unknown) {
   }
 
   return "Transaction lookup failed. Check the selected chain and try again.";
+}
+
+function getPricingErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    if (
+      error.message === "Asset amount is invalid" ||
+      error.message === "Choose a transaction transfer" ||
+      error.message === "CoinGecko historical price request failed" ||
+      error.message === "CoinGecko historical price unavailable" ||
+      error.message === "Raid accounting access required" ||
+      error.message.startsWith("Historical pricing is not configured for ")
+    ) {
+      return error.message;
+    }
+  }
+
+  return "Historical price lookup failed. Try again or enter the USD amount manually.";
 }
 
 function getUsdAmount(value: string) {
@@ -282,6 +307,52 @@ export async function lookupRaidTransaction(
       result: null,
       saved: false,
       savedEntry: null,
+    };
+  }
+}
+
+export async function fetchManualTransferUsdPrice({
+  chainId,
+  transferIndex,
+  txHash,
+}: {
+  chainId: number;
+  transferIndex: string;
+  txHash: string;
+}): Promise<ManualTransferPriceState> {
+  try {
+    await requireRaidAccountingAccess();
+
+    const parsedChainId = getChainId(String(chainId));
+    const parsedTransferIndex = getTransferIndex(transferIndex);
+    const result = await lookupManualTransaction({
+      chainId: parsedChainId,
+      txHash,
+    });
+    const transfer = result.transfers[parsedTransferIndex];
+
+    if (!transfer) {
+      throw new Error("Choose a transaction transfer");
+    }
+
+    const pricing = await getHistoricalUsdPricing({
+      amount: getLedgerAssetAmount(transfer),
+      assetSymbol: transfer.assetSymbol,
+      executedAt: new Date(result.executedAt),
+    });
+
+    return {
+      error: null,
+      priceSource: pricing.priceSource,
+      priceUsd: pricing.priceUsd,
+      usdAmount: pricing.usdAmount,
+    };
+  } catch (error) {
+    return {
+      error: getPricingErrorMessage(error),
+      priceSource: null,
+      priceUsd: null,
+      usdAmount: null,
     };
   }
 }

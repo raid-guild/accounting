@@ -130,27 +130,46 @@ export async function getQuarterClassificationSummary({
   startsOn: string;
 }): Promise<QuarterClassificationSummary> {
   const { endsAtExclusive, startsAt } = getQuarterBounds({ endsOn, startsOn });
-  const [summary] = await getDb()
-    .select({
-      classifiedTransfers: count(ledgerEntries.id),
-      totalTransfers: count(treasuryTransactionTransfers.id),
-    })
-    .from(treasuryTransactionTransfers)
-    .leftJoin(
-      ledgerEntries,
-      eq(
-        ledgerEntries.treasuryTransactionTransferId,
-        treasuryTransactionTransfers.id,
+  const [transferSummary, ledgerSummary] = await Promise.all([
+    getDb()
+      .select({
+        classifiedTransfers: count(ledgerEntries.id),
+        totalTransfers: count(treasuryTransactionTransfers.id),
+      })
+      .from(treasuryTransactionTransfers)
+      .leftJoin(
+        ledgerEntries,
+        eq(
+          ledgerEntries.treasuryTransactionTransferId,
+          treasuryTransactionTransfers.id,
+        ),
+      )
+      .where(
+        and(
+          sql`${treasuryTransactionTransfers.executedAt} >= ${startsAt}`,
+          sql`${treasuryTransactionTransfers.executedAt} < ${endsAtExclusive}`,
+        ),
       ),
-    )
-    .where(
-      and(
-        sql`${treasuryTransactionTransfers.executedAt} >= ${startsAt}`,
-        sql`${treasuryTransactionTransfers.executedAt} < ${endsAtExclusive}`,
+    getDb()
+      .select({
+        classifiedEntries: sql<number>`count(${ledgerEntries.id}) filter (where ${ledgerEntries.category} <> 'uncategorized')`,
+        totalEntries: count(ledgerEntries.id),
+      })
+      .from(ledgerEntries)
+      .where(
+        and(
+          inArray(ledgerEntries.source, ["bank_csv", "manual"]),
+          sql`${ledgerEntries.occurredAt} >= ${startsAt}`,
+          sql`${ledgerEntries.occurredAt} < ${endsAtExclusive}`,
+        ),
       ),
-    );
-  const totalTransfers = summary?.totalTransfers ?? 0;
-  const classifiedTransfers = summary?.classifiedTransfers ?? 0;
+  ]);
+  const totalTransfers =
+    (transferSummary[0]?.totalTransfers ?? 0) +
+    (ledgerSummary[0]?.totalEntries ?? 0);
+  const classifiedTransfers =
+    (transferSummary[0]?.classifiedTransfers ?? 0) +
+    Number(ledgerSummary[0]?.classifiedEntries ?? 0);
 
   return {
     classifiedTransfers,

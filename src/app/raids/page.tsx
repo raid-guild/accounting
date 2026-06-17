@@ -4,6 +4,7 @@ import {
   BarChart3,
   BriefcaseBusiness,
   CircleDollarSign,
+  ExternalLink,
   HandCoins,
   Plus,
   ReceiptText,
@@ -16,6 +17,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { and, desc, eq, inArray } from "drizzle-orm";
 
+import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { getDb } from "@/db";
 import { ledgerEntries, quarters } from "@/db/schema";
@@ -32,6 +34,7 @@ import {
   getRaidAccountingOverview,
   type ClientRevenueSummary,
   type RaidAccountingSummary,
+  type SubcontractorAccountingSummary,
 } from "@/lib/raid-accounting";
 import {
   archiveRaid,
@@ -87,6 +90,36 @@ type ManualRaidLedgerEntryView = {
 
 function formatAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function getTransactionExplorerUrl({
+  chainId,
+  txHash,
+}: {
+  chainId: number;
+  txHash: string;
+}) {
+  if (chainId === 1) {
+    return `https://etherscan.io/tx/${txHash}`;
+  }
+
+  if (chainId === 10) {
+    return `https://optimistic.etherscan.io/tx/${txHash}`;
+  }
+
+  if (chainId === 100) {
+    return `https://gnosisscan.io/tx/${txHash}`;
+  }
+
+  if (chainId === 42161) {
+    return `https://arbiscan.io/tx/${txHash}`;
+  }
+
+  if (chainId === 8453) {
+    return `https://basescan.org/tx/${txHash}`;
+  }
+
+  return null;
 }
 
 function formatTimestamp(value: Date) {
@@ -386,7 +419,42 @@ function AccountingSectionHeader({
   );
 }
 
-function TopClientsTable({ clients }: { clients: ClientRevenueSummary[] }) {
+function TableLinkCell({
+  children,
+  className = "",
+  href,
+}: {
+  children: ReactNode;
+  className?: string;
+  href?: string | null;
+}) {
+  if (!href) {
+    return (
+      <td className="p-0">
+        <div className={`block px-3 py-3 ${className}`}>{children}</div>
+      </td>
+    );
+  }
+
+  return (
+    <td className="p-0">
+      <Link
+        href={href}
+        className={`block px-3 py-3 ${className}`}
+      >
+        {children}
+      </Link>
+    </td>
+  );
+}
+
+function TopClientsTable({
+  canOpenDetails,
+  clients,
+}: {
+  canOpenDetails: boolean;
+  clients: ClientRevenueSummary[];
+}) {
   return (
     <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
       <AccountingSectionHeader
@@ -414,31 +482,45 @@ function TopClientsTable({ clients }: { clients: ClientRevenueSummary[] }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {clients.map((client) => (
-                <tr key={client.clientId}>
-                  <td className="px-3 py-3 font-medium">
-                    {client.clientName}
-                  </td>
-                  <td className="px-3 py-3 text-right font-medium">
-                    {formatAccountingCurrency(client.revenueCents)}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    {client.raidCount}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    {formatAccountingCurrency(client.expectedSpoilsCents)}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    {formatAccountingCurrency(client.spoilsReceivedCents)}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    {formatAccountingCurrency(client.expectedTeamPoolCents)}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    {formatAccountingCurrency(client.subcontractorPayoutCents)}
-                  </td>
-                </tr>
-              ))}
+              {clients.map((client) => {
+                const href = canOpenDetails
+                  ? getEntityHref(client.clientId)
+                  : null;
+
+                return (
+                  <tr
+                    key={client.clientId}
+                    className="transition-colors hover:bg-muted/50"
+                  >
+                    <TableLinkCell href={href} className="font-medium">
+                      {client.clientName}
+                    </TableLinkCell>
+                    <TableLinkCell
+                      href={href}
+                      className="text-right font-medium"
+                    >
+                      {formatAccountingCurrency(client.revenueCents)}
+                    </TableLinkCell>
+                    <TableLinkCell href={href} className="text-right">
+                      {client.raidCount}
+                    </TableLinkCell>
+                    <TableLinkCell href={href} className="text-right">
+                      {formatAccountingCurrency(client.expectedSpoilsCents)}
+                    </TableLinkCell>
+                    <TableLinkCell href={href} className="text-right">
+                      {formatAccountingCurrency(client.spoilsReceivedCents)}
+                    </TableLinkCell>
+                    <TableLinkCell href={href} className="text-right">
+                      {formatAccountingCurrency(client.expectedTeamPoolCents)}
+                    </TableLinkCell>
+                    <TableLinkCell href={href} className="text-right">
+                      {formatAccountingCurrency(
+                        client.subcontractorPayoutCents,
+                      )}
+                    </TableLinkCell>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -452,8 +534,10 @@ function TopClientsTable({ clients }: { clients: ClientRevenueSummary[] }) {
 }
 
 function RaidAccountingTable({
+  canOpenDetails,
   summaries,
 }: {
+  canOpenDetails: boolean;
   summaries: RaidAccountingSummary[];
 }) {
   return (
@@ -491,56 +575,143 @@ function RaidAccountingTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {summaries.map((summary) => (
-                <tr key={summary.raidId}>
-                  <td className="px-3 py-3 font-medium">
-                    {summary.clientName}
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{summary.raidName}</span>
-                      {summary.isShipped ? (
-                        <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
-                          Shipped
-                        </span>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td className="px-3 py-3 text-right font-medium">
-                    {formatAccountingCurrency(summary.revenueCents)}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    {formatAccountingCurrency(summary.expectedSpoilsCents)}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    {formatAccountingCurrency(summary.spoilsReceivedCents)}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    {formatAccountingCurrency(summary.remainingSpoilsCents)}
-                  </td>
-                  <td className="px-3 py-3">
-                    <SpoilsStatusBadge status={summary.spoilsStatus} />
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    {formatAccountingCurrency(summary.expectedTeamPoolCents)}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    {formatAccountingCurrency(summary.subcontractorPayoutCents)}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    {formatAccountingCurrency(summary.remainingPoolCents)}
-                  </td>
-                  <td className="px-3 py-3">
-                    <TeamPayoutStatusBadge status={summary.status} />
-                  </td>
-                </tr>
-              ))}
+              {summaries.map((summary) => {
+                const href = canOpenDetails ? getRaidHref(summary.raidId) : null;
+
+                return (
+                  <tr
+                    key={summary.raidId}
+                    className="transition-colors hover:bg-muted/50"
+                  >
+                    <TableLinkCell href={href} className="font-medium">
+                      {summary.clientName}
+                    </TableLinkCell>
+                    <TableLinkCell href={href}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{summary.raidName}</span>
+                        {summary.isShipped ? (
+                          <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+                            Shipped
+                          </span>
+                        ) : null}
+                      </div>
+                    </TableLinkCell>
+                    <TableLinkCell
+                      href={href}
+                      className="text-right font-medium"
+                    >
+                      {formatAccountingCurrency(summary.revenueCents)}
+                    </TableLinkCell>
+                    <TableLinkCell href={href} className="text-right">
+                      {formatAccountingCurrency(summary.expectedSpoilsCents)}
+                    </TableLinkCell>
+                    <TableLinkCell href={href} className="text-right">
+                      {formatAccountingCurrency(summary.spoilsReceivedCents)}
+                    </TableLinkCell>
+                    <TableLinkCell href={href} className="text-right">
+                      {formatAccountingCurrency(summary.remainingSpoilsCents)}
+                    </TableLinkCell>
+                    <TableLinkCell href={href}>
+                      <SpoilsStatusBadge status={summary.spoilsStatus} />
+                    </TableLinkCell>
+                    <TableLinkCell href={href} className="text-right">
+                      {formatAccountingCurrency(summary.expectedTeamPoolCents)}
+                    </TableLinkCell>
+                    <TableLinkCell href={href} className="text-right">
+                      {formatAccountingCurrency(
+                        summary.subcontractorPayoutCents,
+                      )}
+                    </TableLinkCell>
+                    <TableLinkCell href={href} className="text-right">
+                      {formatAccountingCurrency(summary.remainingPoolCents)}
+                    </TableLinkCell>
+                    <TableLinkCell href={href}>
+                      <TeamPayoutStatusBadge status={summary.status} />
+                    </TableLinkCell>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       ) : (
         <div className="rounded-lg border border-dashed border-border bg-background p-6 text-sm text-muted-foreground">
           No raid accounting activity yet.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SubcontractorAccountingTable({
+  canOpenDetails,
+  summaries,
+}: {
+  canOpenDetails: boolean;
+  summaries: SubcontractorAccountingSummary[];
+}) {
+  return (
+    <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+      <AccountingSectionHeader
+        countLabel={`${summaries.length} subcontractors`}
+        title="Subcontractor Accounting"
+      />
+      {summaries.length > 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] text-left text-sm">
+            <thead className="border-b border-border text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="px-3 py-3 font-medium">Subcontractor</th>
+                <th className="px-3 py-3 text-right font-medium">Payouts</th>
+                <th className="px-3 py-3 text-right font-medium">Raids</th>
+                <th className="px-3 py-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {summaries.map((summary) => {
+                const href = canOpenDetails
+                  ? getEntityHref(summary.subcontractorId)
+                  : null;
+
+                return (
+                  <tr
+                    key={summary.subcontractorId}
+                    className="transition-colors hover:bg-muted/50"
+                  >
+                    <TableLinkCell href={href} className="font-medium">
+                      {summary.subcontractorName}
+                    </TableLinkCell>
+                    <TableLinkCell
+                      href={href}
+                      className="text-right font-medium"
+                    >
+                      {formatAccountingCurrency(
+                        summary.subcontractorPayoutCents,
+                      )}
+                    </TableLinkCell>
+                    <TableLinkCell href={href} className="text-right">
+                      {summary.raidCount}
+                    </TableLinkCell>
+                    <TableLinkCell href={href}>
+                      {summary.isArchived ? (
+                        <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+                          Archived
+                        </span>
+                      ) : (
+                        <span className="rounded-md border border-emerald-600/20 bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-800">
+                          Active
+                        </span>
+                      )}
+                    </TableLinkCell>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border bg-background p-6 text-sm text-muted-foreground">
+          No subcontractor payouts yet.
         </div>
       )}
     </section>
@@ -613,26 +784,13 @@ function AddAddressForm({ entityId }: { entityId: string }) {
 
 function EntityDetails({ entity }: { entity: CoreEntityView }) {
   const type = entity.type as RaidRelatedEntityType;
+  const hasBadges =
+    (type === "subcontractor" && entity.isMember) || Boolean(entity.archivedAt);
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-            {type === "client" ? (
-              <BriefcaseBusiness className="size-5" aria-hidden="true" />
-            ) : (
-              <CircleDollarSign className="size-5" aria-hidden="true" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <p className="type-label-sm text-muted-foreground">
-              {getEntityLabel(type)}
-            </p>
-            <h3 className="truncate text-base font-semibold">{entity.name}</h3>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      {hasBadges ? (
+        <div className="flex flex-wrap justify-end gap-2">
           {type === "subcontractor" && entity.isMember ? (
             <span className="rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
               Member
@@ -644,9 +802,13 @@ function EntityDetails({ entity }: { entity: CoreEntityView }) {
             </span>
           ) : null}
         </div>
-      </div>
+      ) : null}
 
-      <dl className="mt-5 grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
+      <dl
+        className={`grid gap-4 border-t border-border pt-4 sm:grid-cols-2 ${
+          hasBadges ? "mt-5" : ""
+        }`}
+      >
         <div>
           <dt className="type-label-sm text-muted-foreground">Website</dt>
           <dd className="mt-1 text-sm font-medium">
@@ -880,51 +1042,61 @@ function ManualRaidLedgerRows({
             );
 
             return (
-            <div
-              key={entry.id}
-              className="grid gap-3 px-3 py-3 text-sm md:grid-cols-[minmax(0,1fr)_8rem_auto]"
-            >
-              <div className="min-w-0">
-                <p className="font-medium">
-                  {formatUsdAmount(entry.usdAmount)}
-                </p>
-                <p className="mt-1 truncate text-muted-foreground">
-                  {entry.assetAmount} {entry.assetSymbol}
-                  {entry.txHash ? ` · ${formatAddress(entry.txHash)}` : ""}
-                </p>
-                {counterparty ? (
-                  <p className="mt-1 truncate text-xs text-muted-foreground">
-                    {kind === "payout" ? "Paid to" : "Linked to"}{" "}
-                    {counterparty.name}
+              <div
+                key={entry.id}
+                className="grid gap-3 px-3 py-3 text-sm md:grid-cols-[minmax(0,1fr)_8rem_auto]"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium">
+                    {formatUsdAmount(entry.usdAmount)}
                   </p>
-                ) : null}
+                  <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1 text-muted-foreground">
+                    <span className="truncate">
+                      {entry.assetAmount} {entry.assetSymbol}
+                    </span>
+                    {entry.txHash ? (
+                      <>
+                        <span>·</span>
+                        <TransactionHashLink
+                          chainId={entry.chainId}
+                          txHash={entry.txHash}
+                        />
+                      </>
+                    ) : null}
+                  </p>
+                  {counterparty ? (
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      {kind === "payout" ? "Paid to" : "Linked to"}{" "}
+                      {counterparty.name}
+                    </p>
+                  ) : null}
+                </div>
+                <div>
+                  <p className="type-label-sm text-muted-foreground">Quarter</p>
+                  <p className="font-medium">{entry.quarterLabel}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {formatTimestamp(entry.occurredAt)}
+                  </p>
+                </div>
+                <div className="flex items-center md:justify-end">
+                  {entry.kind !== "spoils" &&
+                  entry.source === "manual" &&
+                  entry.quarterStatus === "draft" ? (
+                    <RemoveManualLedgerEntryForm
+                      kind={entry.kind}
+                      ledgerEntryId={entry.id}
+                    />
+                  ) : entry.kind === "spoils" ? (
+                    <span className="rounded-md border border-emerald-600/20 bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-800">
+                      Linked
+                    </span>
+                  ) : (
+                    <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
+                      Locked
+                    </span>
+                  )}
+                </div>
               </div>
-              <div>
-                <p className="type-label-sm text-muted-foreground">Quarter</p>
-                <p className="font-medium">{entry.quarterLabel}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {formatTimestamp(entry.occurredAt)}
-                </p>
-              </div>
-              <div className="flex items-center md:justify-end">
-                {entry.kind !== "spoils" &&
-                entry.source === "manual" &&
-                entry.quarterStatus === "draft" ? (
-                  <RemoveManualLedgerEntryForm
-                    kind={entry.kind}
-                    ledgerEntryId={entry.id}
-                  />
-                ) : entry.kind === "spoils" ? (
-                  <span className="rounded-md border border-emerald-600/20 bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-800">
-                    Linked
-                  </span>
-                ) : (
-                  <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
-                    Locked
-                  </span>
-                )}
-              </div>
-            </div>
             );
           })}
         </div>
@@ -934,6 +1106,40 @@ function ManualRaidLedgerRows({
         </p>
       )}
     </section>
+  );
+}
+
+function TransactionHashLink({
+  chainId,
+  txHash,
+}: {
+  chainId: number | null;
+  txHash: string | null;
+}) {
+  if (!txHash) {
+    return null;
+  }
+
+  const explorerUrl = chainId
+    ? getTransactionExplorerUrl({ chainId, txHash })
+    : null;
+  const formattedHash = formatAddress(txHash);
+
+  if (!explorerUrl) {
+    return <span>{formattedHash}</span>;
+  }
+
+  return (
+    <a
+      href={explorerUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 text-primary transition-colors hover:text-primary/80 hover:underline"
+    >
+      <span>{formattedHash}</span>
+      <ExternalLink className="size-3" aria-hidden="true" />
+      <span className="sr-only">Open transaction explorer</span>
+    </a>
   );
 }
 
@@ -956,14 +1162,10 @@ function RaidDetails({
 
   return (
     <div>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="type-label-sm text-muted-foreground">Raid</p>
-          <h3 className="text-base font-semibold">{raid.name}</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Client: {raid.client.name}
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Client: {raid.client.name}
+        </p>
         {raid.archivedAt ? (
           <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
             Archived
@@ -1208,7 +1410,7 @@ function ModalShell({
       <Link
         href="/raids"
         aria-label="Close modal"
-        className="absolute inset-0"
+        className="absolute inset-0 cursor-default"
       />
       <div
         role="dialog"
@@ -1389,10 +1591,7 @@ export default async function RaidsPage({
   const session = await getAuthSession();
   const sessionState = serializeSession(session);
 
-  if (
-    !sessionState.authenticated ||
-    !sessionState.permissions?.canWriteRaidAccounting
-  ) {
+  if (!sessionState.authenticated || !sessionState.permissions?.canAccess) {
     return (
       <main className="min-h-screen bg-background text-foreground">
         <section className="container-custom py-10">
@@ -1406,7 +1605,7 @@ export default async function RaidsPage({
           <div className="mt-8 rounded-lg border border-border bg-card p-6 shadow-sm">
             <p className="type-label-sm text-muted-foreground">Raid Records</p>
             <h1 className="mt-2 text-2xl font-semibold">
-              Raid accounting access required
+              Member access required
             </h1>
           </div>
         </section>
@@ -1414,6 +1613,9 @@ export default async function RaidsPage({
     );
   }
 
+  const canManageRaidAccounting = Boolean(
+    sessionState.permissions.canWriteRaidAccounting,
+  );
   const params = await searchParams;
   const flow = parseFlow(params?.flow);
   const addModal =
@@ -1426,7 +1628,6 @@ export default async function RaidsPage({
     listRaids(),
     listRaidLedgerEntries(raidId),
   ]);
-  const accountingOverview = await getRaidAccountingOverview(raids);
   const lookupChains = listManualLookupChains();
   const activeClients = entities.filter(
     (entity) => entity.type === "client" && !entity.archivedAt,
@@ -1434,11 +1635,14 @@ export default async function RaidsPage({
   const subcontractors = entities.filter(
     (entity) => entity.type === "subcontractor",
   );
+  const accountingOverview = await getRaidAccountingOverview(
+    raids,
+    subcontractors,
+  );
   const activeSubcontractors = entities.filter(
     (entity) => entity.type === "subcontractor" && !entity.archivedAt,
   );
   const archivedEntities = entities.filter((entity) => entity.archivedAt);
-  const activeRaids = raids.filter((raid) => !raid.archivedAt);
   const archivedRaids = raids.filter((raid) => raid.archivedAt);
   const added = parseToastSubject(params?.added);
   const deleted = parseToastSubject(params?.deleted);
@@ -1452,67 +1656,52 @@ export default async function RaidsPage({
         error={error}
         flow={flow}
       />
-      <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
-        <div className="container-custom flex h-16 items-center justify-between gap-4">
-          <div>
-            <p className="type-label-sm text-scroll-200">Cleric</p>
-            <h1 className="text-base font-semibold leading-none">
-              Raid Management
-            </h1>
-          </div>
-          <Link
-            href="/"
-            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted"
-          >
-            <ArrowLeft data-icon="inline-start" />
-            Home
-          </Link>
-        </div>
-      </header>
+      <AppHeader initialSession={sessionState} />
 
       <section className="container-custom grid gap-8 py-8 md:py-12">
-        <FlowLauncher />
-        <TopClientsTable clients={accountingOverview.clients} />
-        <RaidAccountingTable summaries={accountingOverview.raids} />
-        <RaidRows
-          emptyLabel="No active raids yet."
-          raids={activeRaids}
-          title="Active raids"
+        {canManageRaidAccounting ? <FlowLauncher /> : null}
+        <TopClientsTable
+          canOpenDetails={canManageRaidAccounting}
+          clients={accountingOverview.clients}
         />
-        <EntityRows
-          emptyLabel="No active clients yet."
-          entities={activeClients}
-          title="Clients"
+        <RaidAccountingTable
+          canOpenDetails={canManageRaidAccounting}
+          summaries={accountingOverview.raids}
         />
-        <EntityRows
-          emptyLabel="No active subcontractors yet."
-          entities={activeSubcontractors}
-          title="Subcontractors"
+        <SubcontractorAccountingTable
+          canOpenDetails={canManageRaidAccounting}
+          summaries={accountingOverview.subcontractors}
         />
-        <RaidRows
-          emptyLabel="No archived raids."
-          raids={archivedRaids}
-          title="Archived raids"
-        />
-        <EntityRows
-          emptyLabel="No archived clients or subcontractors."
-          entities={archivedEntities}
-          title="Archived entities"
-        />
+        {canManageRaidAccounting ? (
+          <>
+            <RaidRows
+              emptyLabel="No archived raids."
+              raids={archivedRaids}
+              title="Archived raids"
+            />
+            <EntityRows
+              emptyLabel="No archived clients or subcontractors."
+              entities={archivedEntities}
+              title="Archived entities"
+            />
+          </>
+        ) : null}
       </section>
-      <ActiveModal
-        activeClients={activeClients}
-        addModal={addModal}
-        activeSubcontractors={activeSubcontractors}
-        entities={entities}
-        entityId={entityId}
-        lookupChains={lookupChains}
-        manualModal={manualModal}
-        raidId={raidId}
-        raidLedgerEntries={raidLedgerEntries}
-        raids={raids}
-        subcontractors={subcontractors}
-      />
+      {canManageRaidAccounting ? (
+        <ActiveModal
+          activeClients={activeClients}
+          addModal={addModal}
+          activeSubcontractors={activeSubcontractors}
+          entities={entities}
+          entityId={entityId}
+          lookupChains={lookupChains}
+          manualModal={manualModal}
+          raidId={raidId}
+          raidLedgerEntries={raidLedgerEntries}
+          raids={raids}
+          subcontractors={subcontractors}
+        />
+      ) : null}
     </main>
   );
 }

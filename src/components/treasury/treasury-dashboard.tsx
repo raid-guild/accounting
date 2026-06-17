@@ -72,7 +72,7 @@ function getSyncCopy(snapshot: TreasuryBalanceSnapshot, isRefreshing: boolean) {
 
   if (snapshot.syncedAt) {
     return snapshot.status === "partial"
-      ? `Synced at ${formatTimestamp(snapshot.syncedAt)}. wETH price unavailable.`
+      ? `Synced at ${formatTimestamp(snapshot.syncedAt)}. Some asset prices unavailable.`
       : `Synced at ${formatTimestamp(snapshot.syncedAt)}`;
   }
 

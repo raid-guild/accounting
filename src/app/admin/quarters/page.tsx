@@ -14,6 +14,7 @@ import {
   createQ1ReportingPeriod,
   updateQuarterStatus,
 } from "@/app/admin/quarters/actions";
+import { AppHeader } from "@/components/app-header";
 import { QuarterWorkflowProgress } from "@/components/quarters/quarter-workflow-progress";
 import { Button } from "@/components/ui/button";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
@@ -134,7 +135,13 @@ function ReopenForm({ quarter }: { quarter: QuarterReportingPeriod }) {
   );
 }
 
-function QuarterCard({ quarter }: { quarter: QuarterReportingPeriod }) {
+function QuarterCard({
+  canManage,
+  quarter,
+}: {
+  canManage: boolean;
+  quarter: QuarterReportingPeriod;
+}) {
   const statusCopy = STATUS_COPY[quarter.status];
   const readyStep = quarter.workflowSteps.find((step) => step.key === "ready");
   const publishStep = quarter.workflowSteps.find(
@@ -190,49 +197,53 @@ function QuarterCard({ quarter }: { quarter: QuarterReportingPeriod }) {
         <QuarterWorkflowProgress compact steps={quarter.workflowSteps} />
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-2">
-        <Link
-          href={`/admin/quarters/${quarter.id}/transactions`}
-          className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
-        >
-          <Tags data-icon="inline-start" />
-          Review Transactions
-        </Link>
-        <StatusAction
-          quarter={quarter}
-          status="draft"
-          disabled={quarter.status === "draft" || quarter.status === "published"}
-        >
-          <Save data-icon="inline-start" />
-          Draft
-        </StatusAction>
-        <StatusAction
-          quarter={quarter}
-          status="ready_for_review"
-          disabled={
-            quarter.status === "ready_for_review" ||
-            quarter.status === "published" ||
-            readyStep?.status !== "current"
-          }
-        >
-          <CheckCircle2 data-icon="inline-start" />
-          Mark Ready
-        </StatusAction>
-        <StatusAction
-          quarter={quarter}
-          status="published"
-          variant="default"
-          disabled={
-            quarter.status === "published" ||
-            publishStep?.status !== "current"
-          }
-        >
-          <LockKeyhole data-icon="inline-start" />
-          Publish Quarter
-        </StatusAction>
-      </div>
+      {canManage ? (
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Link
+            href={`/admin/quarters/${quarter.id}/transactions`}
+            className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
+          >
+            <Tags data-icon="inline-start" />
+            Review Transactions
+          </Link>
+          <StatusAction
+            quarter={quarter}
+            status="draft"
+            disabled={
+              quarter.status === "draft" || quarter.status === "published"
+            }
+          >
+            <Save data-icon="inline-start" />
+            Draft
+          </StatusAction>
+          <StatusAction
+            quarter={quarter}
+            status="ready_for_review"
+            disabled={
+              quarter.status === "ready_for_review" ||
+              quarter.status === "published" ||
+              readyStep?.status !== "current"
+            }
+          >
+            <CheckCircle2 data-icon="inline-start" />
+            Mark Ready
+          </StatusAction>
+          <StatusAction
+            quarter={quarter}
+            status="published"
+            variant="default"
+            disabled={
+              quarter.status === "published" ||
+              publishStep?.status !== "current"
+            }
+          >
+            <LockKeyhole data-icon="inline-start" />
+            Publish Quarter
+          </StatusAction>
+        </div>
+      ) : null}
 
-      <ReopenForm quarter={quarter} />
+      {canManage ? <ReopenForm quarter={quarter} /> : null}
 
       <details className="mt-5 rounded-md border border-border bg-background">
         <summary className="flex cursor-pointer items-center gap-2 px-4 py-3 text-sm font-medium">
@@ -299,60 +310,51 @@ export default async function QuartersPage() {
   const session = await getAuthSession();
   const sessionState = serializeSession(session);
 
-  if (!sessionState.authenticated || !sessionState.permissions?.canAdmin) {
+  if (!sessionState.authenticated || !sessionState.permissions?.canAccess) {
     return <AdminGate />;
   }
 
   const reportingPeriods = await listQuarterReportingPeriods();
+  const canManage = Boolean(sessionState.permissions.canAdmin);
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
-        <div className="container-custom flex h-16 items-center justify-between gap-4">
-          <div>
-            <p className="type-label-sm text-scroll-200">Admin</p>
-            <h1 className="text-base font-semibold leading-none">
-              Reporting Periods
-            </h1>
-          </div>
-          <Link
-            href="/"
-            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted"
-          >
-            <ArrowLeft data-icon="inline-start" />
-            Home
-          </Link>
-        </div>
-      </header>
+      <AppHeader initialSession={sessionState} />
 
       <section className="container-custom grid gap-8 py-8 md:py-12">
-        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="type-label-sm text-muted-foreground">
-                Q1 Export Target
-              </p>
-              <h2 className="mt-2 text-xl font-semibold">
-                Q1 2026 reporting period
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Create the calendar quarter used for accounting preparation,
-                review, publishing, and member exports.
-              </p>
+        {canManage ? (
+          <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="type-label-sm text-muted-foreground">
+                  Q1 Export Target
+                </p>
+                <h2 className="mt-2 text-xl font-semibold">
+                  Q1 2026 reporting period
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Create the calendar quarter used for accounting preparation,
+                  review, publishing, and member exports.
+                </p>
+              </div>
+              <form action={createQ1ReportingPeriod}>
+                <Button type="submit">
+                  <Save data-icon="inline-start" />
+                  Create Q1 2026
+                </Button>
+              </form>
             </div>
-            <form action={createQ1ReportingPeriod}>
-              <Button type="submit">
-                <Save data-icon="inline-start" />
-                Create Q1 2026
-              </Button>
-            </form>
-          </div>
-        </section>
+          </section>
+        ) : null}
 
         {reportingPeriods.length > 0 ? (
           <div className="grid gap-5">
             {reportingPeriods.map((quarter) => (
-              <QuarterCard key={quarter.id} quarter={quarter} />
+              <QuarterCard
+                key={quarter.id}
+                canManage={canManage}
+                quarter={quarter}
+              />
             ))}
           </div>
         ) : (
