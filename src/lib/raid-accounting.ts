@@ -352,6 +352,9 @@ export async function getRaidAccountingOverview(
     };
   });
   const clientSummaries = new Map<string, ClientRevenueSummary>();
+  const subcontractorsById = new Map(
+    subcontractors.map((subcontractor) => [subcontractor.id, subcontractor]),
+  );
 
   for (const summary of raidAccounting) {
     if (summary.revenueCents === ZERO) {
@@ -385,9 +388,7 @@ export async function getRaidAccountingOverview(
       continue;
     }
 
-    const subcontractor = subcontractors.find(
-      (entity) => entity.id === row.subcontractorId,
-    );
+    const subcontractor = subcontractorsById.get(row.subcontractorId);
 
     if (!subcontractor) {
       continue;

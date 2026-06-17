@@ -9,7 +9,13 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
-import { useActionState, useEffect, useState, useTransition } from "react";
+import {
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 
 import {
   fetchManualTransferUsdPrice,
@@ -318,6 +324,7 @@ function ManualEntrySaveForm({
   );
   const [priceMessage, setPriceMessage] = useState<string | null>(null);
   const [pricePending, startPriceTransition] = useTransition();
+  const latestPriceRequestRef = useRef(0);
   const saveState = kind === "payout" ? payoutState : revenueState;
   const saveAction = kind === "payout" ? payoutAction : revenueAction;
   const savePending = kind === "payout" ? payoutPending : revenuePending;
@@ -325,16 +332,19 @@ function ManualEntrySaveForm({
   const hasTransfers = result.transfers.length > 0;
   const hasRaids = raids.length > 0;
   const hasSubcontractors = subcontractors.length > 0;
-  const matchedSubcontractor =
+  const matchedSubcontractors =
     kind === "payout" && selectedTransfer
-      ? subcontractors.find((subcontractor) =>
+      ? subcontractors.filter((subcontractor) =>
           subcontractor.addresses.some(
             (address) =>
               normalizeAddress(address.address) ===
-              normalizeAddress(selectedTransfer.toAddress),
+                normalizeAddress(selectedTransfer.toAddress) &&
+              (address.chainId === null || address.chainId === result.chainId),
           ),
         )
-      : null;
+      : [];
+  const matchedSubcontractor =
+    matchedSubcontractors.length === 1 ? matchedSubcontractors[0] : null;
 
   useEffect(() => {
     if (saveState.savedEntry) {
@@ -345,13 +355,19 @@ function ManualEntrySaveForm({
 
   function fetchSelectedTransferPrice() {
     setPriceMessage(null);
+    const requestId = ++latestPriceRequestRef.current;
+    const requestTransferIndex = selectedTransferIndex;
 
     startPriceTransition(async () => {
       const pricing = await fetchManualTransferUsdPrice({
         chainId: result.chainId,
-        transferIndex: selectedTransferIndex,
+        transferIndex: requestTransferIndex,
         txHash: result.txHash,
       });
+
+      if (latestPriceRequestRef.current !== requestId) {
+        return;
+      }
 
       if (pricing.error || !pricing.usdAmount) {
         setPriceMessage(pricing.error ?? "Historical price unavailable.");
@@ -386,6 +402,7 @@ function ManualEntrySaveForm({
               const nextIndex = event.target.value;
               const nextTransfer = result.transfers[Number(nextIndex)];
 
+              latestPriceRequestRef.current += 1;
               setSelectedTransferIndex(nextIndex);
               setSelectedSubcontractorId("");
               setUsdAmount(nextTransfer?.usdAmount ?? "");
@@ -457,6 +474,10 @@ function ManualEntrySaveForm({
             <p className="text-xs font-normal text-muted-foreground">
               Matched from recipient address{" "}
               {formatAddress(selectedTransfer.toAddress)}.
+            </p>
+          ) : matchedSubcontractors.length > 1 ? (
+            <p className="text-xs font-normal text-muted-foreground">
+              Multiple subcontractors match this recipient. Choose one manually.
             </p>
           ) : null}
         </label>

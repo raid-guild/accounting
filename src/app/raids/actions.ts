@@ -246,7 +246,7 @@ export async function updateRaid(formData: FormData) {
   const id = getString(formData, "id");
 
   await updateRaidForAccess(formData);
-  redirect(id ? `/raids?raid=${id}` : "/raids");
+  redirect(id ? `/raids?raid=${encodeURIComponent(id)}` : "/raids");
 }
 
 export async function archiveRaid(formData: FormData) {

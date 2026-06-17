@@ -400,11 +400,13 @@ async function getCoinGeckoUsdPrices(coinIds: string[]) {
   for (const coinId of uniqueCoinIds) {
     const price = body[coinId]?.usd;
 
-    if (!price || !Number.isFinite(price) || price <= 0) {
-      throw new Error(`CoinGecko ${coinId} price invalid or unavailable`);
+    if (typeof price === "number" && Number.isFinite(price) && price > 0) {
+      prices.set(coinId, price);
     }
+  }
 
-    prices.set(coinId, price);
+  if (prices.size === 0) {
+    throw new Error("CoinGecko prices invalid or unavailable");
   }
 
   return prices;
@@ -441,6 +443,18 @@ async function fetchLiveAssetBalances({
     prices = await pricePromise;
   } catch (error) {
     priceError = error instanceof Error ? error : new Error("Price unavailable");
+  }
+
+  const missingPriceIds = TRACKED_TREASURY_ASSETS.flatMap((asset) =>
+    asset.stableUsd || !asset.coingeckoId || prices.has(asset.coingeckoId)
+      ? []
+      : [asset.coingeckoId],
+  );
+
+  if (!priceError && missingPriceIds.length > 0) {
+    priceError = new Error(
+      `Missing CoinGecko prices for ${[...new Set(missingPriceIds)].join(", ")}`,
+    );
   }
 
   const assets = TRACKED_TREASURY_ASSETS.map((asset, index) => {

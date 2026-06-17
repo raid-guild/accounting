@@ -170,8 +170,8 @@ async function getReceiptSwapDetail(
 
       if (
         asset.symbol !== transfer.assetSymbol &&
-        isAddressEqual(to, getAddress(knownCounterparty)) &&
-        !isAddressEqual(from, getAddress(transfer.accountAddress))
+        isAddressEqual(from, getAddress(knownCounterparty)) &&
+        isAddressEqual(to, getAddress(transfer.accountAddress))
       ) {
         addAmount(receivedTotals, {
           amount: formatUnits(value, asset.decimals),
@@ -218,8 +218,14 @@ export async function getSwapDetailsByGroupKey(transfers: SwapTransferLike[]) {
         return;
       }
 
-      const receiptDetail = await getReceiptSwapDetail(knownCounterpartyTransfer);
-      details.set(key, receiptDetail ?? storedDetail);
+      try {
+        const receiptDetail = await getReceiptSwapDetail(
+          knownCounterpartyTransfer,
+        );
+        details.set(key, receiptDetail ?? storedDetail);
+      } catch {
+        details.set(key, storedDetail);
+      }
     }),
   );
 
