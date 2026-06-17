@@ -3,15 +3,19 @@ import {
   ArrowLeft,
   BadgeCheck,
   Building2,
+  Plus,
   RotateCcw,
   Save,
   ShieldCheck,
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
+import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
+import { getTreasuryBalanceSnapshot } from "@/lib/treasury/balances";
 import {
   DEFAULT_TREASURY_ACCOUNT_CHAIN_ID,
   listEditableTreasuryAccounts,
@@ -25,6 +29,23 @@ import {
   restoreTreasuryAccount,
   updateTreasuryAccount,
 } from "@/app/admin/treasury-accounts/actions";
+
+type AccountModal = "add-account" | `account-${string}`;
+
+function formatCurrency(value: string | number) {
+  const number = typeof value === "number" ? value : Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "-";
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "currency",
+  }).format(number);
+}
 
 function formatAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -111,41 +132,117 @@ function NotesField({ defaultValue }: { defaultValue?: string | null }) {
 
 function CreateAccountForm() {
   return (
-    <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-      <div className="flex items-center gap-3">
-        <div className="flex size-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-          <Wallet className="size-5" aria-hidden="true" />
-        </div>
-        <div>
-          <p className="type-label-sm text-muted-foreground">New Account</p>
-          <h2 className="text-lg font-semibold">Add treasury account</h2>
-        </div>
+    <form action={createTreasuryAccount} className="grid gap-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextInput label="Name" name="name" required />
+        <TextInput label="Address" name="address" required />
       </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="grid gap-2 text-sm font-medium">
+          <span className="type-label-sm text-muted-foreground">Type</span>
+          <AccountTypeSelect />
+        </label>
+        <label className="grid gap-2 text-sm font-medium">
+          <span className="type-label-sm text-muted-foreground">Chain</span>
+          <ChainSelect defaultValue={DEFAULT_TREASURY_ACCOUNT_CHAIN_ID} />
+        </label>
+      </div>
+      <NotesField />
+      <div>
+        <Button type="submit">
+          <Save data-icon="inline-start" />
+          Add Account
+        </Button>
+      </div>
+    </form>
+  );
+}
 
-      <form action={createTreasuryAccount} className="mt-6 grid gap-4">
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextInput label="Name" name="name" required />
-          <TextInput label="Address" name="address" required />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="grid gap-2 text-sm font-medium">
-            <span className="type-label-sm text-muted-foreground">Type</span>
-            <AccountTypeSelect />
-          </label>
-          <label className="grid gap-2 text-sm font-medium">
-            <span className="type-label-sm text-muted-foreground">Chain</span>
-            <ChainSelect defaultValue={DEFAULT_TREASURY_ACCOUNT_CHAIN_ID} />
-          </label>
-        </div>
-        <NotesField />
+function getAccountModalHref(modal: AccountModal) {
+  return `/admin/treasury-accounts?modal=${modal}`;
+}
+
+function parseAccountModal(value: string | string[] | undefined) {
+  const modal = Array.isArray(value) ? value[0] : value;
+
+  if (modal === "add-account" || modal?.startsWith("account-")) {
+    return modal as AccountModal;
+  }
+
+  return null;
+}
+
+function AccountLauncher({ canManage }: { canManage: boolean }) {
+  if (!canManage) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Button type="submit">
-            <Save data-icon="inline-start" />
-            Add Account
-          </Button>
+          <p className="type-label-sm text-muted-foreground">
+            Treasury Accounts
+          </p>
+          <h2 className="text-lg font-semibold">Manage accounts</h2>
         </div>
-      </form>
+        <Link
+          href={getAccountModalHref("add-account")}
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-sm transition-all hover:border-primary/40 hover:bg-muted"
+        >
+          <Wallet className="size-5" aria-hidden="true" />
+          Add Account
+          <Plus className="size-4 text-muted-foreground" aria-hidden="true" />
+        </Link>
+      </div>
     </section>
+  );
+}
+
+function ModalShell({
+  children,
+  eyebrow,
+  icon,
+  title,
+}: {
+  children: ReactNode;
+  eyebrow: string;
+  icon: ReactNode;
+  title: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(41,16,10,0.72)] px-4 py-6 backdrop-blur-sm">
+      <Link
+        href="/admin/treasury-accounts"
+        aria-label="Close modal"
+        className="absolute inset-0 cursor-default"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative z-10 max-h-[min(42rem,calc(100vh-3rem))] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-card p-5 shadow-xl md:p-6"
+      >
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+              {icon}
+            </div>
+            <div className="min-w-0">
+              <p className="type-label-sm text-muted-foreground">{eyebrow}</p>
+              <h2 className="text-lg font-semibold">{title}</h2>
+            </div>
+          </div>
+          <Link
+            href="/admin/treasury-accounts"
+            className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            Close
+          </Link>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -165,26 +262,16 @@ function StatusBadge({ account }: { account: TreasuryAccountView }) {
   );
 }
 
-function AccountCard({ account }: { account: TreasuryAccountView }) {
+function AccountDetails({
+  account,
+  canManage,
+}: {
+  account: TreasuryAccountView;
+  canManage: boolean;
+}) {
   return (
-    <article className="rounded-lg border border-border bg-card p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-            {account.type === "side_vault" ? (
-              <Building2 className="size-5" aria-hidden="true" />
-            ) : (
-              <Wallet className="size-5" aria-hidden="true" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <p className="type-label-sm text-muted-foreground">
-              {getAccountTypeLabel(account.type as EditableTreasuryAccountType)}
-            </p>
-            <h3 className="truncate text-base font-semibold">{account.name}</h3>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+    <div>
+      <div className="flex flex-wrap justify-end gap-2">
           {account.isDaoControlled ? (
             <span className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
               <ShieldCheck className="size-3" aria-hidden="true" />
@@ -197,7 +284,6 @@ function AccountCard({ account }: { account: TreasuryAccountView }) {
             </span>
           )}
           <StatusBadge account={account} />
-        </div>
       </div>
 
       <dl className="mt-5 grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
@@ -219,97 +305,195 @@ function AccountCard({ account }: { account: TreasuryAccountView }) {
         </p>
       ) : null}
 
-      <details className="mt-5 rounded-md border border-border bg-background">
-        <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
-          Edit
-        </summary>
-        <form action={updateTreasuryAccount} className="grid gap-4 px-4 pb-4">
-          <input type="hidden" name="id" value={account.id} />
-          <div className="grid gap-4 md:grid-cols-2">
-            <TextInput
-              label="Name"
-              name="name"
-              defaultValue={account.name}
-              required
-            />
-            <TextInput
-              label="Address"
-              name="address"
-              defaultValue={account.address}
-              required
-            />
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="grid gap-2 text-sm font-medium">
-              <span className="type-label-sm text-muted-foreground">Type</span>
-              <AccountTypeSelect
-                defaultValue={account.type as EditableTreasuryAccountType}
+      {canManage ? (
+        <details className="mt-5 rounded-md border border-border bg-background">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+            Edit
+          </summary>
+          <form action={updateTreasuryAccount} className="grid gap-4 px-4 pb-4">
+            <input type="hidden" name="id" value={account.id} />
+            <div className="grid gap-4 md:grid-cols-2">
+              <TextInput
+                label="Name"
+                name="name"
+                defaultValue={account.name}
+                required
               />
-            </label>
-            <label className="grid gap-2 text-sm font-medium">
-              <span className="type-label-sm text-muted-foreground">Chain</span>
-              <ChainSelect defaultValue={account.chainId} />
-            </label>
-          </div>
-          <NotesField defaultValue={account.notes} />
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit">
-              <Save data-icon="inline-start" />
-              Save
-            </Button>
-          </div>
-        </form>
-      </details>
+              <TextInput
+                label="Address"
+                name="address"
+                defaultValue={account.address}
+                required
+              />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-2 text-sm font-medium">
+                <span className="type-label-sm text-muted-foreground">
+                  Type
+                </span>
+                <AccountTypeSelect
+                  defaultValue={account.type as EditableTreasuryAccountType}
+                />
+              </label>
+              <label className="grid gap-2 text-sm font-medium">
+                <span className="type-label-sm text-muted-foreground">
+                  Chain
+                </span>
+                <ChainSelect defaultValue={account.chainId} />
+              </label>
+            </div>
+            <NotesField defaultValue={account.notes} />
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit">
+                <Save data-icon="inline-start" />
+                Save
+              </Button>
+            </div>
+          </form>
+        </details>
+      ) : null}
 
-      <form
-        action={
-          account.archivedAt ? restoreTreasuryAccount : archiveTreasuryAccount
-        }
-        className="mt-3"
-      >
-        <input type="hidden" name="id" value={account.id} />
-        <Button
-          type="submit"
-          variant={account.archivedAt ? "outline" : "destructive"}
-          size="sm"
+      {canManage ? (
+        <form
+          action={
+            account.archivedAt ? restoreTreasuryAccount : archiveTreasuryAccount
+          }
+          className="mt-3"
         >
-          {account.archivedAt ? (
-            <RotateCcw data-icon="inline-start" />
-          ) : (
-            <Archive data-icon="inline-start" />
-          )}
-          {account.archivedAt ? "Restore" : "Archive"}
-        </Button>
-      </form>
-    </article>
+          <input type="hidden" name="id" value={account.id} />
+          <Button
+            type="submit"
+            variant={account.archivedAt ? "outline" : "destructive"}
+            size="sm"
+          >
+            {account.archivedAt ? (
+              <RotateCcw data-icon="inline-start" />
+            ) : (
+              <Archive data-icon="inline-start" />
+            )}
+            {account.archivedAt ? "Restore" : "Archive"}
+          </Button>
+        </form>
+      ) : null}
+    </div>
   );
 }
 
-function AccountList({
+function AccountRankingTable({
   accounts,
+  balancesByAccountId,
   emptyLabel,
   title,
 }: {
   accounts: TreasuryAccountView[];
+  balancesByAccountId: Map<string, string>;
   emptyLabel: string;
   title: string;
 }) {
+  const rankedAccounts = [...accounts].sort((left, right) => {
+    if (left.archivedAt && !right.archivedAt) {
+      return 1;
+    }
+
+    if (!left.archivedAt && right.archivedAt) {
+      return -1;
+    }
+
+    const balanceDifference =
+      Number(balancesByAccountId.get(right.id) ?? 0) -
+      Number(balancesByAccountId.get(left.id) ?? 0);
+
+    return balanceDifference || (
+      left.type.localeCompare(right.type) ||
+      left.chainName.localeCompare(right.chainName) ||
+      left.name.localeCompare(right.name)
+    );
+  });
+
   return (
-    <section>
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold">{title}</h2>
+    <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+            <Wallet className="size-5" aria-hidden="true" />
+          </div>
+          <h2 className="text-lg font-semibold">{title}</h2>
+        </div>
         <span className="type-label-sm text-muted-foreground">
           {accounts.length} accounts
         </span>
       </div>
       {accounts.length > 0 ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {accounts.map((account) => (
-            <AccountCard key={account.id} account={account} />
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-sm">
+            <thead className="border-b border-border text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="px-3 py-3 font-medium">Account</th>
+                <th className="px-3 py-3 text-right font-medium">Balance</th>
+                <th className="px-3 py-3 font-medium">Type</th>
+                <th className="px-3 py-3 font-medium">Chain</th>
+                <th className="px-3 py-3 font-medium">Address</th>
+                <th className="px-3 py-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {rankedAccounts.map((account) => {
+                const href = getAccountModalHref(`account-${account.id}`);
+                const linkedBalance = balancesByAccountId.get(account.id);
+
+                return (
+                  <tr
+                    key={account.id}
+                    className="transition-colors hover:bg-muted/50"
+                  >
+                    <td className="p-0">
+                      <Link href={href} className="block px-3 py-3 font-medium">
+                        {account.name}
+                      </Link>
+                    </td>
+                    <td className="p-0">
+                      <Link
+                        href={href}
+                        className="block px-3 py-3 text-right font-medium"
+                      >
+                        {linkedBalance
+                          ? formatCurrency(linkedBalance)
+                          : "Not synced"}
+                      </Link>
+                    </td>
+                    <td className="p-0">
+                      <Link href={href} className="block px-3 py-3">
+                        {getAccountTypeLabel(
+                          account.type as EditableTreasuryAccountType,
+                        )}
+                      </Link>
+                    </td>
+                    <td className="p-0">
+                      <Link href={href} className="block px-3 py-3">
+                        {account.chainName}
+                      </Link>
+                    </td>
+                    <td className="p-0">
+                      <Link
+                        href={href}
+                        className="block px-3 py-3 font-mono text-muted-foreground"
+                      >
+                        {formatAddress(account.address)}
+                      </Link>
+                    </td>
+                    <td className="p-0">
+                      <Link href={href} className="block px-3 py-3">
+                        <StatusBadge account={account} />
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
+        <div className="rounded-lg border border-dashed border-border bg-background p-6 text-sm text-muted-foreground">
           {emptyLabel}
         </div>
       )}
@@ -317,11 +501,17 @@ function AccountList({
   );
 }
 
-export default async function TreasuryAccountsPage() {
+export default async function TreasuryAccountsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{
+    modal?: string | string[];
+  }>;
+}) {
   const session = await getAuthSession();
   const sessionState = serializeSession(session);
 
-  if (!sessionState.authenticated || !sessionState.permissions?.canAdmin) {
+  if (!sessionState.authenticated || !sessionState.permissions?.canAccess) {
     return (
       <main className="min-h-screen bg-background text-foreground">
         <section className="container-custom py-10">
@@ -346,40 +536,57 @@ export default async function TreasuryAccountsPage() {
   const accounts = await listEditableTreasuryAccounts();
   const activeAccounts = accounts.filter((account) => !account.archivedAt);
   const archivedAccounts = accounts.filter((account) => account.archivedAt);
+  const balanceSnapshot = await getTreasuryBalanceSnapshot();
+  const balancesByAccountId = new Map(
+    balanceSnapshot.accounts.map((account) => [account.id, account.totalUsd]),
+  );
+  const canManage = Boolean(sessionState.permissions.canAdmin);
+  const params = await searchParams;
+  const modal = parseAccountModal(params?.modal);
+  const selectedAccount =
+    modal?.startsWith("account-")
+      ? accounts.find((account) => account.id === modal.slice(8))
+      : null;
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
-        <div className="container-custom flex h-16 items-center justify-between gap-4">
-          <div>
-            <p className="type-label-sm text-scroll-200">Admin</p>
-            <h1 className="text-base font-semibold leading-none">
-              Treasury Accounts
-            </h1>
-          </div>
-          <Link
-            href="/"
-            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted"
-          >
-            <ArrowLeft data-icon="inline-start" />
-            Home
-          </Link>
-        </div>
-      </header>
+      <AppHeader initialSession={sessionState} />
 
       <section className="container-custom grid gap-8 py-8 md:py-12">
-        <CreateAccountForm />
-        <AccountList
-          accounts={activeAccounts}
-          emptyLabel="No active side vaults or operators."
-          title="Active accounts"
-        />
-        <AccountList
-          accounts={archivedAccounts}
-          emptyLabel="No archived side vaults or operators."
-          title="Archived accounts"
+        <AccountLauncher canManage={canManage} />
+        <AccountRankingTable
+          accounts={[...activeAccounts, ...archivedAccounts]}
+          balancesByAccountId={balancesByAccountId}
+          emptyLabel="No side vaults or operators."
+          title="Treasury Accounts"
         />
       </section>
+      {canManage && modal === "add-account" ? (
+        <ModalShell
+          eyebrow="Treasury Account"
+          icon={<Wallet className="size-5" aria-hidden="true" />}
+          title="Add Account"
+        >
+          <CreateAccountForm />
+        </ModalShell>
+      ) : null}
+      {selectedAccount ? (
+        <ModalShell
+          eyebrow={getAccountTypeLabel(
+            selectedAccount.type as EditableTreasuryAccountType,
+          )}
+          icon={
+            selectedAccount.type === "side_vault" ? (
+              <Building2 className="size-5" aria-hidden="true" />
+            ) : (
+              <Wallet className="size-5" aria-hidden="true" />
+            )
+          }
+          title={selectedAccount.name}
+        >
+          <AccountDetails account={selectedAccount} canManage={canManage} />
+        </ModalShell>
+      ) : null}
     </main>
   );
 }

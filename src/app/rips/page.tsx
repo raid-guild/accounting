@@ -1,7 +1,6 @@
 import {
   ArrowLeft,
   ExternalLink,
-  FileText,
   Link as LinkIcon,
   Pencil,
   Plus,
@@ -9,8 +8,10 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { createRip, deleteRip, updateRip } from "@/app/rips/actions";
+import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
 import { listRipsWithTotals, type RipView } from "@/lib/rips";
@@ -19,8 +20,10 @@ type SearchParams = Promise<{
   created?: string;
   deleted?: string;
   error?: string;
+  modal?: string;
   updated?: string;
 }>;
+type RipModal = "add-rip" | `rip-${string}`;
 
 function formatTimestamp(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -44,6 +47,173 @@ function formatCurrency(value: string) {
   }).format(number);
 }
 
+function getRipModalHref(modal: RipModal) {
+  return `/rips?modal=${modal}`;
+}
+
+function parseRipModal(value: string | undefined) {
+  if (value === "add-rip" || value?.startsWith("rip-")) {
+    return value as RipModal;
+  }
+
+  return null;
+}
+
+function ModalShell({
+  children,
+  eyebrow,
+  icon,
+  title,
+}: {
+  children: ReactNode;
+  eyebrow: string;
+  icon: ReactNode;
+  title: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(41,16,10,0.72)] px-4 py-6 backdrop-blur-sm">
+      <Link
+        href="/rips"
+        aria-label="Close modal"
+        className="absolute inset-0 cursor-default"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="relative z-10 max-h-[min(42rem,calc(100vh-3rem))] w-full max-w-3xl overflow-y-auto rounded-lg border border-border bg-card p-5 shadow-xl md:p-6"
+      >
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+              {icon}
+            </div>
+            <div className="min-w-0">
+              <p className="type-label-sm text-muted-foreground">{eyebrow}</p>
+              <h2 className="text-lg font-semibold">{title}</h2>
+            </div>
+          </div>
+          <Link
+            href="/rips"
+            className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
+          >
+            Close
+          </Link>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function RipLauncher() {
+  return (
+    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="type-label-sm text-muted-foreground">RIPs</p>
+          <h2 className="text-lg font-semibold">Track improvement proposals</h2>
+        </div>
+        <Link
+          href={getRipModalHref("add-rip")}
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-sm transition-all hover:border-primary/40 hover:bg-muted"
+        >
+          <LinkIcon className="size-5" aria-hidden="true" />
+          Add RIP
+          <Plus className="size-4 text-muted-foreground" aria-hidden="true" />
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+function CreateRipForm() {
+  return (
+    <form action={createRip} className="grid gap-4">
+      <label className="grid gap-2 text-sm font-medium">
+        <span className="type-label-sm text-muted-foreground">Title</span>
+        <input
+          name="title"
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          required
+        />
+      </label>
+      <label className="grid gap-2 text-sm font-medium">
+        <span className="type-label-sm text-muted-foreground">RIP URL</span>
+        <input
+          name="url"
+          type="url"
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          placeholder="https://..."
+          required
+        />
+      </label>
+      <div>
+        <Button type="submit">
+          <LinkIcon data-icon="inline-start" />
+          Add RIP
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function RipEditForm({ rip }: { rip: RipView }) {
+  return (
+    <div>
+      <form action={updateRip} className="grid gap-4">
+        <input type="hidden" name="ripId" value={rip.id} />
+        <label className="grid gap-2 text-sm font-medium">
+          <span className="type-label-sm text-muted-foreground">Title</span>
+          <input
+            name="title"
+            defaultValue={rip.title}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            required
+          />
+        </label>
+        <label className="grid gap-2 text-sm font-medium">
+          <span className="type-label-sm text-muted-foreground">RIP URL</span>
+          <input
+            name="url"
+            type="url"
+            defaultValue={rip.url}
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            required
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit">
+            <Save data-icon="inline-start" />
+            Save RIP
+          </Button>
+          <a
+            href={rip.url}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium transition-all hover:bg-muted"
+          >
+            <ExternalLink className="size-3.5" aria-hidden="true" />
+            Open
+          </a>
+        </div>
+      </form>
+      <form action={deleteRip} className="mt-4 border-t border-border pt-4">
+        <input type="hidden" name="ripId" value={rip.id} />
+        <Button
+          type="submit"
+          variant="destructive"
+          size="sm"
+          disabled={rip.entryCount > 0}
+        >
+          <Trash2 data-icon="inline-start" />
+          Delete
+        </Button>
+      </form>
+    </div>
+  );
+}
+
 function RipTable({ rips }: { rips: RipView[] }) {
   if (rips.length === 0) {
     return (
@@ -54,97 +224,78 @@ function RipTable({ rips }: { rips: RipView[] }) {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card text-sm shadow-sm">
-      <div className="grid grid-cols-[1.4fr_1fr_1fr_0.5fr_1fr] gap-4 border-b border-border px-4 py-3 text-xs uppercase text-muted-foreground">
-        <span className="font-medium">RIP</span>
-        <span className="font-medium">Created</span>
-        <span className="text-right font-medium">Linked Spend</span>
-        <span className="text-right font-medium">Entries</span>
-        <span className="text-right font-medium">Actions</span>
+    <section className="rounded-lg border border-border bg-card p-5 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+            <LinkIcon className="size-5" aria-hidden="true" />
+          </div>
+          <h2 className="text-lg font-semibold">RIPs By Linked Spend</h2>
+        </div>
+        <span className="type-label-sm text-muted-foreground">
+          {rips.length} RIP{rips.length === 1 ? "" : "s"}
+        </span>
       </div>
-      <div className="divide-y divide-border">
-        {rips.map((rip) => (
-          <details key={rip.id} className="group">
-            <summary className="grid cursor-pointer list-none grid-cols-[1.4fr_1fr_1fr_0.5fr_1fr] items-center gap-4 px-4 py-4 marker:hidden">
-              <span className="truncate font-medium">{rip.title}</span>
-              <span className="text-muted-foreground">
-                {formatTimestamp(rip.createdAt)}
-              </span>
-              <span className="text-right font-medium">
-                {formatCurrency(rip.totalUsd)}
-              </span>
-              <span className="text-right text-muted-foreground">
-                {rip.entryCount}
-              </span>
-              <span className="flex justify-end">
-                <span className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium text-foreground transition-all group-hover:bg-muted group-open:bg-muted">
-                  <Pencil className="size-3.5" aria-hidden="true" />
-                  Edit
-                </span>
-              </span>
-            </summary>
-            <div className="border-t border-border bg-background/60 px-4 py-4">
-              <form
-                action={updateRip}
-                className="grid gap-3 md:grid-cols-[1fr_1.4fr_auto]"
-              >
-                <input type="hidden" name="ripId" value={rip.id} />
-                <label className="grid gap-2 text-sm font-medium">
-                  <span className="type-label-sm text-muted-foreground">
-                    Title
-                  </span>
-                  <input
-                    name="title"
-                    defaultValue={rip.title}
-                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    required
-                  />
-                </label>
-                <label className="grid gap-2 text-sm font-medium">
-                  <span className="type-label-sm text-muted-foreground">
-                    RIP URL
-                  </span>
-                  <input
-                    name="url"
-                    type="url"
-                    defaultValue={rip.url}
-                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    required
-                  />
-                </label>
-                <div className="flex items-end gap-2">
-                  <Button type="submit" size="sm">
-                    <Save data-icon="inline-start" />
-                    Save RIP
-                  </Button>
-                  <a
-                    href={rip.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex h-7 items-center justify-center gap-1 rounded-lg border border-border bg-background px-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted"
-                  >
-                    <ExternalLink className="size-3.5" aria-hidden="true" />
-                    Open
-                  </a>
-                </div>
-              </form>
-              <form action={deleteRip} className="mt-3">
-                <input type="hidden" name="ripId" value={rip.id} />
-                <Button
-                  type="submit"
-                  variant="destructive"
-                  size="sm"
-                  disabled={rip.entryCount > 0}
-                >
-                  <Trash2 data-icon="inline-start" />
-                  Delete
-                </Button>
-              </form>
-            </div>
-          </details>
-        ))}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] text-left text-sm">
+          <thead className="border-b border-border text-xs uppercase text-muted-foreground">
+            <tr>
+              <th className="px-3 py-3 font-medium">RIP</th>
+              <th className="px-3 py-3 font-medium">Created</th>
+              <th className="px-3 py-3 text-right font-medium">
+                Linked Spend
+              </th>
+              <th className="px-3 py-3 text-right font-medium">Entries</th>
+              <th className="px-3 py-3 text-right font-medium">Edit</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {rips.map((rip) => {
+              const href = getRipModalHref(`rip-${rip.id}`);
+
+              return (
+                <tr key={rip.id} className="transition-colors hover:bg-muted/50">
+                  <td className="p-0">
+                    <Link href={href} className="block px-3 py-3 font-medium">
+                      {rip.title}
+                    </Link>
+                  </td>
+                  <td className="p-0">
+                    <Link
+                      href={href}
+                      className="block px-3 py-3 text-muted-foreground"
+                    >
+                      {formatTimestamp(rip.createdAt)}
+                    </Link>
+                  </td>
+                  <td className="p-0">
+                    <Link href={href} className="block px-3 py-3 text-right">
+                      {formatCurrency(rip.totalUsd)}
+                    </Link>
+                  </td>
+                  <td className="p-0">
+                    <Link
+                      href={href}
+                      className="block px-3 py-3 text-right text-muted-foreground"
+                    >
+                      {rip.entryCount}
+                    </Link>
+                  </td>
+                  <td className="p-0">
+                    <Link href={href} className="flex justify-end px-3 py-3">
+                      <span className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium transition-all hover:bg-muted">
+                        <Pencil className="size-3.5" aria-hidden="true" />
+                        Edit
+                      </span>
+                    </Link>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -179,31 +330,15 @@ export default async function RipsPage({
   }
 
   const rips = await listRipsWithTotals();
+  const modal = parseRipModal(query.modal);
+  const selectedRip =
+    modal?.startsWith("rip-")
+      ? rips.find((rip) => rip.id === modal.slice(4))
+      : null;
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
-        <div className="container-custom flex min-h-16 items-center justify-between gap-4 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-scroll-100/10 text-scroll-100">
-              <FileText className="size-5" aria-hidden="true" />
-            </div>
-            <div>
-              <p className="type-label-sm text-scroll-200">RIP Tracking</p>
-              <h1 className="text-base font-semibold leading-none">
-                Raid Improvement Proposals
-              </h1>
-            </div>
-          </div>
-          <Link
-            href="/"
-            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-scroll-300/20 bg-scroll-100 px-2.5 text-sm font-medium text-moloch-800 transition-all hover:bg-scroll-200"
-          >
-            <ArrowLeft data-icon="inline-start" />
-            Home
-          </Link>
-        </div>
-      </header>
+      <AppHeader initialSession={session} />
 
       <section className="container-custom py-8 md:py-12">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -251,53 +386,29 @@ export default async function RipsPage({
           </div>
         ) : null}
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(280px,360px)_1fr]">
-          <form
-            action={createRip}
-            className="self-start rounded-lg border border-border bg-card p-5 shadow-sm"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-                <Plus className="size-5" aria-hidden="true" />
-              </div>
-              <div>
-                <p className="type-label-sm text-muted-foreground">New RIP</p>
-                <h3 className="text-lg font-semibold">Add RIP</h3>
-              </div>
-            </div>
-            <div className="mt-5 grid gap-4">
-              <label className="grid gap-2 text-sm font-medium">
-                <span className="type-label-sm text-muted-foreground">
-                  Title
-                </span>
-                <input
-                  name="title"
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                  required
-                />
-              </label>
-              <label className="grid gap-2 text-sm font-medium">
-                <span className="type-label-sm text-muted-foreground">
-                  RIP URL
-                </span>
-                <input
-                  name="url"
-                  type="url"
-                  className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-                  placeholder="https://..."
-                  required
-                />
-              </label>
-              <Button type="submit">
-                <LinkIcon data-icon="inline-start" />
-                Add RIP
-              </Button>
-            </div>
-          </form>
-
+        <div className="grid gap-8">
+          <RipLauncher />
           <RipTable rips={rips} />
         </div>
       </section>
+      {modal === "add-rip" ? (
+        <ModalShell
+          eyebrow="RIP"
+          icon={<LinkIcon className="size-5" aria-hidden="true" />}
+          title="Add RIP"
+        >
+          <CreateRipForm />
+        </ModalShell>
+      ) : null}
+      {selectedRip ? (
+        <ModalShell
+          eyebrow="RIP"
+          icon={<LinkIcon className="size-5" aria-hidden="true" />}
+          title={selectedRip.title}
+        >
+          <RipEditForm rip={selectedRip} />
+        </ModalShell>
+      ) : null}
     </main>
   );
 }

@@ -1,6 +1,7 @@
-import { ArrowLeft, ExternalLink, FileText } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
+import { AppHeader } from "@/components/app-header";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
 import {
   listProposalActivity,
@@ -180,28 +181,7 @@ export default async function ProposalsPage() {
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
-        <div className="container-custom flex min-h-16 items-center justify-between gap-4 py-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-scroll-100/10 text-scroll-100">
-              <FileText className="size-5" aria-hidden="true" />
-            </div>
-            <div>
-              <p className="type-label-sm text-scroll-200">DAOhaus</p>
-              <h1 className="text-base font-semibold leading-none">
-                Proposal Activity
-              </h1>
-            </div>
-          </div>
-          <Link
-            href="/"
-            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-scroll-300/20 bg-scroll-100 px-2.5 text-sm font-medium text-moloch-800 transition-all hover:bg-scroll-200"
-          >
-            <ArrowLeft data-icon="inline-start" />
-            Home
-          </Link>
-        </div>
-      </header>
+      <AppHeader initialSession={session} />
 
       <section className="container-custom py-8 md:py-12">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">

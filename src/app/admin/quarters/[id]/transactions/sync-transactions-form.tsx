@@ -160,9 +160,20 @@ export function SyncTransactionsForm({
 
   if (isComplete) {
     return (
-      <div className="flex items-center gap-2 rounded-md border border-emerald-600/25 bg-emerald-600/10 px-3 py-2 text-sm font-medium text-emerald-800">
-        <CheckCircle2 className="size-4" aria-hidden="true" />
-        <span>Sync complete</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 rounded-md border border-emerald-600/25 bg-emerald-600/10 px-3 py-2 text-sm font-medium text-emerald-800">
+          <CheckCircle2 className="size-4" aria-hidden="true" />
+          <span>Sync complete</span>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={runSync}
+          className="shrink-0"
+        >
+          <RefreshCw data-icon="inline-start" aria-hidden="true" />
+          Sync Again
+        </Button>
       </div>
     );
   }

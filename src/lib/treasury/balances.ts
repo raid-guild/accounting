@@ -368,9 +368,15 @@ async function getLatestCachedAccountSnapshot(
   };
 }
 
-async function getWethUsdPrice() {
+async function getCoinGeckoUsdPrices(coinIds: string[]) {
+  const uniqueCoinIds = [...new Set(coinIds)].filter(Boolean);
+
+  if (uniqueCoinIds.length === 0) {
+    return new Map<string, number>();
+  }
+
   const url = new URL("https://api.coingecko.com/api/v3/simple/price");
-  url.searchParams.set("ids", "weth");
+  url.searchParams.set("ids", uniqueCoinIds.join(","));
   url.searchParams.set("vs_currencies", "usd");
 
   const headers = new Headers();
@@ -388,24 +394,30 @@ async function getWethUsdPrice() {
     throw new Error("CoinGecko price request failed");
   }
 
-  const body = (await response.json()) as { weth?: { usd?: number } };
-  const price = body.weth?.usd;
+  const body = (await response.json()) as Record<string, { usd?: number }>;
+  const prices = new Map<string, number>();
 
-  if (!price || !Number.isFinite(price) || price <= 0) {
-    throw new Error("CoinGecko wETH price invalid or unavailable");
+  for (const coinId of uniqueCoinIds) {
+    const price = body[coinId]?.usd;
+
+    if (!price || !Number.isFinite(price) || price <= 0) {
+      throw new Error(`CoinGecko ${coinId} price invalid or unavailable`);
+    }
+
+    prices.set(coinId, price);
   }
 
-  return price;
+  return prices;
 }
 
 async function fetchLiveAssetBalances({
   address,
   client,
-  wethPricePromise,
+  pricePromise,
 }: {
   address: Address;
   client: ReturnType<typeof createPublicClient>;
-  wethPricePromise: Promise<number>;
+  pricePromise: Promise<Map<string, number>>;
 }) {
   const rawBalances = await Promise.all(
     TRACKED_TREASURY_ASSETS.map(async (asset) => {
@@ -422,11 +434,11 @@ async function fetchLiveAssetBalances({
     }),
   );
 
-  let wethUsdPrice = 0;
+  let prices = new Map<string, number>();
   let priceError: Error | null = null;
 
   try {
-    wethUsdPrice = await wethPricePromise;
+    prices = await pricePromise;
   } catch (error) {
     priceError = error instanceof Error ? error : new Error("Price unavailable");
   }
@@ -434,7 +446,11 @@ async function fetchLiveAssetBalances({
   const assets = TRACKED_TREASURY_ASSETS.map((asset, index) => {
     const rawAmount = rawBalances[index];
     const balance = formatUnits(rawAmount, asset.decimals);
-    const usdPrice = asset.stableUsd ? 1 : wethUsdPrice;
+    const usdPrice = asset.stableUsd
+      ? 1
+      : asset.coingeckoId
+        ? (prices.get(asset.coingeckoId) ?? 0)
+        : 0;
     const usdValue = toNumber(balance) * usdPrice;
 
     return {
@@ -455,18 +471,18 @@ async function syncAccountBalanceSnapshot({
   account,
   client,
   syncedAt,
-  wethPricePromise,
+  pricePromise,
 }: {
   account: BalanceAccountSource & { address: Address };
   client: ReturnType<typeof createPublicClient>;
   syncedAt: Date;
-  wethPricePromise: Promise<number>;
+  pricePromise: Promise<Map<string, number>>;
 }): Promise<SyncedAccountSnapshot> {
   try {
     const { assets, priceError } = await fetchLiveAssetBalances({
       address: account.address,
       client,
-      wethPricePromise,
+      pricePromise,
     });
     const totalUsd = formatUsd(
       assets.reduce((total, asset) => total + toNumber(asset.usdValue), 0),
@@ -616,14 +632,18 @@ async function syncTreasuryAccountBalances(): Promise<TreasuryBalanceSnapshot> {
     transport: http(getGnosisRpcUrl()),
   });
   const syncedAt = new Date();
-  const wethPricePromise = getWethUsdPrice();
+  const pricePromise = getCoinGeckoUsdPrices(
+    TRACKED_TREASURY_ASSETS.flatMap((asset) =>
+      asset.stableUsd || !asset.coingeckoId ? [] : [asset.coingeckoId],
+    ),
+  );
   const syncedSnapshots = await Promise.all(
     syncableAccounts.map((account) =>
       syncAccountBalanceSnapshot({
         account,
         client,
         syncedAt,
-        wethPricePromise,
+        pricePromise,
       }),
     ),
   );

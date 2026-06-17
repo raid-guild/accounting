@@ -1,8 +1,7 @@
-import { ChevronDown, LockKeyhole } from "lucide-react";
+import { LockKeyhole } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
-import type { ReactNode } from "react";
 
+import { AppHeader } from "@/components/app-header";
 import { WalletConnect } from "@/components/auth/wallet-connect";
 import { TreasuryDashboard } from "@/components/treasury/treasury-dashboard";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
@@ -29,54 +28,6 @@ async function getSessionState() {
 
 type SessionState = Awaited<ReturnType<typeof getSessionState>>;
 
-function AppNavLink({
-  children,
-  href,
-}: {
-  children: ReactNode;
-  href: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex h-8 shrink-0 items-center justify-center rounded-md px-3 text-sm font-medium text-scroll-200 transition-all hover:bg-scroll-100/10 hover:text-scroll-100"
-    >
-      {children}
-    </Link>
-  );
-}
-
-function AdminNavMenu() {
-  const links = [
-    { href: "/admin/providers", label: "Providers" },
-    { href: "/admin/quarters", label: "Quarters" },
-    { href: "/admin/treasury-accounts", label: "Accounts" },
-  ];
-
-  return (
-    <details className="group relative">
-      <summary className="inline-flex h-8 cursor-pointer list-none items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium text-scroll-200 transition-all hover:bg-scroll-100/10 hover:text-scroll-100 marker:hidden">
-        Admin
-        <ChevronDown
-          className="size-3.5 transition-transform group-open:rotate-180"
-          aria-hidden="true"
-        />
-      </summary>
-      <div className="absolute right-0 top-10 z-20 grid min-w-44 gap-1 overflow-hidden rounded-lg border border-scroll-300/25 bg-moloch-800 p-1 shadow-xl shadow-black/30">
-        {links.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="flex h-8 items-center rounded-md px-3 text-sm font-medium text-scroll-100 transition-all hover:bg-scroll-100/10"
-          >
-            {link.label}
-          </Link>
-        ))}
-      </div>
-    </details>
-  );
-}
-
 function PublicHome({ session }: { session: SessionState }) {
   return (
     <main className="min-h-screen bg-moloch-800 text-scroll-100">
@@ -97,11 +48,10 @@ function PublicHome({ session }: { session: SessionState }) {
               Accounting Dashboard
             </p>
             <h1 className="mt-4 text-4xl font-semibold leading-tight tracking-normal text-scroll-100 md:text-6xl">
-              Member access for treasury reporting.
+              RaidGuild accounting, for members.
             </h1>
             <p className="mt-5 max-w-2xl text-base leading-7 text-scroll-200">
-              Connect a RaidGuild member wallet to view treasury balances and
-              export-ready accounting records.
+              Connect your wallet to view treasury balances and quarter reports.
             </p>
           </div>
 
@@ -120,8 +70,7 @@ function PublicHome({ session }: { session: SessionState }) {
               </div>
             </div>
             <p className="mt-5 text-sm leading-6 text-scroll-200">
-              Access is checked against DAO shares, Angry Dwarf Hats, and
-              database-managed Cleric permissions.
+              Use a RaidGuild wallet to continue.
             </p>
             <div className="mt-6 flex justify-start">
               <WalletConnect initialSession={session} />
@@ -144,54 +93,7 @@ function MemberHome({
 }) {
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
-        <div className="container-custom grid min-h-18 gap-3 py-3 xl:grid-cols-[auto_1fr] xl:items-center">
-          <div className="flex min-w-0 items-center gap-3">
-            {/* Keep the complementary dimension auto when className controls logo height. */}
-            <Image
-              src="/raidguild-full-logo.svg"
-              alt="RaidGuild"
-              width={120}
-              height={32}
-              className="h-8 w-auto shrink-0"
-              style={{ width: "auto" }}
-            />
-            <div className="min-w-0">
-              <p className="type-label-sm text-scroll-200">RaidGuild</p>
-              <h1 className="text-base font-semibold leading-none">
-                Accounting
-              </h1>
-            </div>
-          </div>
-
-          <div className="flex min-w-0 flex-wrap items-center gap-3 xl:justify-end">
-            {session.permissions?.canWriteRaidAccounting ||
-            session.permissions?.canAdmin ||
-            session.permissions?.canAccess ? (
-              <nav
-                className="flex min-w-0 flex-wrap items-center gap-1 rounded-lg border border-scroll-300/20 bg-moloch-900/35 p-1 shadow-inner shadow-black/10"
-                aria-label="Accounting sections"
-              >
-                {session.permissions?.canAccess ? (
-                  <>
-                    <AppNavLink href="/membership">Membership</AppNavLink>
-                    <AppNavLink href="/proposals">Proposals</AppNavLink>
-                    <AppNavLink href="/rips">RIPs</AppNavLink>
-                  </>
-                ) : null}
-                {session.permissions?.canWriteRaidAccounting ? (
-                  <AppNavLink href="/raids">Raids</AppNavLink>
-                ) : null}
-                {session.permissions?.canAdmin ? (
-                  <AdminNavMenu />
-                ) : null}
-              </nav>
-            ) : null}
-            <WalletConnect initialSession={session} />
-          </div>
-        </div>
-      </header>
-
+      <AppHeader initialSession={session} />
       <TreasuryDashboard
         initialSnapshot={snapshot}
         publishedQuarters={publishedQuarters}

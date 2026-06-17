@@ -12,8 +12,11 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { BankCsvImportPanel } from "@/app/admin/quarters/[id]/transactions/bank-csv-import-panel";
+import { ClassificationLinkedFields } from "@/app/admin/quarters/[id]/transactions/classification-linked-fields";
+import { ManualProviderExpenseButton } from "@/app/admin/quarters/[id]/transactions/manual-provider-expense-panel";
 import {
   classifyQuarterTransfer,
   updateLedgerEntryClassification,
@@ -46,6 +49,14 @@ import {
   type TreasuryTransferDaoProposal,
   type TreasuryTransferClassificationView,
 } from "@/lib/transaction-classification";
+import {
+  getSwapDetailsByGroupKey,
+  type SwapDetail,
+} from "@/lib/treasury/swap-details";
+import {
+  getSwapTransactionKeys,
+  getTransferGroupKey,
+} from "@/lib/treasury/swap-detection";
 
 type PageParams = Promise<{ id: string }>;
 type SearchParams = Promise<{
@@ -136,6 +147,10 @@ function formatTokenAmount(value: string) {
   return `${whole}.${trimmedFraction.slice(0, 8)}`;
 }
 
+function formatSwapAsset(value: NonNullable<SwapDetail["sold"]>) {
+  return `${formatTokenAmount(value.amount)} ${value.symbol}`;
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
@@ -208,92 +223,29 @@ function getEntityTypeLabel(type: ClassificationEntityOption["type"]) {
   return "Subcontractor";
 }
 
-function CategorySelect({ defaultValue }: { defaultValue: LedgerCategory | null }) {
-  return (
-    <select
-      name="category"
-      defaultValue={defaultValue ?? ""}
-      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-      required
-    >
-      <option value="">Choose category</option>
-      {IMPORTED_TRANSFER_CLASSIFICATION_CATEGORIES.map((category) => (
-        <option key={category} value={category}>
-          {getCategoryLabel(category)}
-        </option>
-      ))}
-    </select>
-  );
+function getReviewItemTime(item: QuarterReviewItem) {
+  return item.type === "ledger" ? item.entry.executedAt : item.transfer.executedAt;
 }
 
-function EntitySelect({
-  defaultValue,
-  entities,
-}: {
-  defaultValue: string | null;
-  entities: ClassificationOptions["entities"];
-}) {
-  return (
-    <select
-      name="counterpartyEntityId"
-      defaultValue={defaultValue ?? ""}
-      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-    >
-      <option value="">No entity link</option>
-      {entities.map((entity) => (
-        <option key={entity.id} value={entity.id}>
-          {entity.label} ({getEntityTypeLabel(entity.type)})
-        </option>
-      ))}
-    </select>
-  );
+function getDateInputValue(value: string) {
+  return new Date(value).toISOString().slice(0, 10);
 }
 
-function RaidSelect({
-  defaultValue,
-  raids,
-}: {
-  defaultValue: string | null;
-  raids: ClassificationOptions["raids"];
-}) {
-  return (
-    <select
-      name="raidId"
-      defaultValue={defaultValue ?? ""}
-      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-    >
-      <option value="">No raid link</option>
-      {raids.map((raid) => (
-        <option key={raid.id} value={raid.id}>
-          {raid.name} ({raid.clientName})
-        </option>
-      ))}
-    </select>
-  );
-}
+type QuarterReviewItem =
+  | {
+      entry: ManualLedgerEntryClassificationView;
+      type: "ledger";
+    }
+  | {
+      transfer: TreasuryTransferClassificationView;
+      type: "transfer";
+    };
 
-function RipSelect({
-  defaultValue,
-  rips,
-}: {
-  defaultValue: string | null;
-  rips: ClassificationOptions["rips"];
-}) {
-  return (
-    <select
-      name="ripId"
-      defaultValue={defaultValue ?? ""}
-      className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-    >
-      <option value="">No RIP link</option>
-      {rips.map((rip) => (
-        <option key={rip.id} value={rip.id}>
-          {rip.title}
-        </option>
-      ))}
-    </select>
-  );
-}
+const classificationCategoryOptions =
+  IMPORTED_TRANSFER_CLASSIFICATION_CATEGORIES.map((category) => ({
+    label: getCategoryLabel(category),
+    value: category,
+  }));
 
 function Field({
   children,
@@ -382,6 +334,7 @@ function ClassificationForm({
   counterpartyLabel,
   defaultCategory,
   isTreasuryCounterparty,
+  isSwap,
   options,
   quarter,
   transfer,
@@ -391,71 +344,84 @@ function ClassificationForm({
   counterpartyLabel: string | null;
   defaultCategory: LedgerCategory | null;
   isTreasuryCounterparty: boolean;
+  isSwap: boolean;
   options: ClassificationOptions;
   quarter: QuarterSummary;
   transfer: TreasuryTransferClassificationView;
   usdAmount: string;
 }) {
+  const isLockedTreasuryTransfer = isTreasuryCounterparty || isSwap;
+
   return (
     <form action={classifyQuarterTransfer} className="grid gap-4">
       <input type="hidden" name="quarterId" value={quarter.id} />
       <input type="hidden" name="transferId" value={transfer.transferId} />
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Category">
-          {isTreasuryCounterparty ? (
-            <div className="flex h-9 items-center rounded-md border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground">
-              Treasury Transfer
-              <input type="hidden" name="category" value="treasury_transfer" />
-            </div>
-          ) : (
-            <CategorySelect defaultValue={defaultCategory} />
-          )}
-        </Field>
-        <Field label="USD Amount">
-          <UsdAmountField
-            defaultValue={usdAmount}
-            transferId={transfer.transferId}
-          />
-        </Field>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Counterparty">
-          {isTreasuryCounterparty ? (
-            <div className="flex h-9 items-center rounded-md border border-border bg-secondary px-3 text-sm text-secondary-foreground">
-              <span className="font-medium">{counterpartyLabel}</span>
-              <span className="ml-2 font-mono text-muted-foreground">
-                {formatAddress(counterpartyAddress)}
-              </span>
-              <input type="hidden" name="counterpartyEntityId" value="" />
-            </div>
-          ) : (
-            <EntitySelect
-              defaultValue={transfer.counterpartyEntityId}
-              entities={options.entities}
-            />
-          )}
-        </Field>
-        <Field label="Raid">
-          {isTreasuryCounterparty ? (
-            <div className="flex h-9 items-center rounded-md border border-border bg-secondary px-3 text-sm text-muted-foreground">
-              Not needed for treasury transfers
-              <input type="hidden" name="raidId" value="" />
-            </div>
-          ) : (
-            <RaidSelect defaultValue={transfer.raidId} raids={options.raids} />
-          )}
-        </Field>
-      </div>
-      <Field label="RIP">
-        {isTreasuryCounterparty ? (
-          <div className="flex h-9 items-center rounded-md border border-border bg-secondary px-3 text-sm text-muted-foreground">
-            Not needed for treasury transfers
-            <input type="hidden" name="ripId" value="" />
+      {isLockedTreasuryTransfer ? (
+        <>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Category">
+              <div className="flex h-9 items-center rounded-md border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground">
+                {isSwap ? "Swap" : "Treasury Transfer"}
+                <input type="hidden" name="category" value="treasury_transfer" />
+              </div>
+            </Field>
+            <Field label="USD Amount">
+              <UsdAmountField
+                defaultValue={usdAmount}
+                transferId={transfer.transferId}
+              />
+            </Field>
           </div>
-        ) : (
-          <RipSelect defaultValue={transfer.ripId} rips={options.rips} />
-        )}
-      </Field>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Counterparty">
+              <div className="flex h-9 items-center rounded-md border border-border bg-secondary px-3 text-sm text-secondary-foreground">
+                {isSwap ? (
+                  <span className="font-medium">Asset swap</span>
+                ) : (
+                  <>
+                    <span className="font-medium">{counterpartyLabel}</span>
+                    <span className="ml-2 font-mono text-muted-foreground">
+                      {formatAddress(counterpartyAddress)}
+                    </span>
+                  </>
+                )}
+                <input type="hidden" name="counterpartyEntityId" value="" />
+              </div>
+            </Field>
+            <Field label="Raid">
+              <div className="flex h-9 items-center rounded-md border border-border bg-secondary px-3 text-sm text-muted-foreground">
+                Not needed for treasury transfers
+                <input type="hidden" name="raidId" value="" />
+              </div>
+            </Field>
+          </div>
+          <Field label="RIP">
+            <div className="flex h-9 items-center rounded-md border border-border bg-secondary px-3 text-sm font-medium text-secondary-foreground">
+              Not needed for treasury transfers
+              <input type="hidden" name="ripId" value="" />
+            </div>
+          </Field>
+        </>
+      ) : (
+        <ClassificationLinkedFields
+          categories={classificationCategoryOptions}
+          defaultCategory={defaultCategory}
+          defaultCounterpartyEntityId={transfer.counterpartyEntityId}
+          defaultRaidId={transfer.raidId}
+          defaultRipId={transfer.ripId}
+          entities={options.entities}
+          quarterId={quarter.id}
+          raids={options.raids}
+          rips={options.rips}
+        >
+          <Field label="USD Amount">
+            <UsdAmountField
+              defaultValue={usdAmount}
+              transferId={transfer.transferId}
+            />
+          </Field>
+        </ClassificationLinkedFields>
+      )}
       <Field label="Notes">
         <textarea
           name="notes"
@@ -473,13 +439,93 @@ function ClassificationForm({
   );
 }
 
+function LedgerEntryEditForm({
+  entry,
+  options,
+  quarterId,
+}: {
+  entry: ManualLedgerEntryClassificationView;
+  options: ClassificationOptions;
+  quarterId: string;
+}) {
+  return (
+    <form
+      action={updateLedgerEntryClassification}
+      className="mt-4 grid gap-4 text-sm"
+    >
+      <input type="hidden" name="quarterId" value={quarterId} />
+      <input type="hidden" name="ledgerEntryId" value={entry.id} />
+      <ClassificationLinkedFields
+        categories={classificationCategoryOptions}
+        defaultCategory={entry.category}
+        defaultCounterpartyEntityId={entry.counterpartyEntityId}
+        defaultRaidId={entry.raidId}
+        defaultRipId={entry.ripId}
+        entities={options.entities}
+        quarterId={quarterId}
+        raids={options.raids}
+        rips={options.rips}
+      >
+        <Field label="USD Amount">
+          <input
+            name="usdAmount"
+            defaultValue={formatUsdAmount(entry.usdAmount)}
+            inputMode="decimal"
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            required
+          />
+        </Field>
+      </ClassificationLinkedFields>
+      <label className="grid gap-2 text-sm font-medium">
+        <span className="type-label-sm text-muted-foreground">Notes</span>
+        <textarea
+          name="notes"
+          defaultValue={entry.notes ?? ""}
+          rows={3}
+          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+        />
+      </label>
+      <div>
+        <Button type="submit">
+          <Save data-icon="inline-start" />
+          Save Classification
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function SwapDetailLine({ detail }: { detail: SwapDetail | null }) {
+  if (!detail?.sold || !detail.received) {
+    return (
+      <span>
+        Swap details:{" "}
+        <span className="font-medium text-foreground">Detecting asset route</span>
+      </span>
+    );
+  }
+
+  return (
+    <span>
+      Swap:{" "}
+      <span className="font-medium text-foreground">
+        {formatSwapAsset(detail.sold)} for {formatSwapAsset(detail.received)}
+      </span>
+    </span>
+  );
+}
+
 function TransferCard({
+  isSwap,
   options,
   quarter,
+  swapDetail,
   transfer,
 }: {
+  isSwap: boolean;
   options: ClassificationOptions;
   quarter: QuarterSummary;
+  swapDetail: SwapDetail | null;
   transfer: TreasuryTransferClassificationView;
 }) {
   const usdAmount = getDefaultUsdAmount(transfer);
@@ -487,7 +533,8 @@ function TransferCard({
   const counterpartyLabel = getCounterpartyLabel(transfer);
   const isTreasuryCounterparty = Boolean(counterpartyLabel);
   const defaultCategory =
-    transfer.category ?? (isTreasuryCounterparty ? "treasury_transfer" : null);
+    transfer.category ??
+    (isTreasuryCounterparty || isSwap ? "treasury_transfer" : null);
   const transactionExplorerUrl = getTransactionExplorerUrl({
     chainId: transfer.chainId,
     txHash: transfer.txHash,
@@ -500,7 +547,10 @@ function TransferCard({
 
   if (transfer.ledgerEntryId && transfer.category) {
     return (
-      <article className="rounded-lg border border-emerald-600/20 bg-card px-4 py-3 shadow-sm">
+      <article
+        id={`transfer-${transfer.transferId}`}
+        className="relative scroll-mt-6 rounded-lg border border-emerald-600/20 bg-card px-4 py-3 shadow-sm"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -509,7 +559,7 @@ function TransferCard({
                 Classified
               </span>
               <span className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
-                {getDirectionLabel(transfer.direction)}
+                {isSwap ? "Swap" : getDirectionLabel(transfer.direction)}
               </span>
               <span className="text-xs font-medium text-muted-foreground">
                 {getCategoryLabel(transfer.category)}
@@ -563,11 +613,15 @@ function TransferCard({
               <span>
                 Counterparty:{" "}
                 <span className="font-mono text-foreground">
-                  {counterpartyLabel ? `${counterpartyLabel} ` : ""}
-                  {formatAddress(counterpartyAddress)}
+                  {isSwap
+                    ? "Asset swap"
+                    : `${counterpartyLabel ? `${counterpartyLabel} ` : ""}${formatAddress(
+                        counterpartyAddress,
+                      )}`}
                 </span>
               </span>
               <ProposalInline proposal={transfer.daoProposal} />
+              {isSwap ? <SwapDetailLine detail={swapDetail} /> : null}
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -590,7 +644,7 @@ function TransferCard({
           </div>
         </div>
         <details className="group mt-3 border-t border-border pt-3">
-          <summary className="inline-flex h-8 cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground marker:hidden">
+          <summary className="inline-flex h-8 cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground marker:hidden group-open:hidden">
             <Pencil className="size-3" aria-hidden="true" />
             Edit
           </summary>
@@ -600,6 +654,7 @@ function TransferCard({
               counterpartyLabel={counterpartyLabel}
               defaultCategory={defaultCategory}
               isTreasuryCounterparty={isTreasuryCounterparty}
+              isSwap={isSwap}
               options={options}
               quarter={quarter}
               transfer={transfer}
@@ -612,12 +667,15 @@ function TransferCard({
   }
 
   return (
-    <article className="rounded-lg border border-border bg-card p-5 shadow-sm">
+    <article
+      id={`transfer-${transfer.transferId}`}
+      className="relative scroll-mt-6 rounded-lg border border-border bg-card p-5 shadow-sm"
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
-              {getDirectionLabel(transfer.direction)}
+              {isSwap ? "Swap" : getDirectionLabel(transfer.direction)}
             </span>
             {transfer.ledgerEntryId ? (
               <span className="inline-flex items-center gap-1 rounded-md border border-emerald-600/20 bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-800">
@@ -644,11 +702,17 @@ function TransferCard({
           </p>
         </div>
         <div className="text-right text-sm">
-          {counterpartyLabel ? (
+          {isSwap ? (
+            <p className="font-medium">Asset swap</p>
+          ) : counterpartyLabel ? (
             <p className="font-medium">{counterpartyLabel}</p>
           ) : null}
-          <p className="font-mono">{formatAddress(counterpartyAddress)}</p>
-          <p className="mt-1 text-xs text-muted-foreground">Counterparty</p>
+          {isSwap ? null : (
+            <p className="font-mono">{formatAddress(counterpartyAddress)}</p>
+          )}
+          <p className="mt-1 text-xs text-muted-foreground">
+            {isSwap ? "Transaction type" : "Counterparty"}
+          </p>
         </div>
       </div>
 
@@ -689,12 +753,19 @@ function TransferCard({
 
       <ProposalContext proposal={transfer.daoProposal} />
 
+      {isSwap ? (
+        <div className="mt-5 rounded-md border border-border bg-background/60 p-3 text-sm text-muted-foreground">
+          <SwapDetailLine detail={swapDetail} />
+        </div>
+      ) : null}
+
       <div className="mt-5 border-t border-border pt-5">
         <ClassificationForm
           counterpartyAddress={counterpartyAddress}
           counterpartyLabel={counterpartyLabel}
           defaultCategory={defaultCategory}
           isTreasuryCounterparty={isTreasuryCounterparty}
+          isSwap={isSwap}
           options={options}
           quarter={quarter}
           transfer={transfer}
@@ -728,16 +799,33 @@ function ManualLedgerEntryCard({
   const linkedRip = options.rips.find((rip) => rip.id === entry.ripId);
   const sourceLabel =
     entry.source === "bank_csv" ? "Bank CSV" : "Manual Entry";
+  const isClassified = entry.category !== "uncategorized";
+  const canAddProviderExpense =
+    quarter.status !== "published" &&
+    entry.source === "bank_csv" &&
+    entry.category === "treasury_transfer";
+  const providers = options.entities.filter((entity) => entity.type === "provider");
 
   return (
-    <article className="rounded-lg border border-emerald-600/20 bg-card px-4 py-3 shadow-sm">
+    <article
+      id={`ledger-entry-${entry.id}`}
+      className={`relative rounded-lg border bg-card px-4 py-3 shadow-sm ${
+        isClassified ? "border-emerald-600/20" : "border-primary/20"
+      }`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-600/20 bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-800">
-              <BadgeCheck className="size-3" aria-hidden="true" />
-              Classified
-            </span>
+            {isClassified ? (
+              <span className="inline-flex items-center gap-1 rounded-md border border-emerald-600/20 bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-800">
+                <BadgeCheck className="size-3" aria-hidden="true" />
+                Classified
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-md border border-primary/20 bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                Needs classification
+              </span>
+            )}
             <span className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
               {sourceLabel}
             </span>
@@ -819,8 +907,8 @@ function ManualLedgerEntryCard({
         </div>
       </div>
       {quarter.status !== "published" ? (
-        <details className="mt-4 border-t border-border pt-4">
-          <summary className="inline-flex h-9 cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:text-foreground">
+        <details className="group mt-4 border-t border-border pt-4">
+          <summary className="inline-flex h-9 cursor-pointer list-none items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium text-muted-foreground shadow-sm transition-colors hover:text-foreground group-open:hidden">
             <Pencil className="size-4" aria-hidden="true" />
             Edit
           </summary>
@@ -831,66 +919,18 @@ function ManualLedgerEntryCard({
           />
         </details>
       ) : null}
+      {canAddProviderExpense ? (
+        <ManualProviderExpenseButton
+          defaultDate={getDateInputValue(entry.executedAt)}
+          defaultOccurredAt={entry.executedAt}
+          providers={providers}
+          quarterId={quarter.id}
+          sourceChainId={entry.chainId}
+          sourceTransferId={entry.id}
+          sourceTxHash={entry.txHash}
+        />
+      ) : null}
     </article>
-  );
-}
-
-function LedgerEntryEditForm({
-  entry,
-  options,
-  quarterId,
-}: {
-  entry: ManualLedgerEntryClassificationView;
-  options: ClassificationOptions;
-  quarterId: string;
-}) {
-  return (
-    <form
-      action={updateLedgerEntryClassification}
-      className="mt-4 grid gap-4 text-sm md:grid-cols-2"
-    >
-      <input type="hidden" name="quarterId" value={quarterId} />
-      <input type="hidden" name="ledgerEntryId" value={entry.id} />
-      <Field label="Category">
-        <CategorySelect defaultValue={entry.category} />
-      </Field>
-      <Field label="USD Amount">
-        <input
-          name="usdAmount"
-          defaultValue={formatUsdAmount(entry.usdAmount)}
-          inputMode="decimal"
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-          required
-        />
-      </Field>
-      <Field label="Counterparty">
-        <EntitySelect
-          defaultValue={entry.counterpartyEntityId}
-          entities={options.entities}
-        />
-      </Field>
-      <Field label="Raid">
-        <RaidSelect defaultValue={entry.raidId} raids={options.raids} />
-      </Field>
-      <Field label="RIP">
-        <RipSelect defaultValue={entry.ripId} rips={options.rips} />
-      </Field>
-      <label className="grid gap-2 text-sm font-medium md:col-span-2">
-        <span className="type-label-sm text-muted-foreground">Notes</span>
-        <textarea
-          name="notes"
-          defaultValue={entry.notes ?? ""}
-          rows={3}
-          className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-        />
-      </label>
-      <div className="md:col-span-2">
-        <Button type="submit">
-          <Save data-icon="inline-start" />
-          Save Classification
-        </Button>
-      </div>
-    </form>
   );
 }
 
@@ -972,6 +1012,30 @@ export default async function QuarterTransactionsPage({
   });
   const syncComplete =
     workflowSteps.find((step) => step.key === "sync")?.status === "complete";
+  const reviewItems = [
+    ...manualEntries.map(
+      (entry): QuarterReviewItem => ({
+        entry,
+        type: "ledger",
+      }),
+    ),
+    ...transfers.map(
+      (transfer): QuarterReviewItem => ({
+        transfer,
+        type: "transfer",
+      }),
+    ),
+  ].sort(
+    (left, right) =>
+      new Date(getReviewItemTime(left)).getTime() -
+      new Date(getReviewItemTime(right)).getTime(),
+  );
+  const swapTransactionKeys = getSwapTransactionKeys(transfers);
+  const swapDetailsByGroupKey = await getSwapDetailsByGroupKey(
+    transfers.filter((transfer) =>
+      swapTransactionKeys.has(getTransferGroupKey(transfer)),
+    ),
+  );
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -984,6 +1048,7 @@ export default async function QuarterTransactionsPage({
         syncImportedCount={syncImportedCount}
         syncStatus={toastSyncStatus}
       />
+      <AppHeader initialSession={session} />
       <section className="container-custom py-8 md:py-10">
         <div className="mb-6 grid gap-5">
           <div>
@@ -1063,38 +1128,36 @@ export default async function QuarterTransactionsPage({
         ) : null}
 
         <section className="grid gap-4">
-          {manualEntries.length > 0 ? (
-            <div className="grid gap-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold">Ledger Entries</h2>
-                <span className="type-label-sm text-muted-foreground">
-                  {manualEntries.length} entries
-                </span>
-              </div>
-              {manualEntries.map((entry) => (
+          {reviewItems.length > 0 ? (
+            reviewItems.map((item) =>
+              item.type === "ledger" ? (
                 <ManualLedgerEntryCard
-                  key={entry.id}
-                  entry={entry}
+                  key={`ledger:${item.entry.id}`}
+                  entry={item.entry}
                   options={options}
                   quarter={quarter}
                 />
-              ))}
-            </div>
-          ) : null}
-          {transfers.length > 0 ? (
-            transfers.map((transfer) => (
-              <TransferCard
-                key={transfer.transferId}
-                options={options}
-                quarter={quarter}
-                transfer={transfer}
-              />
-            ))
-          ) : manualEntries.length === 0 ? (
+              ) : (
+                <TransferCard
+                  key={`transfer:${item.transfer.transferId}`}
+                  isSwap={swapTransactionKeys.has(
+                    getTransferGroupKey(item.transfer),
+                  )}
+                  options={options}
+                  quarter={quarter}
+                  swapDetail={
+                    swapDetailsByGroupKey.get(getTransferGroupKey(item.transfer)) ??
+                    null
+                  }
+                  transfer={item.transfer}
+                />
+              ),
+            )
+          ) : (
             <div className="rounded-lg border border-dashed border-border bg-card p-8 text-sm text-muted-foreground">
-              No imported treasury transfers found for this quarter.
+              No treasury, bank, or manual activity found for this quarter.
             </div>
-          ) : null}
+          )}
         </section>
       </section>
     </main>

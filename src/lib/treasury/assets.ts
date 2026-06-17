@@ -9,6 +9,7 @@ export type TrackedTreasuryAsset = {
   decimals: number;
   tokenAddress: Address | null;
   stableUsd: boolean;
+  coingeckoId?: string;
 };
 
 export const GNOSIS_TREASURY_ASSETS = [
@@ -39,6 +40,7 @@ export const GNOSIS_TREASURY_ASSETS = [
     decimals: 18,
     tokenAddress: "0x6A023CCd1ff6F2045C3309768eAd9E68F978f6e1",
     stableUsd: false,
+    coingeckoId: "weth",
   },
 ] as const satisfies readonly TrackedTreasuryAsset[];
 
@@ -61,6 +63,15 @@ export const OPERATOR_ERC20_ASSETS_BY_CHAIN: Record<
       decimals: 18,
       tokenAddress: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
       stableUsd: false,
+      coingeckoId: "weth",
+    },
+    {
+      symbol: "LPT",
+      name: "Livepeer Protocol Token",
+      decimals: 18,
+      tokenAddress: "0x58b6A8A3302369DAEc383334672404Ee733aB239",
+      stableUsd: false,
+      coingeckoId: "livepeer",
     },
   ],
   [base.id]: [
@@ -77,6 +88,7 @@ export const OPERATOR_ERC20_ASSETS_BY_CHAIN: Record<
       decimals: 18,
       tokenAddress: "0x4200000000000000000000000000000000000006",
       stableUsd: false,
+      coingeckoId: "weth",
     },
   ],
 } as const satisfies Record<number, readonly TrackedTreasuryAsset[]>;

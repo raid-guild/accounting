@@ -4,7 +4,7 @@ import { and, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import { ledgerEntries } from "@/db/schema";
-import type { RaidView } from "@/lib/core-entities";
+import type { CoreEntityView, RaidView } from "@/lib/core-entities";
 
 type RaidAccountingStatus =
   | "fully_paid"
@@ -21,6 +21,12 @@ type RaidLedgerTotals = {
   raidId: string | null;
   revenueUsd: string;
   spoilsUsd: string;
+  subcontractorPayoutUsd: string;
+};
+
+type SubcontractorLedgerTotals = {
+  raidCount: string;
+  subcontractorId: string | null;
   subcontractorPayoutUsd: string;
 };
 
@@ -58,9 +64,18 @@ export type ClientRevenueSummary = {
   subcontractorPayoutCents: bigint;
 };
 
+export type SubcontractorAccountingSummary = {
+  isArchived: boolean;
+  raidCount: number;
+  subcontractorId: string;
+  subcontractorName: string;
+  subcontractorPayoutCents: bigint;
+};
+
 export type RaidAccountingOverview = {
   clients: ClientRevenueSummary[];
   raids: RaidAccountingSummary[];
+  subcontractors: SubcontractorAccountingSummary[];
 };
 
 function parseUsdCents(value: string) {
@@ -143,6 +158,19 @@ function sortByRevenueThenName<
   );
 }
 
+function sortByPayoutThenName(
+  left: SubcontractorAccountingSummary,
+  right: SubcontractorAccountingSummary,
+) {
+  if (left.subcontractorPayoutCents !== right.subcontractorPayoutCents) {
+    return left.subcontractorPayoutCents > right.subcontractorPayoutCents
+      ? -1
+      : 1;
+  }
+
+  return left.subcontractorName.localeCompare(right.subcontractorName);
+}
+
 export function formatAccountingCurrency(cents: bigint) {
   const isNegative = cents < ZERO;
   const absolute = isNegative ? -cents : cents;
@@ -153,6 +181,12 @@ export function formatAccountingCurrency(cents: bigint) {
     .padStart(2, "0")}`;
 
   return `${isNegative ? "-" : ""}$${formatted}`;
+}
+
+function asCount(value: string) {
+  const count = Number(value);
+
+  return Number.isFinite(count) ? count : 0;
 }
 
 async function listRaidLedgerTotals(): Promise<RaidLedgerTotals[]> {
@@ -179,12 +213,55 @@ async function listRaidLedgerTotals(): Promise<RaidLedgerTotals[]> {
     .groupBy(ledgerEntries.raidId);
 }
 
+async function listSubcontractorLedgerTotals(): Promise<
+  SubcontractorLedgerTotals[]
+> {
+  const db = getDb();
+
+  return db
+    .select({
+      raidCount: sql<string>`count(distinct ${ledgerEntries.raidId})`,
+      subcontractorId: ledgerEntries.counterpartyEntityId,
+      subcontractorPayoutUsd: sql<string>`coalesce(sum(${ledgerEntries.usdAmount}), 0)`,
+    })
+    .from(ledgerEntries)
+    .where(
+      and(
+        isNotNull(ledgerEntries.counterpartyEntityId),
+        inArray(ledgerEntries.category, ["subcontractor_payout"]),
+      ),
+    )
+    .groupBy(ledgerEntries.counterpartyEntityId);
+}
+
 export async function getRaidAccountingOverview(
   raids: RaidView[],
+  subcontractors: CoreEntityView[],
 ): Promise<RaidAccountingOverview> {
-  const ledgerRows = await listRaidLedgerTotals();
+  const [ledgerRows, subcontractorLedgerRows] = await Promise.all([
+    listRaidLedgerTotals(),
+    listSubcontractorLedgerTotals(),
+  ]);
   const raidSummaries = new Map<string, RaidAccountingSummary>();
   const raidsById = new Map(raids.map((raid) => [raid.id, raid]));
+  const subcontractorSummaries = new Map<
+    string,
+    SubcontractorAccountingSummary
+  >();
+
+  for (const subcontractor of subcontractors) {
+    if (subcontractor.archivedAt) {
+      continue;
+    }
+
+    subcontractorSummaries.set(subcontractor.id, {
+      isArchived: false,
+      raidCount: 0,
+      subcontractorId: subcontractor.id,
+      subcontractorName: subcontractor.name,
+      subcontractorPayoutCents: ZERO,
+    });
+  }
 
   for (const raid of raids) {
     if (raid.archivedAt) {
@@ -303,8 +380,33 @@ export async function getRaidAccountingOverview(
     clientSummaries.set(summary.clientId, clientSummary);
   }
 
+  for (const row of subcontractorLedgerRows) {
+    if (!row.subcontractorId) {
+      continue;
+    }
+
+    const subcontractor = subcontractors.find(
+      (entity) => entity.id === row.subcontractorId,
+    );
+
+    if (!subcontractor) {
+      continue;
+    }
+
+    subcontractorSummaries.set(row.subcontractorId, {
+      isArchived: Boolean(subcontractor.archivedAt),
+      raidCount: asCount(row.raidCount),
+      subcontractorId: subcontractor.id,
+      subcontractorName: subcontractor.name,
+      subcontractorPayoutCents: parseUsdCents(row.subcontractorPayoutUsd),
+    });
+  }
+
   return {
     clients: Array.from(clientSummaries.values()).sort(sortByRevenueThenName),
     raids: raidAccounting.sort(sortByRevenueThenName),
+    subcontractors: Array.from(subcontractorSummaries.values()).sort(
+      sortByPayoutThenName,
+    ),
   };
 }

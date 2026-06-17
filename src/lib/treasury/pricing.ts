@@ -1,6 +1,10 @@
 import "server-only";
 
 const STABLE_ASSET_SYMBOLS = new Set(["USDC", "XDAI", "WXDAI"]);
+const COINGECKO_ASSET_IDS_BY_SYMBOL = new Map([
+  ["LPT", "livepeer"],
+  ["WETH", "ethereum"],
+]);
 
 function normalizeAssetSymbol(assetSymbol: string) {
   return assetSymbol.trim().toUpperCase();
@@ -24,10 +28,16 @@ function isPositiveFinite(value: number) {
   return Number.isFinite(value) && value > 0;
 }
 
-async function fetchHistoricalEthUsdPrice(executedAt: Date) {
+async function fetchHistoricalCoinGeckoUsdPrice({
+  coinId,
+  executedAt,
+}: {
+  coinId: string;
+  executedAt: Date;
+}) {
   const timestampSeconds = Math.floor(executedAt.getTime() / 1000);
   const url = new URL(
-    "https://api.coingecko.com/api/v3/coins/ethereum/market_chart/range",
+    `https://api.coingecko.com/api/v3/coins/${coinId}/market_chart/range`,
   );
 
   url.searchParams.set("vs_currency", "usd");
@@ -64,7 +74,7 @@ async function fetchHistoricalEthUsdPrice(executedAt: Date) {
   }
 
   if (!nearest) {
-    throw new Error("CoinGecko historical ETH price unavailable");
+    throw new Error("CoinGecko historical price unavailable");
   }
 
   return nearest[1];
@@ -95,8 +105,13 @@ export async function getHistoricalUsdPricing({
     };
   }
 
-  if (normalizedAssetSymbol === "WETH") {
-    const price = await fetchHistoricalEthUsdPrice(executedAt);
+  const coinId = COINGECKO_ASSET_IDS_BY_SYMBOL.get(normalizedAssetSymbol);
+
+  if (coinId) {
+    const price = await fetchHistoricalCoinGeckoUsdPrice({
+      coinId,
+      executedAt,
+    });
 
     return {
       priceSource: "coingecko",

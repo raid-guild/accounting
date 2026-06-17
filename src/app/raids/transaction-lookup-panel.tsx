@@ -4,13 +4,15 @@ import {
   AlertTriangle,
   ArrowRight,
   ExternalLink,
+  RefreshCw,
   Search,
   Save,
   Trash2,
 } from "lucide-react";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 
 import {
+  fetchManualTransferUsdPrice,
   lookupRaidTransaction,
   removeManualRaidLedgerEntry,
   saveManualRaidPayout,
@@ -61,6 +63,10 @@ const CLASSIFICATION_COPY: Record<
 
 function formatAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function normalizeAddress(address: string) {
+  return address.toLowerCase();
 }
 
 function formatTimestamp(value: string) {
@@ -306,9 +312,12 @@ function ManualEntrySaveForm({
     INITIAL_STATE,
   );
   const [selectedTransferIndex, setSelectedTransferIndex] = useState("0");
+  const [selectedSubcontractorId, setSelectedSubcontractorId] = useState("");
   const [usdAmount, setUsdAmount] = useState(
     result.transfers[0]?.usdAmount ?? "",
   );
+  const [priceMessage, setPriceMessage] = useState<string | null>(null);
+  const [pricePending, startPriceTransition] = useTransition();
   const saveState = kind === "payout" ? payoutState : revenueState;
   const saveAction = kind === "payout" ? payoutAction : revenueAction;
   const savePending = kind === "payout" ? payoutPending : revenuePending;
@@ -316,6 +325,16 @@ function ManualEntrySaveForm({
   const hasTransfers = result.transfers.length > 0;
   const hasRaids = raids.length > 0;
   const hasSubcontractors = subcontractors.length > 0;
+  const matchedSubcontractor =
+    kind === "payout" && selectedTransfer
+      ? subcontractors.find((subcontractor) =>
+          subcontractor.addresses.some(
+            (address) =>
+              normalizeAddress(address.address) ===
+              normalizeAddress(selectedTransfer.toAddress),
+          ),
+        )
+      : null;
 
   useEffect(() => {
     if (saveState.savedEntry) {
@@ -323,6 +342,30 @@ function ManualEntrySaveForm({
       onSaved(saveState.savedEntry);
     }
   }, [onSaved, saveState.savedEntry, showToast]);
+
+  function fetchSelectedTransferPrice() {
+    setPriceMessage(null);
+
+    startPriceTransition(async () => {
+      const pricing = await fetchManualTransferUsdPrice({
+        chainId: result.chainId,
+        transferIndex: selectedTransferIndex,
+        txHash: result.txHash,
+      });
+
+      if (pricing.error || !pricing.usdAmount) {
+        setPriceMessage(pricing.error ?? "Historical price unavailable.");
+        return;
+      }
+
+      setUsdAmount(pricing.usdAmount);
+      setPriceMessage(
+        pricing.priceSource === "stable_1_to_1"
+          ? "Filled from 1:1 stablecoin pricing."
+          : `Fetched historical price: $${pricing.priceUsd}.`,
+      );
+    });
+  }
 
   return (
     <form
@@ -344,7 +387,9 @@ function ManualEntrySaveForm({
               const nextTransfer = result.transfers[Number(nextIndex)];
 
               setSelectedTransferIndex(nextIndex);
+              setSelectedSubcontractorId("");
               setUsdAmount(nextTransfer?.usdAmount ?? "");
+              setPriceMessage(null);
             }}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             disabled={!hasTransfers}
@@ -382,10 +427,19 @@ function ManualEntrySaveForm({
           <span className="type-label-sm text-muted-foreground">
             Subcontractor
           </span>
+          {matchedSubcontractor ? (
+            <input
+              type="hidden"
+              name="subcontractorId"
+              value={matchedSubcontractor.id}
+            />
+          ) : null}
           <select
             name="subcontractorId"
+            value={matchedSubcontractor?.id ?? selectedSubcontractorId}
+            onChange={(event) => setSelectedSubcontractorId(event.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-            disabled={!hasSubcontractors}
+            disabled={!hasSubcontractors || Boolean(matchedSubcontractor)}
             required
           >
             <option value="">
@@ -399,23 +453,53 @@ function ManualEntrySaveForm({
               </option>
             ))}
           </select>
+          {matchedSubcontractor ? (
+            <p className="text-xs font-normal text-muted-foreground">
+              Matched from recipient address{" "}
+              {formatAddress(selectedTransfer.toAddress)}.
+            </p>
+          ) : null}
         </label>
       ) : null}
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="grid gap-2 text-sm font-medium">
+        <div className="grid gap-2 text-sm font-medium">
           <span className="type-label-sm text-muted-foreground">
             USD Amount
           </span>
-          <input
-            name="usdAmount"
-            value={usdAmount}
-            onChange={(event) => setUsdAmount(event.target.value)}
-            inputMode="decimal"
-            placeholder="0.00"
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
-            required
-          />
-        </label>
+          <div className="flex flex-wrap gap-2">
+            <input
+              name="usdAmount"
+              value={usdAmount}
+              onChange={(event) => {
+                setUsdAmount(event.target.value);
+                setPriceMessage(null);
+              }}
+              inputMode="decimal"
+              placeholder="0.00"
+              className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+              required
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={fetchSelectedTransferPrice}
+              disabled={!selectedTransfer || pricePending}
+              aria-busy={pricePending}
+            >
+              <RefreshCw
+                data-icon="inline-start"
+                className={pricePending ? "animate-spin" : ""}
+              />
+              {pricePending ? "Fetching" : "Fetch Price"}
+            </Button>
+          </div>
+          {priceMessage ? (
+            <p className="text-xs font-normal text-muted-foreground">
+              {priceMessage}
+            </p>
+          ) : null}
+        </div>
         <div className="rounded-md border border-border bg-card p-3 text-sm">
           <p className="type-label-sm text-muted-foreground">
             Selected Receipt

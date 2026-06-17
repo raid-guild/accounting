@@ -1,4 +1,4 @@
-export type TreasuryAssetSymbol = "USDC" | "xDAI" | "wxDAI" | "wETH";
+export type TreasuryAssetSymbol = "LPT" | "USDC" | "xDAI" | "wxDAI" | "wETH";
 
 export type TreasurySnapshotStatus =
   | "pending_live_sync"

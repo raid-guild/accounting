@@ -243,7 +243,10 @@ export async function createRaid(formData: FormData) {
 }
 
 export async function updateRaid(formData: FormData) {
+  const id = getString(formData, "id");
+
   await updateRaidForAccess(formData);
+  redirect(id ? `/raids?raid=${id}` : "/raids");
 }
 
 export async function archiveRaid(formData: FormData) {

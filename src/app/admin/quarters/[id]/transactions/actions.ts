@@ -2,13 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import {
   ledgerCategoryEnum,
   ledgerEntries,
+  entities,
   quarters,
+  rips,
   treasuryAccounts,
   treasuryTransactionTransfers,
 } from "@/db/schema";
@@ -23,6 +25,11 @@ import {
 } from "@/lib/bank-csv";
 import { syncDaoProposalsForPeriod } from "@/lib/dao-proposals";
 import { encryptField } from "@/lib/encryption";
+import {
+  CoreEntityValidationError,
+  createEntityForAccess,
+  createRaidForAccess,
+} from "@/lib/core-entity-mutations";
 import { syncMembershipActivitiesForPeriod } from "@/lib/membership-activity";
 import {
   assertClassificationEntityMatchesCategory,
@@ -32,6 +39,7 @@ import {
   getTreasuryAccountLabels,
   type LedgerCategory,
 } from "@/lib/transaction-classification";
+import { getSwapTransactionKeys } from "@/lib/treasury/swap-detection";
 import {
   getQuarterSyncStatus,
   markQuarterSyncStepFailed,
@@ -178,6 +186,157 @@ export type BankCsvImportState = {
   preview: BankCsvPreviewResult | null;
 };
 
+export type InlineCreateState = {
+  message: string;
+  success: boolean;
+};
+
+export type ManualProviderExpenseState = {
+  error: string | null;
+  saved: boolean;
+};
+
+const INLINE_CREATE_INITIAL_ERROR = "Could not add this record";
+
+function getAddressErrorMessage(error: unknown) {
+  if (error instanceof CoreEntityValidationError) {
+    if (error.code === "duplicate_address") {
+      return "That address is already assigned to an entity.";
+    }
+
+    if (error.code === "invalid_address") {
+      return "Enter a valid EVM address.";
+    }
+
+    if (error.code === "invalid_chain") {
+      return "Chain ID must be a positive whole number.";
+    }
+
+    if (error.code === "missing_address") {
+      return "Address is required.";
+    }
+  }
+
+  return null;
+}
+
+function normalizeRipUrl(value: string) {
+  try {
+    const url = new URL(value);
+
+    if (url.protocol !== "https:" && url.protocol !== "http:") {
+      return null;
+    }
+
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function revalidateInlineCreatePaths(formData: FormData) {
+  const quarterId = getString(formData, "quarterId");
+
+  if (quarterId) {
+    revalidatePath(getTransactionsPath(quarterId));
+  }
+}
+
+export async function createClassificationProvider(
+  _previousState: InlineCreateState,
+  formData: FormData,
+): Promise<InlineCreateState> {
+  try {
+    await createEntityForAccess(formData, "provider");
+    revalidateInlineCreatePaths(formData);
+    return { message: "", success: true };
+  } catch (error) {
+    return {
+      message: getAddressErrorMessage(error) ?? INLINE_CREATE_INITIAL_ERROR,
+      success: false,
+    };
+  }
+}
+
+export async function createClassificationSubcontractor(
+  _previousState: InlineCreateState,
+  formData: FormData,
+): Promise<InlineCreateState> {
+  try {
+    formData.set("type", "subcontractor");
+    await createEntityForAccess(formData, "raid-related");
+    revalidateInlineCreatePaths(formData);
+    return { message: "", success: true };
+  } catch (error) {
+    return {
+      message: getAddressErrorMessage(error) ?? INLINE_CREATE_INITIAL_ERROR,
+      success: false,
+    };
+  }
+}
+
+export async function createClassificationRaid(
+  _previousState: InlineCreateState,
+  formData: FormData,
+): Promise<InlineCreateState> {
+  try {
+    await createRaidForAccess(formData);
+    revalidateInlineCreatePaths(formData);
+    return { message: "", success: true };
+  } catch (error) {
+    return {
+      message: error instanceof Error ? error.message : INLINE_CREATE_INITIAL_ERROR,
+      success: false,
+    };
+  }
+}
+
+export async function createClassificationRip(
+  _previousState: InlineCreateState,
+  formData: FormData,
+): Promise<InlineCreateState> {
+  try {
+    const session = await getAuthSession();
+    const title = getString(formData, "title");
+    const url = normalizeRipUrl(getString(formData, "url"));
+
+    if (!session.address || !session.permissions?.canAccess) {
+      throw new Error("Member access required");
+    }
+
+    if (!title || !url) {
+      throw new Error("Add a title and a valid RIP URL.");
+    }
+
+    const [rip] = await getDb()
+      .insert(rips)
+      .values({
+        createdByWalletAddress: session.address,
+        titleEncrypted: encryptField(title),
+        urlEncrypted: encryptField(url),
+      })
+      .returning();
+
+    await writeAuditEvent({
+      action: "create",
+      actorWalletAddress: session.address,
+      metadata: {},
+      subjectId: rip.id,
+      subjectTable: "rips",
+      summary: "Created RIP",
+    });
+
+    revalidatePath("/rips");
+    revalidateInlineCreatePaths(formData);
+    return { message: "", success: true };
+  } catch (error) {
+    return {
+      message: error instanceof Error ? error.message : INLINE_CREATE_INITIAL_ERROR,
+      success: false,
+    };
+  }
+}
+
 const BANK_CSV_INITIAL_ERROR = "Bank CSV import failed";
 
 function getBankCsvErrorMessage(error: unknown) {
@@ -198,6 +357,86 @@ function getBankCsvErrorMessage(error: unknown) {
   }
 
   return BANK_CSV_INITIAL_ERROR;
+}
+
+function getManualProviderExpenseErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    if (
+      error.message === "Active provider is required" ||
+      error.message === "Date must be within this quarter" ||
+      error.message === "Expense date is required" ||
+      error.message === "Provider is required" ||
+      error.message === "Quarter not found" ||
+      error.message === "USD amount must be greater than zero" ||
+      error.message === "USD amount must be a positive dollar amount" ||
+      error.message.startsWith("Published quarters")
+    ) {
+      return error.message;
+    }
+  }
+
+  return "Provider expense could not be saved.";
+}
+
+function getExpenseDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error("Expense date is required");
+  }
+
+  return new Date(`${value}T12:00:00.000Z`);
+}
+
+function getManualExpenseOccurredAt({
+  defaultOccurredAt,
+  occurredOn,
+}: {
+  defaultOccurredAt: string;
+  occurredOn: string;
+}) {
+  if (defaultOccurredAt) {
+    const parsedDefault = new Date(defaultOccurredAt);
+
+    if (
+      Number.isFinite(parsedDefault.getTime()) &&
+      parsedDefault.toISOString().slice(0, 10) === occurredOn
+    ) {
+      return new Date(parsedDefault.getTime() + 5_000);
+    }
+  }
+
+  return getExpenseDate(occurredOn);
+}
+
+function getOptionalPositiveInteger(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  const number = Number(value);
+
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+
+function getQuarterSyncPeriod(quarter: typeof quarters.$inferSelect) {
+  const startsAt = new Date(`${quarter.startsOn}T00:00:00.000Z`);
+  const endsAtExclusive = new Date(`${quarter.endsOn}T00:00:00.000Z`);
+  endsAtExclusive.setUTCDate(endsAtExclusive.getUTCDate() + 1);
+
+  return { endsAtExclusive, startsAt };
+}
+
+function assertDateInQuarter({
+  occurredAt,
+  quarter,
+}: {
+  occurredAt: Date;
+  quarter: typeof quarters.$inferSelect;
+}) {
+  const { endsAtExclusive, startsAt } = getQuarterSyncPeriod(quarter);
+
+  if (occurredAt < startsAt || occurredAt >= endsAtExclusive) {
+    throw new Error("Date must be within this quarter");
+  }
 }
 
 export async function previewBankCsvImport(
@@ -371,6 +610,105 @@ export async function confirmBankCsvImport(
   }
 }
 
+export async function createManualProviderExpense(
+  _previousState: ManualProviderExpenseState,
+  formData: FormData,
+): Promise<ManualProviderExpenseState> {
+  try {
+    const session = await requireAdminSession();
+    const quarterId = getString(formData, "quarterId");
+    const providerId = getString(formData, "providerId");
+    const notes = getString(formData, "notes");
+    const assetSymbol = getString(formData, "assetSymbol") || "USD";
+    const usdAmount = getUsdAmount(getString(formData, "usdAmount"));
+    const occurredOn = getString(formData, "occurredOn");
+    const occurredAt = getManualExpenseOccurredAt({
+      defaultOccurredAt: getString(formData, "defaultOccurredAt"),
+      occurredOn,
+    });
+    const sourceChainId = getOptionalPositiveInteger(
+      getString(formData, "sourceChainId"),
+    );
+    const sourceTransferId = getOptionalString(formData, "sourceTransferId");
+    const sourceTxHash = getOptionalString(formData, "sourceTxHash");
+
+    if (!quarterId) {
+      throw new Error("Quarter not found");
+    }
+
+    if (!providerId) {
+      throw new Error("Provider is required");
+    }
+
+    const quarter = await getQuarterById(quarterId);
+    assertQuarterCanAcceptLedgerChanges(quarter);
+    assertDateInQuarter({ occurredAt, quarter });
+
+    const [provider] = await getDb()
+      .select({ id: entities.id })
+      .from(entities)
+      .where(
+        and(
+          eq(entities.id, providerId),
+          eq(entities.type, "provider"),
+          isNull(entities.archivedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!provider) {
+      throw new Error("Active provider is required");
+    }
+
+    const [entry] = await getDb()
+      .insert(ledgerEntries)
+      .values({
+        assetAmount: usdAmount,
+        assetSymbol: assetSymbol.toUpperCase(),
+        category: "provider_expense",
+        chainId: sourceChainId,
+        counterpartyEntityId: provider.id,
+        notesEncrypted: notes ? encryptField(notes) : null,
+        occurredAt,
+        quarterId: quarter.id,
+        source: "manual",
+        sourceExternalId: `manual-provider-expense:${crypto.randomUUID()}`,
+        sourceMetadata: {
+          entryType: "manual_provider_expense",
+          sourceTransferId,
+          sourceTxHash,
+        },
+        txHash: sourceTxHash,
+        usdAmount,
+        verificationStatus: "verified",
+      })
+      .returning();
+
+    await writeAuditEvent({
+      action: "create",
+      actorWalletAddress: session.address,
+      metadata: {
+        providerId: provider.id,
+        quarterId: quarter.id,
+      },
+      quarterId: quarter.id,
+      subjectId: entry.id,
+      subjectTable: "ledger_entries",
+      summary: "Created manual provider expense",
+    });
+
+    revalidatePath("/admin/quarters");
+    revalidatePath(getTransactionsPath(quarter.id));
+
+    return { error: null, saved: true };
+  } catch (error) {
+    return {
+      error: getManualProviderExpenseErrorMessage(error),
+      saved: false,
+    };
+  }
+}
+
 async function getLedgerSourceForTransfer(
   transfer: typeof treasuryTransactionTransfers.$inferSelect,
 ) {
@@ -387,20 +725,51 @@ async function getLedgerSourceForTransfer(
   return account?.type === "operator" ? "operator" : "side_vault";
 }
 
+async function isSwapLikeTransfer(
+  transfer: typeof treasuryTransactionTransfers.$inferSelect,
+) {
+  if (!transfer.treasuryTransactionId) {
+    return false;
+  }
+
+  const rows = await getDb()
+    .select({
+      accountAddress: treasuryTransactionTransfers.accountAddress,
+      assetSymbol: treasuryTransactionTransfers.assetSymbol,
+      chainId: treasuryTransactionTransfers.chainId,
+      direction: treasuryTransactionTransfers.direction,
+      fromAddress: treasuryTransactionTransfers.fromAddress,
+      toAddress: treasuryTransactionTransfers.toAddress,
+      txHash: treasuryTransactionTransfers.txHash,
+    })
+    .from(treasuryTransactionTransfers)
+    .where(
+      and(
+        eq(
+          treasuryTransactionTransfers.treasuryTransactionId,
+          transfer.treasuryTransactionId,
+        ),
+        eq(treasuryTransactionTransfers.chainId, transfer.chainId),
+        sql`lower(${treasuryTransactionTransfers.accountAddress}) = ${transfer.accountAddress.toLowerCase()}`,
+      ),
+    );
+  return getSwapTransactionKeys(rows).size > 0;
+}
+
 function getTransactionsPath(quarterId: string) {
   return `/admin/quarters/${quarterId}/transactions`;
 }
 
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Sync failed";
+function getLedgerEntryAnchor(id: string) {
+  return `ledger-entry-${id}`;
 }
 
-function getQuarterSyncPeriod(quarter: typeof quarters.$inferSelect) {
-  const startsAt = new Date(`${quarter.startsOn}T00:00:00.000Z`);
-  const endsAtExclusive = new Date(`${quarter.endsOn}T00:00:00.000Z`);
-  endsAtExclusive.setUTCDate(endsAtExclusive.getUTCDate() + 1);
+function getTransferAnchor(id: string) {
+  return `transfer-${id}`;
+}
 
-  return { endsAtExclusive, startsAt };
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Sync failed";
 }
 
 export async function syncQuarterTransactions(formData: FormData) {
@@ -698,9 +1067,13 @@ export async function classifyQuarterTransfer(formData: FormData) {
     chainId: transfer.chainId,
     labels: treasuryLabels,
   });
+  const isSwap = await isSwapLikeTransfer(transfer);
 
-  if (treasuryCounterparty) {
+  if (treasuryCounterparty || isSwap) {
     category = "treasury_transfer";
+  }
+
+  if (category === "treasury_transfer") {
     counterpartyEntityId = null;
     raidId = null;
     ripId = null;
@@ -729,8 +1102,14 @@ export async function classifyQuarterTransfer(formData: FormData) {
     if (!ripId) {
       throw new Error("RIP is required for RIP expenses");
     }
+    counterpartyEntityId = null;
+    raidId = null;
   } else {
     ripId = null;
+  }
+
+  if (category === "provider_expense") {
+    raidId = null;
   }
 
   await assertClassificationEntityMatchesCategory({
@@ -814,7 +1193,11 @@ export async function classifyQuarterTransfer(formData: FormData) {
     classifiedId: crypto.randomUUID(),
   });
 
-  redirect(`${getTransactionsPath(quarterId)}?${params.toString()}`);
+  redirect(
+    `${getTransactionsPath(quarterId)}?${params.toString()}#${getTransferAnchor(
+      transfer.id,
+    )}`,
+  );
 }
 
 export async function updateLedgerEntryClassification(formData: FormData) {
@@ -864,6 +1247,7 @@ export async function updateLedgerEntryClassification(formData: FormData) {
     if (!ripId) {
       throw new Error("RIP is required for RIP expenses");
     }
+    counterpartyEntityId = null;
     raidId = null;
   } else {
     ripId = null;
@@ -874,6 +1258,10 @@ export async function updateLedgerEntryClassification(formData: FormData) {
       throw new Error("Raid is required for spoils");
     }
     counterpartyEntityId = null;
+  }
+
+  if (category === "provider_expense") {
+    raidId = null;
   }
 
   await assertClassificationEntityMatchesCategory({
@@ -920,5 +1308,9 @@ export async function updateLedgerEntryClassification(formData: FormData) {
     classifiedId: crypto.randomUUID(),
   });
 
-  redirect(`${getTransactionsPath(quarterId)}?${params.toString()}`);
+  redirect(
+    `${getTransactionsPath(quarterId)}?${params.toString()}#${getLedgerEntryAnchor(
+      entry.id,
+    )}`,
+  );
 }
