@@ -182,10 +182,12 @@ async function getTrackedAccountSources(): Promise<
 
 function createEmptyAssetBalance(
   asset: TrackedTreasuryAsset,
+  chainId: number,
 ): TreasuryAssetBalance {
   return {
     symbol: asset.symbol,
     name: asset.name,
+    chainIds: [chainId],
     rawAmount: "0",
     balance: "0.00",
     usdValue: "0.00",
@@ -213,7 +215,9 @@ function createEmptyAccountBalance(
     address: account.address,
     chainId: account.chainId,
     totalUsd: "0.00",
-    assets: trackedAssets.map(createEmptyAssetBalance),
+    assets: trackedAssets.map((asset) =>
+      createEmptyAssetBalance(asset, account.chainId),
+    ),
   };
 }
 
@@ -354,10 +358,14 @@ function aggregateAssets(
         ? matchingAssets.find((matchingAsset) => toNumber(matchingAsset.usdPrice))
             ?.usdPrice
         : formatPrice(usdValue / toNumber(balance));
+    const chainIds = [
+      ...new Set(matchingAssets.flatMap((matchingAsset) => matchingAsset.chainIds)),
+    ].sort((left, right) => left - right);
 
     return {
       symbol: asset.symbol,
       name: asset.name,
+      chainIds,
       rawAmount: rawTotal.toString(),
       balance,
       usdValue: formatUsd(usdValue),
@@ -369,10 +377,14 @@ function aggregateAssets(
   return sortAssetsByUsdValue(aggregatedAssets);
 }
 
-function mapCachedAsset(asset: typeof treasuryBalanceAssets.$inferSelect) {
+function mapCachedAsset(
+  asset: typeof treasuryBalanceAssets.$inferSelect,
+  chainId: number,
+) {
   return {
     symbol: asset.symbol as TreasuryAssetSymbol,
     name: asset.name,
+    chainIds: [chainId],
     rawAmount: asset.rawAmount,
     balance: asset.balance,
     usdValue: asset.usdValue,
@@ -422,10 +434,12 @@ async function getLatestCachedAccountSnapshot(
     .from(treasuryBalanceAssets)
     .where(eq(treasuryBalanceAssets.snapshotId, snapshot.id));
   const assetMap = new Map(
-    assets.map((asset) => [asset.symbol, mapCachedAsset(asset)]),
+    assets.map((asset) => [asset.symbol, mapCachedAsset(asset, account.chainId)]),
   );
   const orderedAssets = getTrackedAssetsForAccount(account).map(
-    (asset) => assetMap.get(asset.symbol) ?? createEmptyAssetBalance(asset),
+    (asset) =>
+      assetMap.get(asset.symbol) ??
+      createEmptyAssetBalance(asset, account.chainId),
   );
   const isFailed = snapshot.status === "failed";
   const isStale = isFailed || isSyncedAtStale(snapshot.syncedAt);
@@ -492,11 +506,13 @@ async function getCoinGeckoUsdPrices(coinIds: string[]) {
 
 async function fetchLiveAssetBalances({
   address,
+  chainId,
   client,
   trackedAssets,
   pricePromise,
 }: {
   address: Address;
+  chainId: number;
   client: ReturnType<typeof createPublicClient>;
   trackedAssets: TrackedTreasuryAsset[];
   pricePromise: Promise<Map<string, number>>;
@@ -550,6 +566,7 @@ async function fetchLiveAssetBalances({
     return {
       symbol: asset.symbol,
       name: asset.name,
+      chainIds: [chainId],
       rawAmount: rawAmount.toString(),
       balance,
       usdValue: formatUsd(usdValue),
@@ -576,6 +593,7 @@ async function syncAccountBalanceSnapshot({
     const trackedAssets = getTrackedAssetsForAccount(account);
     const { assets, priceError } = await fetchLiveAssetBalances({
       address: account.address,
+      chainId: account.chainId,
       client,
       trackedAssets,
       pricePromise,

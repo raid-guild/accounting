@@ -8,6 +8,10 @@ import { quarters } from "@/db/schema";
 import { writeAuditEvent } from "@/lib/audit";
 import { canUseAdminAccess, getAuthSession } from "@/lib/auth/session";
 import {
+  getQuarterBalanceValidation,
+  isQuarterBalanceValidationSatisfied,
+} from "@/lib/quarter-balance-validation";
+import {
   getQuarterClassificationSummary,
   getQ1_2026Definition,
   type QuarterStatus,
@@ -15,6 +19,7 @@ import {
 import { getQuarterSyncStatus, isQuarterSyncFresh } from "@/lib/quarter-sync";
 
 const QUARTERS_PATH = "/admin/quarters";
+const REPORTS_PATH = "/reports";
 
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -140,6 +145,7 @@ export async function createQ1ReportingPeriod() {
 
   revalidatePath("/");
   revalidatePath(QUARTERS_PATH);
+  revalidatePath(REPORTS_PATH);
 }
 
 export async function updateQuarterStatus(formData: FormData) {
@@ -180,6 +186,16 @@ export async function updateQuarterStatus(formData: FormData) {
         targetStatus === "published"
           ? "Classify all imported transactions before publishing this quarter"
           : "Classify all imported transactions before marking this quarter ready",
+      );
+    }
+
+    const validation = await getQuarterBalanceValidation(id);
+
+    if (!isQuarterBalanceValidationSatisfied(validation)) {
+      throw new Error(
+        targetStatus === "published"
+          ? "Validate balances before publishing this quarter"
+          : "Validate balances before marking this quarter ready",
       );
     }
   }
@@ -224,4 +240,7 @@ export async function updateQuarterStatus(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath(QUARTERS_PATH);
+  revalidatePath(`/admin/quarters/${id}/transactions`);
+  revalidatePath(REPORTS_PATH);
+  revalidatePath(`/reports/quarters/${id}`);
 }

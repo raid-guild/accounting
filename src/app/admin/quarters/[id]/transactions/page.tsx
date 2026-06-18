@@ -18,8 +18,11 @@ import { Button } from "@/components/ui/button";
 import { BankCsvImportPanel } from "@/app/admin/quarters/[id]/transactions/bank-csv-import-panel";
 import { ClassificationLinkedFields } from "@/app/admin/quarters/[id]/transactions/classification-linked-fields";
 import { ManualProviderExpenseButton } from "@/app/admin/quarters/[id]/transactions/manual-provider-expense-panel";
+import { updateQuarterStatus } from "@/app/admin/quarters/actions";
 import {
+  acknowledgeBalanceVariance,
   classifyQuarterTransfer,
+  runBalanceValidation,
   updateLedgerEntryClassification,
 } from "@/app/admin/quarters/[id]/transactions/actions";
 import { RemoveManualLedgerEntryForm } from "@/app/raids/remove-manual-revenue-form";
@@ -44,6 +47,11 @@ import {
   type QuarterBalanceRow,
   type QuarterAccountBalanceSummary,
 } from "@/lib/quarter-balances";
+import {
+  getQuarterBalanceValidation,
+  getQuarterValidationReadiness,
+  type QuarterBalanceValidation,
+} from "@/lib/quarter-balance-validation";
 import {
   getCategoryLabel,
   IMPORTED_TRANSFER_CLASSIFICATION_CATEGORIES,
@@ -341,6 +349,233 @@ function QuarterBalancesPanel({
             </details>
           );
         })}
+      </div>
+    </section>
+  );
+}
+
+function BalanceValidationPanel({
+  canRun,
+  readinessReason,
+  validation,
+  quarterId,
+  quarterStatus,
+}: {
+  canRun: boolean;
+  readinessReason: string | null;
+  validation: QuarterBalanceValidation | null;
+  quarterId: string;
+  quarterStatus: QuarterSummary["status"];
+}) {
+  const status = validation?.status ?? "not_ready";
+  const statusCopy =
+    status === "validated"
+      ? {
+          label: "Validated",
+          tone: "border-emerald-600/25 bg-emerald-600/10 text-emerald-800",
+        }
+      : status === "acknowledged"
+        ? {
+            label: "Acknowledged",
+            tone: "border-amber-500/30 bg-amber-500/10 text-amber-800",
+          }
+        : status === "needs_review"
+          ? {
+              label: "Needs Review",
+              tone: "border-primary/25 bg-primary/10 text-primary",
+            }
+          : {
+              label: "Not Ready",
+              tone: "border-border bg-background text-muted-foreground",
+            };
+  const topVariances = validation?.details.variances.slice(0, 5) ?? [];
+  const validationSatisfied =
+    validation?.status === "validated" || validation?.status === "acknowledged";
+  const canMarkReady =
+    validationSatisfied &&
+    quarterStatus !== "ready_for_review" &&
+    quarterStatus !== "published";
+
+  return (
+    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="type-label-sm text-muted-foreground">
+            Balance Validation
+          </p>
+          <h2 className="mt-1 text-lg font-semibold">
+            Reconcile ledger activity
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            Compare opening balances plus classified token movement against
+            synced closing balances.
+          </p>
+        </div>
+        <span
+          className={`rounded-md border px-2 py-1 text-xs font-medium ${statusCopy.tone}`}
+        >
+          {statusCopy.label}
+        </span>
+      </div>
+
+      {validation ? (
+        <dl className="mt-5 grid gap-3 sm:grid-cols-4">
+          <div className="rounded-md border border-border bg-background p-3">
+            <dt className="type-label-sm text-muted-foreground">Checked</dt>
+            <dd className="mt-1 text-lg font-semibold">
+              {validation.checkedCount}
+            </dd>
+          </div>
+          <div className="rounded-md border border-border bg-background p-3">
+            <dt className="type-label-sm text-muted-foreground">Variances</dt>
+            <dd className="mt-1 text-lg font-semibold">
+              {validation.varianceCount}
+            </dd>
+          </div>
+          <div className="rounded-md border border-border bg-background p-3">
+            <dt className="type-label-sm text-muted-foreground">Excluded</dt>
+            <dd className="mt-1 text-lg font-semibold">
+              {validation.excludedCount}
+            </dd>
+          </div>
+          <div className="rounded-md border border-border bg-background p-3">
+            <dt className="type-label-sm text-muted-foreground">Variance USD</dt>
+            <dd className="mt-1 text-lg font-semibold">
+              {formatCurrency(validation.totalVarianceUsd)}
+            </dd>
+          </div>
+        </dl>
+      ) : null}
+
+      {topVariances.length > 0 ? (
+        <div className="mt-5 overflow-x-auto rounded-md border border-border">
+          <table className="w-full min-w-[720px] text-left text-xs">
+            <thead className="border-b border-border text-muted-foreground uppercase">
+              <tr>
+                <th className="px-3 py-2 font-medium">Account</th>
+                <th className="px-3 py-2 font-medium">Asset</th>
+                <th className="px-3 py-2 text-right font-medium">Opening</th>
+                <th className="px-3 py-2 text-right font-medium">Movement</th>
+                <th className="px-3 py-2 text-right font-medium">Expected</th>
+                <th className="px-3 py-2 text-right font-medium">Actual</th>
+                <th className="px-3 py-2 text-right font-medium">Difference</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {topVariances.map((variance) => (
+                <tr
+                  key={`${variance.chainId}:${variance.accountAddress}:${variance.assetSymbol}`}
+                >
+                  <td className="px-3 py-2">
+                    <p className="font-medium">{variance.accountName}</p>
+                    <p className="mt-1 font-mono text-muted-foreground">
+                      {formatAddress(variance.accountAddress)}
+                    </p>
+                  </td>
+                  <td className="px-3 py-2 font-medium">
+                    {variance.assetSymbol}
+                  </td>
+                  <td className="px-3 py-2 text-right">{variance.opening}</td>
+                  <td className="px-3 py-2 text-right">{variance.movement}</td>
+                  <td className="px-3 py-2 text-right">
+                    {variance.expectedClosing}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {variance.actualClosing}
+                  </td>
+                  <td className="px-3 py-2 text-right font-semibold">
+                    {variance.difference}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {validation?.details.excludedRows.length ? (
+        <details className="mt-4 rounded-md border border-border bg-background">
+          <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+            {validation.details.excludedRows.length} excluded ledger row
+            {validation.details.excludedRows.length === 1 ? "" : "s"}
+          </summary>
+          <ul className="divide-y divide-border px-3 pb-3 text-sm">
+            {validation.details.excludedRows.slice(0, 8).map((row) => (
+              <li key={row.id} className="py-2">
+                <p className="font-medium">{row.reason}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {row.source} · {getCategoryLabel(row.category as LedgerCategory)} ·{" "}
+                  {formatTokenAmount(row.assetAmount)} {row.assetSymbol}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+
+      {validation?.status === "acknowledged" ? (
+        <div className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+          <p className="font-medium text-amber-900">Variance acknowledged</p>
+          <p className="mt-1 text-amber-900/80">
+            {validation.acknowledgementNote}
+          </p>
+          <p className="mt-2 text-xs text-amber-900/70">
+            {validation.acknowledgedByWalletAddress
+              ? formatAddress(validation.acknowledgedByWalletAddress)
+              : "Unknown wallet"}
+            {validation.acknowledgedAt
+              ? ` · ${formatTimestamp(validation.acknowledgedAt)}`
+              : ""}
+          </p>
+        </div>
+      ) : null}
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        {canMarkReady ? (
+          <form action={updateQuarterStatus}>
+            <input type="hidden" name="id" value={quarterId} />
+            <input type="hidden" name="status" value="ready_for_review" />
+            <Button type="submit">
+              <BadgeCheck data-icon="inline-start" />
+              Mark Ready
+            </Button>
+          </form>
+        ) : null}
+        {canRun ? (
+          <form action={runBalanceValidation}>
+            <input type="hidden" name="quarterId" value={quarterId} />
+            <Button type="submit" variant="outline">
+              <BadgeCheck data-icon="inline-start" />
+              {validationSatisfied ? "Re-run Validation" : "Run Validation"}
+            </Button>
+          </form>
+        ) : (
+          <p className="text-sm text-muted-foreground">{readinessReason}</p>
+        )}
+        {validation?.status === "needs_review" ? (
+          <form
+            action={acknowledgeBalanceVariance}
+            className="grid w-full gap-3 rounded-md border border-border bg-background p-3"
+          >
+            <input type="hidden" name="quarterId" value={quarterId} />
+            <label className="grid gap-2 text-sm font-medium">
+              <span className="type-label-sm text-muted-foreground">
+                Variance Note
+              </span>
+              <textarea
+                name="note"
+                required
+                className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </label>
+            <div>
+              <Button type="submit" variant="default">
+                <Save data-icon="inline-start" />
+                Acknowledge Variance
+              </Button>
+            </div>
+          </form>
+        ) : null}
       </div>
     </section>
   );
@@ -1180,6 +1415,7 @@ export default async function QuarterTransactionsPage({
     summary,
     quarterSyncStatus,
     balanceRows,
+    balanceValidation,
   ] = await Promise.all([
     listClassificationOptions(),
     listTreasuryTransferClassifications({
@@ -1190,6 +1426,7 @@ export default async function QuarterTransactionsPage({
     getQuarterClassificationSummary(quarter),
     getQuarterSyncStatus(quarter.id),
     listQuarterBalanceRows(quarter.id),
+    getQuarterBalanceValidation(quarter.id),
   ]);
   const balanceSummaries = summarizeQuarterBalanceRows(balanceRows);
   const toastSyncStatus =
@@ -1205,12 +1442,19 @@ export default async function QuarterTransactionsPage({
     classificationSummary: summary,
     quarter,
     syncStatus: quarterSyncStatus,
+    validation: balanceValidation,
   });
   const syncComplete =
     workflowSteps.find((step) => step.key === "sync")?.status === "complete";
   const canExport = isQuarterExportReady({
     ...quarter,
+    balanceValidation,
     classificationSummary: summary,
+    syncStatus: quarterSyncStatus,
+  });
+  const validationReadiness = getQuarterValidationReadiness({
+    classificationSummary: summary,
+    quarter,
     syncStatus: quarterSyncStatus,
   });
   const reviewItems = [
@@ -1309,6 +1553,13 @@ export default async function QuarterTransactionsPage({
             />
           </div>
           <QuarterWorkflowProgress steps={workflowSteps} />
+          <BalanceValidationPanel
+            canRun={validationReadiness.ready}
+            readinessReason={validationReadiness.reason}
+            validation={balanceValidation}
+            quarterId={quarter.id}
+            quarterStatus={quarter.status}
+          />
           <QuarterBalancesPanel balances={balanceSummaries} rows={balanceRows} />
           <BankCsvImportPanel quarterId={quarter.id} />
         </div>

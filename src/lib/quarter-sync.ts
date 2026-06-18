@@ -46,7 +46,7 @@ export type QuarterSyncStatus = {
 };
 
 export type QuarterWorkflowStep = {
-  key: "sync" | "classify" | "ready" | "publish";
+  key: "sync" | "classify" | "validate" | "ready" | "publish";
   label: string;
   status: "complete" | "current" | "blocked" | "pending" | "failed";
   detail: string;
@@ -156,6 +156,7 @@ export function buildQuarterWorkflowSteps({
   classificationSummary,
   quarter,
   syncStatus,
+  validation,
 }: {
   classificationSummary: {
     classifiedTransfers: number;
@@ -164,6 +165,10 @@ export function buildQuarterWorkflowSteps({
   };
   quarter: QuarterLike;
   syncStatus: QuarterSyncStatus | null;
+  validation?: {
+    status: "not_ready" | "needs_review" | "validated" | "acknowledged";
+    varianceCount: number;
+  } | null;
 }): QuarterWorkflowStep[] {
   const syncFresh = isQuarterSyncFresh({ quarter, syncStatus });
   const syncFailed =
@@ -227,6 +232,34 @@ export function buildQuarterWorkflowSteps({
         status: syncFresh ? "current" : "blocked",
       };
 
+  const validationComplete =
+    validation?.status === "validated" || validation?.status === "acknowledged";
+  const validateStep: QuarterWorkflowStep = validationComplete
+    ? {
+        detail:
+          validation.status === "acknowledged"
+            ? `${validation.varianceCount} variance${validation.varianceCount === 1 ? "" : "s"} acknowledged`
+            : "Balances reconciled",
+        key: "validate",
+        label: "Validate balances",
+        status: "complete",
+      }
+    : validation?.status === "needs_review"
+      ? {
+          detail: "Acknowledge variance or resolve ledger differences",
+          key: "validate",
+          label: "Validate balances",
+          status: "current",
+        }
+      : {
+          detail: classificationComplete
+            ? "Ready to validate"
+            : "Finish classification first",
+          key: "validate",
+          label: "Validate balances",
+          status: classificationComplete ? "current" : "blocked",
+        };
+
   const readyComplete =
     quarter.status === "ready_for_review" || quarter.status === "published";
   const readyStep: QuarterWorkflowStep = readyComplete
@@ -237,10 +270,10 @@ export function buildQuarterWorkflowSteps({
         status: "complete",
       }
     : {
-        detail: classificationComplete ? "Ready to mark" : "Finish review first",
+        detail: validationComplete ? "Ready to mark" : "Validate balances first",
         key: "ready",
         label: "Mark ready",
-        status: classificationComplete ? "current" : "blocked",
+        status: validationComplete ? "current" : "blocked",
       };
 
   const publishStep: QuarterWorkflowStep =
@@ -251,7 +284,7 @@ export function buildQuarterWorkflowSteps({
           label: "Publish",
           status: "complete",
         }
-      : quarter.status === "ready_for_review" && classificationComplete
+      : quarter.status === "ready_for_review" && validationComplete
         ? {
             detail: "Ready to publish",
             key: "publish",
@@ -268,7 +301,7 @@ export function buildQuarterWorkflowSteps({
             status: "blocked",
           };
 
-  return [syncStep, classifyStep, readyStep, publishStep];
+  return [syncStep, classifyStep, validateStep, readyStep, publishStep];
 }
 
 export async function startOrResumeQuarterSync(quarterId: string) {

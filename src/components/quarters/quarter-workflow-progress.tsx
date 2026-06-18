@@ -41,7 +41,13 @@ export function QuarterWorkflowProgress({
   steps: QuarterWorkflowStep[];
 }) {
   return (
-    <ol className={compact ? "grid gap-2 sm:grid-cols-4" : "grid gap-3 md:grid-cols-4"}>
+    <ol
+      className={
+        compact
+          ? "grid gap-2 md:grid-cols-5"
+          : "grid gap-3 md:grid-cols-4 xl:grid-cols-5"
+      }
+    >
       {steps.map((step, index) => {
         const tone = STEP_TONE[step.status];
         const Icon = tone.icon;
@@ -49,18 +55,28 @@ export function QuarterWorkflowProgress({
         return (
           <li
             key={step.key}
-            className={`rounded-md border px-3 py-3 ${tone.className}`}
+            className={`rounded-md border ${
+              compact ? "px-2.5 py-2.5" : "px-3 py-3"
+            } ${tone.className}`}
           >
             <div className="flex items-center gap-2">
               <Icon
                 className={
                   step.status === "current"
-                    ? "size-4 animate-pulse"
-                    : "size-4"
+                    ? compact
+                      ? "size-3.5 animate-pulse"
+                      : "size-4 animate-pulse"
+                    : compact
+                      ? "size-3.5"
+                      : "size-4"
                 }
                 aria-hidden="true"
               />
-              <span className="type-label-sm">
+              <span
+                className={
+                  compact ? "text-xs font-semibold" : "type-label-sm"
+                }
+              >
                 {index + 1}. {step.label}
               </span>
             </div>

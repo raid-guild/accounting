@@ -17,6 +17,7 @@ export type TreasurySnapshotStatus =
 export type TreasuryAssetBalance = {
   symbol: TreasuryAssetSymbol;
   name: string;
+  chainIds: number[];
   rawAmount: string;
   balance: string;
   usdValue: string;
