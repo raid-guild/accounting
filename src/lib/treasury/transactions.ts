@@ -738,6 +738,7 @@ async function fetchOperatorTokenLogs({
   }
 
   const client = getPublicClient(account.chainId);
+  const tokenAddress = getAddress(asset.tokenAddress);
   const chunkSize = getPositiveBigInt(
     process.env.OPERATOR_TRANSFER_LOG_BLOCK_CHUNK_SIZE,
     DEFAULT_OPERATOR_LOG_BLOCK_CHUNK_SIZE,
@@ -751,14 +752,14 @@ async function fetchOperatorTokenLogs({
         : chunkStart + chunkSize - BigInt(1);
     const [incoming, outgoing] = await Promise.all([
       client.getLogs({
-        address: asset.tokenAddress,
+        address: tokenAddress,
         args: { to: account.address },
         event: ERC20_TRANSFER_EVENT,
         fromBlock: chunkStart,
         toBlock: chunkEnd,
       }),
       client.getLogs({
-        address: asset.tokenAddress,
+        address: tokenAddress,
         args: { from: account.address },
         event: ERC20_TRANSFER_EVENT,
         fromBlock: chunkStart,
@@ -808,6 +809,14 @@ async function syncOperatorTransfers({
   let scannedTransfers = 0;
 
   for (const asset of assets) {
+    const normalizedTokenAddress = asset.tokenAddress
+      ? getAddress(asset.tokenAddress)
+      : null;
+
+    if (!normalizedTokenAddress) {
+      continue;
+    }
+
     const logs = await fetchOperatorTokenLogs({
       account,
       asset,
@@ -834,7 +843,7 @@ async function syncOperatorTransfers({
         continue;
       }
 
-      const logKey = `${account.chainId}:${txHash}:${logIndex}:${asset.tokenAddress}`;
+      const logKey = `${account.chainId}:${txHash}:${logIndex}:${normalizedTokenAddress}`;
 
       if (seenLogs.has(logKey)) {
         continue;
@@ -871,8 +880,8 @@ async function syncOperatorTransfers({
         },
         safeTransactionHash: null,
         toAddress,
-        tokenAddress: asset.tokenAddress,
-        transferId: `rpc:${account.chainId}:${txHash}:${logIndex}:${asset.tokenAddress}`,
+        tokenAddress: normalizedTokenAddress,
+        transferId: `rpc:${account.chainId}:${txHash}:${logIndex}:${normalizedTokenAddress}`,
         transferType: "ERC20_TRANSFER",
         txHash,
         usdAmount: getUsdAmount({ amount, usdPrice }),

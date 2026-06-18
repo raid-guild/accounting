@@ -8,7 +8,11 @@ import { getAddress, isAddress } from "viem";
 import { getDb } from "@/db";
 import { entities, entityAddresses, raids } from "@/db/schema";
 import { writeAuditEvent } from "@/lib/audit";
-import { getAuthSession } from "@/lib/auth/session";
+import {
+  canUseAdminAccess,
+  canUseRaidAccountingAccess,
+  getAuthSession,
+} from "@/lib/auth/session";
 import { encryptField } from "@/lib/encryption";
 import type {
   CoreEntityType,
@@ -153,13 +157,13 @@ async function requireEntityAccess(access: EntityMutationAccess) {
     throw new Error("Wallet session required");
   }
 
-  if (access === "provider" && !session.permissions?.canAdmin) {
+  if (access === "provider" && !canUseAdminAccess(session)) {
     throw new Error("Admin access required");
   }
 
   if (
     access === "raid-related" &&
-    !session.permissions?.canWriteRaidAccounting
+    !canUseRaidAccountingAccess(session)
   ) {
     throw new Error("Raid accounting access required");
   }

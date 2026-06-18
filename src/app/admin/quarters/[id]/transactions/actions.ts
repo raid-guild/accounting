@@ -15,7 +15,7 @@ import {
   treasuryTransactionTransfers,
 } from "@/db/schema";
 import { writeAuditEvent } from "@/lib/audit";
-import { getAuthSession } from "@/lib/auth/session";
+import { canUseAdminAccess, getAuthSession } from "@/lib/auth/session";
 import {
   buildBankCsvNote,
   parseBankCsvConfirmRows,
@@ -31,6 +31,7 @@ import {
   createRaidForAccess,
 } from "@/lib/core-entity-mutations";
 import { syncMembershipActivitiesForPeriod } from "@/lib/membership-activity";
+import { syncQuarterBalances } from "@/lib/quarter-balances";
 import {
   assertClassificationEntityMatchesCategory,
   assertRaidIsAvailable,
@@ -130,7 +131,7 @@ async function getExistingSourceExternalIds(sourceExternalIds: string[]) {
 async function requireAdminSession() {
   const session = await getAuthSession();
 
-  if (!session.address || !session.permissions?.canAdmin) {
+  if (!canUseAdminAccess(session)) {
     throw new Error("Admin access required");
   }
 
@@ -790,6 +791,8 @@ export async function syncQuarterTransactions(formData: FormData) {
   throwIfStepFailed(status, "proposals");
   status = await syncQuarterMembershipStep({ quarterId, runId: status.runId });
   throwIfStepFailed(status, "membership");
+  status = await syncQuarterBalancesStep({ quarterId, runId: status.runId });
+  throwIfStepFailed(status, "balances");
   status = await finalizeQuarterSyncStep({
     quarterId,
     runId: status.runId,
@@ -827,6 +830,8 @@ function throwIfStepFailed(status: QuarterSyncStatus, step: string) {
         ? status.proposalsError
         : step === "membership"
           ? status.membershipError
+          : step === "balances"
+            ? status.balancesError
           : status.finalizeError;
 
   if (status.overallStatus === "failed" && error) {
@@ -988,6 +993,44 @@ export async function syncQuarterMembershipStep({
   }
 }
 
+export async function syncQuarterBalancesStep({
+  quarterId,
+  runId,
+}: {
+  quarterId: string;
+  runId: string;
+}) {
+  await requireAdminSession();
+
+  const priorStatus = await getQuarterSyncStatus(quarterId);
+  if (priorStatus?.membershipStatus !== "success") {
+    throw new Error("Sync membership activity before quarter balances");
+  }
+
+  const quarter = await getQuarterById(quarterId);
+
+  await markQuarterSyncStepRunning({ quarterId, runId, step: "balances" });
+
+  try {
+    await syncQuarterBalances(quarter);
+    const status = await markQuarterSyncStepSuccess({
+      quarterId,
+      runId,
+      step: "balances",
+    });
+
+    revalidateQuarterSyncPaths(quarterId);
+    return status;
+  } catch (error) {
+    return markQuarterSyncStepFailed({
+      error: getErrorMessage(error),
+      quarterId,
+      runId,
+      step: "balances",
+    });
+  }
+}
+
 export async function finalizeQuarterSyncStep({
   quarterId,
   runId,
@@ -1003,7 +1046,8 @@ export async function finalizeQuarterSyncStep({
   if (
     priorStatus?.transactionsStatus !== "success" ||
     priorStatus.proposalsStatus !== "success" ||
-    priorStatus.membershipStatus !== "success"
+    priorStatus.membershipStatus !== "success" ||
+    priorStatus.balancesStatus !== "success"
   ) {
     throw new Error("Finish each sync step before finalizing");
   }

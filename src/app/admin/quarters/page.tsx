@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   CheckCircle2,
+  Download,
   History,
   LockKeyhole,
   RotateCcw,
@@ -23,6 +24,7 @@ import {
   type QuarterReportingPeriod,
   type QuarterStatus,
 } from "@/lib/quarters";
+import { isQuarterExportReady } from "@/lib/quarter-export-readiness";
 
 const STATUS_COPY: Record<
   QuarterStatus,
@@ -147,6 +149,9 @@ function QuarterCard({
   const publishStep = quarter.workflowSteps.find(
     (step) => step.key === "publish",
   );
+  const canExport =
+    isQuarterExportReady(quarter) &&
+    (canManage || quarter.status === "published");
 
   return (
     <article className="rounded-lg border border-border bg-card p-6 shadow-sm">
@@ -197,49 +202,62 @@ function QuarterCard({
         <QuarterWorkflowProgress compact steps={quarter.workflowSteps} />
       </div>
 
-      {canManage ? (
+      {canManage || canExport ? (
         <div className="mt-6 flex flex-wrap gap-2">
-          <Link
-            href={`/admin/quarters/${quarter.id}/transactions`}
-            className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
-          >
-            <Tags data-icon="inline-start" />
-            Review Transactions
-          </Link>
-          <StatusAction
-            quarter={quarter}
-            status="draft"
-            disabled={
-              quarter.status === "draft" || quarter.status === "published"
-            }
-          >
-            <Save data-icon="inline-start" />
-            Draft
-          </StatusAction>
-          <StatusAction
-            quarter={quarter}
-            status="ready_for_review"
-            disabled={
-              quarter.status === "ready_for_review" ||
-              quarter.status === "published" ||
-              readyStep?.status !== "current"
-            }
-          >
-            <CheckCircle2 data-icon="inline-start" />
-            Mark Ready
-          </StatusAction>
-          <StatusAction
-            quarter={quarter}
-            status="published"
-            variant="default"
-            disabled={
-              quarter.status === "published" ||
-              publishStep?.status !== "current"
-            }
-          >
-            <LockKeyhole data-icon="inline-start" />
-            Publish Quarter
-          </StatusAction>
+          {canExport ? (
+            <Link
+              href={`/admin/quarters/${quarter.id}/export.xlsx`}
+              className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
+            >
+              <Download data-icon="inline-start" />
+              Export XLSX
+            </Link>
+          ) : null}
+          {canManage ? (
+            <>
+              <Link
+                href={`/admin/quarters/${quarter.id}/transactions`}
+                className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
+              >
+                <Tags data-icon="inline-start" />
+                Review Transactions
+              </Link>
+              <StatusAction
+                quarter={quarter}
+                status="draft"
+                disabled={
+                  quarter.status === "draft" || quarter.status === "published"
+                }
+              >
+                <Save data-icon="inline-start" />
+                Draft
+              </StatusAction>
+              <StatusAction
+                quarter={quarter}
+                status="ready_for_review"
+                disabled={
+                  quarter.status === "ready_for_review" ||
+                  quarter.status === "published" ||
+                  readyStep?.status !== "current"
+                }
+              >
+                <CheckCircle2 data-icon="inline-start" />
+                Mark Ready
+              </StatusAction>
+              <StatusAction
+                quarter={quarter}
+                status="published"
+                variant="default"
+                disabled={
+                  quarter.status === "published" ||
+                  publishStep?.status !== "current"
+                }
+              >
+                <LockKeyhole data-icon="inline-start" />
+                Publish Quarter
+              </StatusAction>
+            </>
+          ) : null}
         </div>
       ) : null}
 
@@ -316,25 +334,28 @@ export default async function QuartersPage() {
 
   const reportingPeriods = await listQuarterReportingPeriods();
   const canManage = Boolean(sessionState.permissions.canAdmin);
+  const q1Exists = reportingPeriods.some(
+    (quarter) => quarter.year === 2026 && quarter.quarter === 1,
+  );
 
   return (
     <main className="min-h-screen bg-background text-foreground">
       <AppHeader initialSession={sessionState} />
 
       <section className="container-custom grid gap-8 py-8 md:py-12">
-        {canManage ? (
+        {canManage && !q1Exists ? (
           <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="type-label-sm text-muted-foreground">
-                  Q1 Export Target
+                  Missing Reporting Period
                 </p>
                 <h2 className="mt-2 text-xl font-semibold">
-                  Q1 2026 reporting period
+                  Create Q1 2026
                 </h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Create the calendar quarter used for accounting preparation,
-                  review, publishing, and member exports.
+                  Add the Q1 2026 quarter before importing or exporting its
+                  records.
                 </p>
               </div>
               <form action={createQ1ReportingPeriod}>

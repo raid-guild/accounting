@@ -6,7 +6,11 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { entities, ledgerEntries, quarters, raids } from "@/db/schema";
 import { writeAuditEvent } from "@/lib/audit";
-import { getAuthSession } from "@/lib/auth/session";
+import {
+  canUseAdminAccess,
+  canUseRaidAccountingAccess,
+  getAuthSession,
+} from "@/lib/auth/session";
 import { encryptField } from "@/lib/encryption";
 import {
   lookupManualTransaction,
@@ -90,7 +94,7 @@ function getChainId(value: string) {
 async function requireRaidAccountingAccess() {
   const session = await getAuthSession();
 
-  if (!session.address || !session.permissions?.canWriteRaidAccounting) {
+  if (!canUseRaidAccountingAccess(session)) {
     throw new Error("Raid accounting access required");
   }
 
@@ -395,7 +399,7 @@ export async function saveManualRaidRevenue(
     const occurredAt = new Date(result.executedAt);
     const quarter = await getOrCreateQuarter(occurredAt);
     assertQuarterCanAcceptManualEntry({
-      canAdmin: Boolean(session.permissions?.canAdmin),
+      canAdmin: canUseAdminAccess(session),
       status: quarter.status,
     });
     const sourceMetadata = {
@@ -525,7 +529,7 @@ export async function saveManualRaidPayout(
     const occurredAt = new Date(result.executedAt);
     const quarter = await getOrCreateQuarter(occurredAt);
     assertQuarterCanAcceptManualEntry({
-      canAdmin: Boolean(session.permissions?.canAdmin),
+      canAdmin: canUseAdminAccess(session),
       status: quarter.status,
     });
     const sourceMetadata = {

@@ -26,10 +26,12 @@ export type QuarterSyncStatus = {
   transactionsStatus: QuarterSyncStepStatus;
   proposalsStatus: QuarterSyncStepStatus;
   membershipStatus: QuarterSyncStepStatus;
+  balancesStatus: QuarterSyncStepStatus;
   finalizeStatus: QuarterSyncStepStatus;
   transactionsError: string | null;
   proposalsError: string | null;
   membershipError: string | null;
+  balancesError: string | null;
   finalizeError: string | null;
   importedTransactions: number;
   importedTransfers: number;
@@ -88,10 +90,12 @@ export function mapQuarterSyncStatus(
     transactionsStatus: status.transactionsStatus,
     proposalsStatus: status.proposalsStatus,
     membershipStatus: status.membershipStatus,
+    balancesStatus: status.balancesStatus,
     finalizeStatus: status.finalizeStatus,
     transactionsError: status.transactionsError,
     proposalsError: status.proposalsError,
     membershipError: status.membershipError,
+    balancesError: status.balancesError,
     finalizeError: status.finalizeError,
     importedTransactions: asNumber(status.importedTransactions),
     importedTransfers: asNumber(status.importedTransfers),
@@ -288,6 +292,10 @@ export async function startOrResumeQuarterSync(quarterId: string) {
       finalizeError: null,
       finalizeStartedAt: null,
       finalizeStatus: "pending",
+      balancesCompletedAt: null,
+      balancesError: null,
+      balancesStartedAt: null,
+      balancesStatus: "pending",
       importedTransactions: 0,
       importedTransfers: 0,
       lastSyncedAt: null,
@@ -319,6 +327,10 @@ export async function startOrResumeQuarterSync(quarterId: string) {
         finalizeError: null,
         finalizeStartedAt: null,
         finalizeStatus: "pending",
+        balancesCompletedAt: null,
+        balancesError: null,
+        balancesStartedAt: null,
+        balancesStatus: "pending",
         importedTransactions: 0,
         importedTransfers: 0,
         lastSyncedAt: null,
@@ -366,6 +378,13 @@ export async function markQuarterSyncStepRunning({
       finalizeError: null,
       finalizeStartedAt: now,
       finalizeStatus: "running" as const,
+    },
+    balances: {
+      currentStep: "balances" as const,
+      balancesCompletedAt: null,
+      balancesError: null,
+      balancesStartedAt: now,
+      balancesStatus: "running" as const,
     },
     membership: {
       currentStep: "membership" as const,
@@ -442,6 +461,11 @@ export async function markQuarterSyncStepFailed({
       finalizeError: error,
       finalizeStatus: "failed" as const,
     },
+    balances: {
+      balancesCompletedAt: now,
+      balancesError: error,
+      balancesStatus: "failed" as const,
+    },
     membership: {
       membershipCompletedAt: now,
       membershipError: error,
@@ -513,8 +537,14 @@ export async function markQuarterSyncStepSuccess({
       lastSyncedAt: now,
       overallStatus: "success" as const,
     },
-    membership: {
+    balances: {
+      balancesCompletedAt: now,
+      balancesError: null,
+      balancesStatus: "success" as const,
       currentStep: "finalize" as const,
+    },
+    membership: {
+      currentStep: "balances" as const,
       membershipCompletedAt: now,
       membershipError: null,
       membershipStatus: "success" as const,

@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   Building2,
+  Landmark,
   Plus,
   RotateCcw,
   Save,
@@ -52,7 +53,15 @@ function formatAddress(address: string) {
 }
 
 function getAccountTypeLabel(type: EditableTreasuryAccountType) {
-  return type === "side_vault" ? "Side vault" : "Operator";
+  if (type === "side_vault") {
+    return "Side vault";
+  }
+
+  if (type === "bank") {
+    return "Bank";
+  }
+
+  return "Operator";
 }
 
 function AccountTypeSelect({
@@ -69,6 +78,7 @@ function AccountTypeSelect({
     >
       <option value="side_vault">Side vault</option>
       <option value="operator">Operator</option>
+      <option value="bank">Bank</option>
     </select>
   );
 }
@@ -262,6 +272,18 @@ function StatusBadge({ account }: { account: TreasuryAccountView }) {
   );
 }
 
+function getAccountBalanceLabel({
+  linkedBalance,
+}: {
+  linkedBalance: string | undefined;
+}) {
+  if (linkedBalance) {
+    return formatCurrency(linkedBalance);
+  }
+
+  return "Not synced";
+}
+
 function AccountDetails({
   account,
   canManage,
@@ -279,8 +301,12 @@ function AccountDetails({
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
-              <BadgeCheck className="size-3" aria-hidden="true" />
-              Operator
+              {account.type === "bank" ? (
+                <Landmark className="size-3" aria-hidden="true" />
+              ) : (
+                <BadgeCheck className="size-3" aria-hidden="true" />
+              )}
+              {getAccountTypeLabel(account.type as EditableTreasuryAccountType)}
             </span>
           )}
           <StatusBadge account={account} />
@@ -456,9 +482,7 @@ function AccountRankingTable({
                         href={href}
                         className="block px-3 py-3 text-right font-medium"
                       >
-                        {linkedBalance
-                          ? formatCurrency(linkedBalance)
-                          : "Not synced"}
+                        {getAccountBalanceLabel({ linkedBalance })}
                       </Link>
                     </td>
                     <td className="p-0">
@@ -557,7 +581,7 @@ export default async function TreasuryAccountsPage({
         <AccountRankingTable
           accounts={[...activeAccounts, ...archivedAccounts]}
           balancesByAccountId={balancesByAccountId}
-          emptyLabel="No side vaults or operators."
+          emptyLabel="No treasury accounts yet."
           title="Treasury Accounts"
         />
       </section>
@@ -578,6 +602,8 @@ export default async function TreasuryAccountsPage({
           icon={
             selectedAccount.type === "side_vault" ? (
               <Building2 className="size-5" aria-hidden="true" />
+            ) : selectedAccount.type === "bank" ? (
+              <Landmark className="size-5" aria-hidden="true" />
             ) : (
               <Wallet className="size-5" aria-hidden="true" />
             )

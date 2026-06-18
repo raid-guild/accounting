@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import { treasuryAccounts } from "@/db/schema";
-import { getAuthSession } from "@/lib/auth/session";
+import { canUseAdminAccess, getAuthSession } from "@/lib/auth/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { encryptField } from "@/lib/encryption";
 import {
@@ -22,11 +23,11 @@ function getString(formData: FormData, key: string) {
 }
 
 function getAccountType(value: string): EditableTreasuryAccountType {
-  if (value === "side_vault" || value === "operator") {
+  if (value === "side_vault" || value === "operator" || value === "bank") {
     return value;
   }
 
-  throw new Error("Account type must be side vault or operator");
+  throw new Error("Account type must be side vault, operator, or bank");
 }
 
 function getChainId(value: string) {
@@ -46,7 +47,7 @@ function getChainId(value: string) {
 async function requireAdminSession() {
   const session = await getAuthSession();
 
-  if (!session.address || !session.permissions?.canAdmin) {
+  if (!canUseAdminAccess(session)) {
     throw new Error("Admin access required");
   }
 
@@ -95,7 +96,7 @@ async function assertEditableTreasuryAccount(id: string) {
     .where(
       and(
         eq(treasuryAccounts.id, id),
-        inArray(treasuryAccounts.type, ["side_vault", "operator"]),
+        inArray(treasuryAccounts.type, ["side_vault", "operator", "bank"]),
       ),
     )
     .limit(1);
@@ -153,6 +154,7 @@ export async function createTreasuryAccount(formData: FormData) {
   });
 
   revalidatePath(TREASURY_ACCOUNTS_PATH);
+  redirect(TREASURY_ACCOUNTS_PATH);
 }
 
 export async function updateTreasuryAccount(formData: FormData) {

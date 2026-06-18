@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { writeAuditEvent } from "@/lib/audit";
-import { getAuthSession } from "@/lib/auth/session";
+import { canUseAdminAccess, getAuthSession } from "@/lib/auth/session";
 import {
   getRecentTreasuryTransactionTransfers,
   syncTreasuryTransactions,
@@ -22,7 +22,7 @@ function getPositiveQueryInteger(value: string | null) {
 async function requireAdminSession() {
   const session = await getAuthSession();
 
-  if (!session.address || !session.permissions?.canAdmin) {
+  if (!canUseAdminAccess(session)) {
     return null;
   }
 

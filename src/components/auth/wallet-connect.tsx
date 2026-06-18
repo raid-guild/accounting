@@ -1,9 +1,9 @@
 "use client";
 
-import { LogOut, ShieldCheck, Wallet } from "lucide-react";
+import { ChevronDown, LogOut, ShieldCheck, UserCircle, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { SiweMessage } from "siwe";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useAccount,
   useConnect,
@@ -18,8 +18,10 @@ import type { AuthPermissions } from "@/lib/auth/types";
 type SessionResponse = {
   address: string | null;
   authenticated: boolean;
+  canUseMemberView?: boolean;
   chainId: number | null;
   permissions: AuthPermissions | null;
+  viewMode?: "admin" | "member";
 };
 
 type WalletConnectProps = {
@@ -29,8 +31,10 @@ type WalletConnectProps = {
 const emptySession: SessionResponse = {
   address: null,
   authenticated: false,
+  canUseMemberView: false,
   chainId: null,
   permissions: null,
+  viewMode: "admin",
 };
 
 function formatAddress(address: string) {
@@ -116,10 +120,12 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
   const { disconnectAsync } = useDisconnect();
   const { signMessageAsync, isPending: isSigning } = useSignMessage();
   const { showToast } = useToast();
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const [session, setSession] = useState<SessionResponse>(
     initialSession ?? emptySession,
   );
   const [isLoadingSession, setIsLoadingSession] = useState(!initialSession);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
   const primaryConnector = useMemo(
@@ -170,6 +176,24 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
       isMounted = false;
     };
   }, [initialSession, showToast]);
+
+  useEffect(() => {
+    function onPointerDown(event: PointerEvent) {
+      if (
+        profileMenuRef.current &&
+        event.target instanceof Node &&
+        !profileMenuRef.current.contains(event.target)
+      ) {
+        setIsProfileMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, []);
 
   async function signIn() {
     setIsVerifying(true);
@@ -243,6 +267,7 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
       }
 
       setSession(nextSession);
+      setIsProfileMenuOpen(false);
       router.refresh();
     } catch (nextError) {
       showToast(
@@ -276,26 +301,87 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
     }
   }
 
+  async function toggleViewMode() {
+    const nextMode = session.viewMode === "member" ? "admin" : "member";
+
+    try {
+      const response = await fetch("/api/auth/view-mode", {
+        body: JSON.stringify({ mode: nextMode }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const nextSession = (await response.json()) as SessionResponse & {
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(nextSession.error ?? "View mode update failed");
+      }
+
+      setSession(nextSession);
+      router.refresh();
+    } catch {
+      showToast("Could not switch view mode.");
+    }
+  }
+
   if (session.authenticated && session.address) {
+    const roleLabel = session.permissions?.roles.join(", ") ?? "member";
+    const isMemberPreview = session.viewMode === "member";
+    const viewLabel = isMemberPreview ? "member" : "admin";
+
     return (
-      <div className="flex min-w-0 items-center gap-1 rounded-lg border border-scroll-300/20 bg-moloch-900/35 p-1 shadow-inner shadow-black/10">
-        <div className="flex h-8 min-w-0 items-center px-2.5 text-sm text-scroll-100">
-          <span className="font-medium">{formatAddress(session.address)}</span>
-          {session.permissions?.roles.length ? (
-            <span className="ml-2 inline-block truncate text-scroll-300">
-              {session.permissions.roles.join(", ")}
-            </span>
-          ) : null}
-        </div>
-        <Button
-          size="icon-sm"
-          variant="ghost"
-          className="text-scroll-200 hover:bg-scroll-100/10 hover:text-scroll-100"
-          onClick={signOut}
-          aria-label="Sign out"
+      <div className="relative" ref={profileMenuRef}>
+        <button
+          type="button"
+          aria-expanded={isProfileMenuOpen}
+          onClick={() => setIsProfileMenuOpen((open) => !open)}
+          className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-scroll-300/20 bg-moloch-900/35 px-3 text-sm text-scroll-100 shadow-inner shadow-black/10 transition-colors hover:bg-scroll-100/10"
         >
-          <LogOut className="size-4" aria-hidden="true" />
-        </Button>
+          <UserCircle className="size-4 shrink-0 text-scroll-200" aria-hidden="true" />
+          <span className="font-medium">{formatAddress(session.address)}</span>
+          <span className="hidden max-w-24 truncate text-scroll-300 sm:inline">
+            {viewLabel}
+          </span>
+          <ChevronDown
+            className={`size-3.5 shrink-0 transition-transform ${isProfileMenuOpen ? "rotate-180" : ""}`}
+            aria-hidden="true"
+          />
+        </button>
+
+        {isProfileMenuOpen ? (
+          <div className="absolute right-0 top-12 z-30 grid w-72 gap-1 rounded-lg border border-scroll-300/25 bg-moloch-800 p-1 text-scroll-100 shadow-xl shadow-black/35">
+            <div className="px-3 py-2">
+              <p className="font-mono text-sm font-medium">
+                {formatAddress(session.address)}
+              </p>
+              <p className="mt-1 text-xs text-scroll-300">
+                {isMemberPreview
+                  ? "Viewing the app as a member"
+                  : `Signed in as ${roleLabel}`}
+              </p>
+            </div>
+            {session.canUseMemberView ? (
+              <button
+                type="button"
+                onClick={toggleViewMode}
+                className="flex h-10 w-full items-center justify-between rounded-md px-3 text-left text-sm font-medium transition-colors hover:bg-scroll-100/10"
+              >
+                <span>{isMemberPreview ? "View as admin" : "View as member"}</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={signOut}
+              className="flex h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm font-medium text-scroll-200 transition-colors hover:bg-scroll-100/10 hover:text-scroll-100"
+            >
+              <LogOut className="size-4" aria-hidden="true" />
+              Sign out
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   }

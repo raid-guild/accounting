@@ -11,7 +11,7 @@ import { decryptField, type EncryptedField } from "@/lib/encryption";
 export type TreasuryAccountType =
   (typeof treasuryAccountTypeEnum.enumValues)[number];
 
-export type EditableTreasuryAccountType = "side_vault" | "operator";
+export type EditableTreasuryAccountType = "side_vault" | "operator" | "bank";
 
 export type TreasuryAccountChainId =
   | typeof gnosis.id
@@ -99,12 +99,14 @@ export function normalizeTreasuryAccountInput({
     };
   }
 
-  const isSupportedOperatorChain = SUPPORTED_OPERATOR_CHAINS.some(
+  const isSupportedAccountChain = SUPPORTED_OPERATOR_CHAINS.some(
     (chain) => chain.id === chainId,
   );
 
-  if (!isSupportedOperatorChain) {
-    throw new Error("Operators must be on Gnosis, Ethereum, or Base");
+  if (!isSupportedAccountChain) {
+    throw new Error(
+      "Operator and bank accounts must be on Gnosis, Ethereum, or Base",
+    );
   }
 
   return {
@@ -120,15 +122,10 @@ export async function listEditableTreasuryAccounts() {
   const accounts = await db
     .select()
     .from(treasuryAccounts)
-    .where(eq(treasuryAccounts.type, "side_vault"))
-    .orderBy(asc(treasuryAccounts.archivedAt), asc(treasuryAccounts.createdAt));
-  const operators = await db
-    .select()
-    .from(treasuryAccounts)
-    .where(eq(treasuryAccounts.type, "operator"))
+    .where(inArray(treasuryAccounts.type, ["side_vault", "operator", "bank"]))
     .orderBy(asc(treasuryAccounts.archivedAt), asc(treasuryAccounts.createdAt));
 
-  return [...accounts, ...operators].map(mapTreasuryAccount);
+  return accounts.map(mapTreasuryAccount);
 }
 
 export async function listActiveGnosisBalanceAccounts(): Promise<
@@ -142,7 +139,7 @@ export async function listActiveGnosisBalanceAccounts(): Promise<
       and(
         isNull(treasuryAccounts.archivedAt),
         eq(treasuryAccounts.chainId, gnosis.id),
-        inArray(treasuryAccounts.type, ["side_vault", "operator"]),
+        inArray(treasuryAccounts.type, ["side_vault", "operator", "bank"]),
       ),
     )
     .orderBy(asc(treasuryAccounts.type), asc(treasuryAccounts.createdAt));
@@ -154,6 +151,55 @@ export async function listActiveGnosisBalanceAccounts(): Promise<
     chainId: account.chainId,
     type: account.type as EditableTreasuryAccountType,
   }));
+}
+
+export async function listActiveBalanceAccounts(): Promise<
+  TreasuryBalanceAccountSource[]
+> {
+  const db = getDb();
+  const accounts = await db
+    .select()
+    .from(treasuryAccounts)
+    .where(
+      and(
+        isNull(treasuryAccounts.archivedAt),
+        inArray(treasuryAccounts.type, ["side_vault", "operator", "bank"]),
+      ),
+    )
+    .orderBy(
+      asc(treasuryAccounts.chainId),
+      asc(treasuryAccounts.type),
+      asc(treasuryAccounts.createdAt),
+    );
+
+  return accounts.map((account) => ({
+    id: account.id,
+    name: decryptField(account.nameEncrypted as EncryptedField),
+    address: getAddress(account.address),
+    chainId: account.chainId,
+    type: account.type as EditableTreasuryAccountType,
+  }));
+}
+
+export async function listTreasuryAccountNamesById(ids: string[]) {
+  if (ids.length === 0) {
+    return new Map<string, string>();
+  }
+
+  const accounts = await getDb()
+    .select({
+      id: treasuryAccounts.id,
+      nameEncrypted: treasuryAccounts.nameEncrypted,
+    })
+    .from(treasuryAccounts)
+    .where(inArray(treasuryAccounts.id, ids));
+
+  return new Map(
+    accounts.map((account) => [
+      account.id,
+      decryptField(account.nameEncrypted as EncryptedField),
+    ]),
+  );
 }
 
 export async function listActiveGnosisSideVaultAccounts(): Promise<

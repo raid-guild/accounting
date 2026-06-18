@@ -13,4 +13,5 @@ export type AuthSessionData = {
   chainId?: number;
   nonce?: string;
   permissions?: AuthPermissions;
+  viewMode?: "admin" | "member";
 };

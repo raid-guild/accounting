@@ -89,7 +89,8 @@ export function TreasuryDashboard({
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [justUpdated, setJustUpdated] = useState(false);
-  const shouldRefresh = snapshot.isStale || !snapshot.syncedAt;
+  const shouldRefresh =
+    snapshot.status === "failed" || snapshot.isStale || !snapshot.syncedAt;
 
   useEffect(() => {
     let isMounted = true;

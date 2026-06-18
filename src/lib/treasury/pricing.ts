@@ -1,6 +1,12 @@
 import "server-only";
 
-const STABLE_ASSET_SYMBOLS = new Set(["USDC", "XDAI", "WXDAI"]);
+const STABLE_ASSET_SYMBOLS = new Set([
+  "DAI",
+  "DKUSD",
+  "USDC",
+  "XDAI",
+  "WXDAI",
+]);
 const COINGECKO_ASSET_IDS_BY_SYMBOL = new Map([
   ["LPT", "livepeer"],
   ["WETH", "ethereum"],

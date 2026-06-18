@@ -4,7 +4,7 @@ import { ChevronDown } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { WalletConnect } from "@/components/auth/wallet-connect";
 import type { AuthPermissions } from "@/lib/auth/types";
@@ -13,8 +13,10 @@ import { cn } from "@/lib/utils";
 type AppHeaderSession = {
   address: `0x${string}` | null;
   authenticated: boolean;
+  canUseMemberView?: boolean;
   chainId: number | null;
   permissions: AuthPermissions | null;
+  viewMode?: "admin" | "member";
 };
 
 type AppHeaderProps = {
@@ -66,20 +68,27 @@ function NavItem({ children, href }: { children: ReactNode; href: string }) {
 }
 
 function NavGroup({
+  isOpen,
   label,
   links,
+  onOpenChange,
 }: {
+  isOpen: boolean;
   label: string;
   links: NavLink[];
+  onOpenChange: (open: boolean) => void;
 }) {
   const pathname = usePathname();
   const active = links.some((link) => isActivePath(pathname, link.href));
 
   return (
-    <details className="group relative">
-      <summary
+    <div className="relative">
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        onClick={() => onOpenChange(!isOpen)}
         className={cn(
-          "inline-flex h-9 cursor-pointer list-none items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-all marker:hidden",
+          "inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-all",
           active
             ? "bg-scroll-100 text-moloch-800 shadow-sm"
             : "text-scroll-200 hover:bg-scroll-100/10 hover:text-scroll-100",
@@ -87,35 +96,59 @@ function NavGroup({
       >
         {label}
         <ChevronDown
-          className="size-3.5 transition-transform group-open:rotate-180"
+          className={cn("size-3.5 transition-transform", isOpen && "rotate-180")}
           aria-hidden="true"
         />
-      </summary>
-      <div className="absolute left-0 top-11 z-30 grid min-w-52 gap-1 overflow-hidden rounded-lg border border-scroll-300/25 bg-moloch-800 p-1 shadow-xl shadow-black/35">
-        {links.map((link) => {
-          const linkActive = isActivePath(pathname, link.href);
+      </button>
+      {isOpen ? (
+        <div className="absolute left-0 top-11 z-30 grid min-w-52 gap-1 overflow-hidden rounded-lg border border-scroll-300/25 bg-moloch-800 p-1 shadow-xl shadow-black/35">
+          {links.map((link) => {
+            const linkActive = isActivePath(pathname, link.href);
 
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "flex h-9 items-center rounded-md px-3 text-sm font-medium transition-all",
-                linkActive
-                  ? "bg-scroll-100 text-moloch-800"
-                  : "text-scroll-100 hover:bg-scroll-100/10",
-              )}
-            >
-              {link.label}
-            </Link>
-          );
-        })}
-      </div>
-    </details>
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={() => onOpenChange(false)}
+                className={cn(
+                  "flex h-9 items-center rounded-md px-3 text-sm font-medium transition-all",
+                  linkActive
+                    ? "bg-scroll-100 text-moloch-800"
+                    : "text-scroll-100 hover:bg-scroll-100/10",
+                )}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
 export function AppHeader({ initialSession }: AppHeaderProps) {
+  const navRef = useRef<HTMLElement | null>(null);
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onPointerDown(event: PointerEvent) {
+      if (
+        navRef.current &&
+        event.target instanceof Node &&
+        !navRef.current.contains(event.target)
+      ) {
+        setOpenGroup(null);
+      }
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, []);
+
   return (
     <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
       <div className="container-custom grid min-h-18 gap-3 py-3 xl:grid-cols-[auto_1fr] xl:items-center">
@@ -141,13 +174,26 @@ export function AppHeader({ initialSession }: AppHeaderProps) {
         <div className="flex min-w-0 flex-wrap items-center gap-3 xl:justify-end">
           {initialSession.permissions?.canAccess ? (
             <nav
+              ref={navRef}
               className="flex min-w-0 flex-wrap items-center gap-1 rounded-lg border border-scroll-300/20 bg-moloch-900/35 p-1 shadow-inner shadow-black/10"
               aria-label="Accounting sections"
             >
               <NavItem href="/">Dashboard</NavItem>
               <NavItem href="/admin/quarters">Quarters</NavItem>
-              <NavGroup label="Accounting" links={accountingLinks} />
-              <NavGroup label="DAO" links={daoLinks} />
+              <NavGroup
+                isOpen={openGroup === "accounting"}
+                label="Accounting"
+                links={accountingLinks}
+                onOpenChange={(open) =>
+                  setOpenGroup(open ? "accounting" : null)
+                }
+              />
+              <NavGroup
+                isOpen={openGroup === "dao"}
+                label="DAO"
+                links={daoLinks}
+                onOpenChange={(open) => setOpenGroup(open ? "dao" : null)}
+              />
             </nav>
           ) : null}
           <WalletConnect initialSession={initialSession} />

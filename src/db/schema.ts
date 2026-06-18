@@ -25,6 +25,7 @@ export const treasuryAccountTypeEnum = pgEnum("treasury_account_type", [
   "main_safe",
   "side_vault",
   "operator",
+  "bank",
 ]);
 
 export const entityTypeEnum = pgEnum("entity_type", [
@@ -81,6 +82,7 @@ export const quarterSyncStepEnum = pgEnum("quarter_sync_step", [
   "transactions",
   "proposals",
   "membership",
+  "balances",
   "finalize",
 ]);
 
@@ -95,6 +97,11 @@ export const quarterSyncOverallStatusEnum = pgEnum(
   "quarter_sync_overall_status",
   ["idle", "running", "success", "partial", "failed"],
 );
+
+export const quarterBalanceBoundaryEnum = pgEnum("quarter_balance_boundary", [
+  "opening",
+  "closing",
+]);
 
 export const auditActionEnum = pgEnum("audit_action", [
   "create",
@@ -200,6 +207,9 @@ export const quarterSyncStatuses = pgTable(
     membershipStatus: quarterSyncStepStatusEnum("membership_status")
       .default("pending")
       .notNull(),
+    balancesStatus: quarterSyncStepStatusEnum("balances_status")
+      .default("pending")
+      .notNull(),
     finalizeStatus: quarterSyncStepStatusEnum("finalize_status")
       .default("pending")
       .notNull(),
@@ -221,6 +231,12 @@ export const quarterSyncStatuses = pgTable(
     membershipCompletedAt: timestamp("membership_completed_at", {
       withTimezone: true,
     }),
+    balancesStartedAt: timestamp("balances_started_at", {
+      withTimezone: true,
+    }),
+    balancesCompletedAt: timestamp("balances_completed_at", {
+      withTimezone: true,
+    }),
     finalizeStartedAt: timestamp("finalize_started_at", {
       withTimezone: true,
     }),
@@ -230,6 +246,7 @@ export const quarterSyncStatuses = pgTable(
     transactionsError: text("transactions_error"),
     proposalsError: text("proposals_error"),
     membershipError: text("membership_error"),
+    balancesError: text("balances_error"),
     finalizeError: text("finalize_error"),
     importedTransactions: integer("imported_transactions")
       .default(0)
@@ -321,6 +338,48 @@ export const treasuryBalanceAssets = pgTable(
     index("treasury_balance_assets_snapshot_id_idx").on(table.snapshotId),
     uniqueIndex("treasury_balance_assets_snapshot_symbol_unique").on(
       table.snapshotId,
+      table.symbol,
+    ),
+  ],
+);
+
+export const quarterBalanceSnapshots = pgTable(
+  "quarter_balance_snapshots",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    quarterId: uuid("quarter_id")
+      .notNull()
+      .references(() => quarters.id, { onDelete: "cascade" }),
+    treasuryAccountId: uuid("treasury_account_id").references(
+      () => treasuryAccounts.id,
+      { onDelete: "set null" },
+    ),
+    boundary: quarterBalanceBoundaryEnum("boundary").notNull(),
+    accountAddress: text("account_address").notNull(),
+    chainId: integer("chain_id").notNull(),
+    blockNumber: integer("block_number").notNull(),
+    blockTimestamp: timestamp("block_timestamp", { withTimezone: true })
+      .notNull(),
+    symbol: text("symbol").notNull(),
+    name: text("name").notNull(),
+    decimals: integer("decimals").notNull(),
+    rawAmount: numeric("raw_amount", { precision: 78, scale: 0 }).notNull(),
+    balance: numeric("balance", { precision: 36, scale: 18 }).notNull(),
+    usdPrice: numeric("usd_price", { precision: 18, scale: 8 }).notNull(),
+    usdValue: numeric("usd_value", { precision: 18, scale: 2 }).notNull(),
+    priceSource: text("price_source").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("quarter_balance_snapshots_quarter_boundary_idx").on(
+      table.quarterId,
+      table.boundary,
+    ),
+    uniqueIndex("quarter_balance_snapshots_unique").on(
+      table.quarterId,
+      table.boundary,
+      table.chainId,
+      sql`lower(${table.accountAddress})`,
       table.symbol,
     ),
   ],

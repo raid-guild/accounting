@@ -58,6 +58,13 @@ export const OPERATOR_ERC20_ASSETS_BY_CHAIN: Record<
       stableUsd: true,
     },
     {
+      symbol: "DAI",
+      name: "Dai Stablecoin",
+      decimals: 18,
+      tokenAddress: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+      stableUsd: true,
+    },
+    {
       symbol: "wETH",
       name: "Wrapped Ether",
       decimals: 18,
@@ -80,6 +87,13 @@ export const OPERATOR_ERC20_ASSETS_BY_CHAIN: Record<
       name: "USD Coin",
       decimals: 6,
       tokenAddress: "0x833589fCD6eDb6E08f4c7C32D4f71B54bdA02913",
+      stableUsd: true,
+    },
+    {
+      symbol: "DKUSD",
+      name: "Dakota USD",
+      decimals: 18,
+      tokenAddress: "0xFa2ACD0861Bd3219D5764d349D3a970AE8321620",
       stableUsd: true,
     },
     {
