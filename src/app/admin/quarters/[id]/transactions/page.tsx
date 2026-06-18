@@ -132,7 +132,9 @@ function formatUsdAmount(value: string) {
 }
 
 function isStableAssetSymbol(symbol: string) {
-  return ["USDC", "XDAI", "WXDAI"].includes(symbol.toUpperCase());
+  return ["DAI", "DKUSD", "USDC", "XDAI", "WXDAI"].includes(
+    symbol.toUpperCase(),
+  );
 }
 
 function getDefaultUsdAmount(transfer: TreasuryTransferClassificationView) {

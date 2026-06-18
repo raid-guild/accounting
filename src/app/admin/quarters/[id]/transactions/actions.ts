@@ -791,6 +791,8 @@ export async function syncQuarterTransactions(formData: FormData) {
   throwIfStepFailed(status, "proposals");
   status = await syncQuarterMembershipStep({ quarterId, runId: status.runId });
   throwIfStepFailed(status, "membership");
+  status = await syncQuarterBalancesStep({ quarterId, runId: status.runId });
+  throwIfStepFailed(status, "balances");
   status = await finalizeQuarterSyncStep({
     quarterId,
     runId: status.runId,
