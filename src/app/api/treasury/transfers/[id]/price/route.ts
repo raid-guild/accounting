@@ -3,13 +3,13 @@ import { NextResponse } from "next/server";
 
 import { getDb } from "@/db";
 import { treasuryTransactionTransfers } from "@/db/schema";
-import { getAuthSession } from "@/lib/auth/session";
+import { canUseAdminAccess, getAuthSession } from "@/lib/auth/session";
 import { getHistoricalUsdPricing } from "@/lib/treasury/pricing";
 
 async function requireAdminSession() {
   const session = await getAuthSession();
 
-  if (!session.address || !session.permissions?.canAdmin) {
+  if (!canUseAdminAccess(session)) {
     return null;
   }
 

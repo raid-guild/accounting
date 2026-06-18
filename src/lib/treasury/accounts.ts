@@ -181,6 +181,27 @@ export async function listActiveBalanceAccounts(): Promise<
   }));
 }
 
+export async function listTreasuryAccountNamesById(ids: string[]) {
+  if (ids.length === 0) {
+    return new Map<string, string>();
+  }
+
+  const accounts = await getDb()
+    .select({
+      id: treasuryAccounts.id,
+      nameEncrypted: treasuryAccounts.nameEncrypted,
+    })
+    .from(treasuryAccounts)
+    .where(inArray(treasuryAccounts.id, ids));
+
+  return new Map(
+    accounts.map((account) => [
+      account.id,
+      decryptField(account.nameEncrypted as EncryptedField),
+    ]),
+  );
+}
+
 export async function listActiveGnosisSideVaultAccounts(): Promise<
   TreasuryBalanceAccountSource[]
 > {

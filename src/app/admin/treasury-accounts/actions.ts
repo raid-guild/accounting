@@ -6,7 +6,7 @@ import { and, eq, inArray, ne } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import { treasuryAccounts } from "@/db/schema";
-import { getAuthSession } from "@/lib/auth/session";
+import { canUseAdminAccess, getAuthSession } from "@/lib/auth/session";
 import { writeAuditEvent } from "@/lib/audit";
 import { encryptField } from "@/lib/encryption";
 import {
@@ -47,7 +47,7 @@ function getChainId(value: string) {
 async function requireAdminSession() {
   const session = await getAuthSession();
 
-  if (!session.address || !session.permissions?.canAdmin) {
+  if (!canUseAdminAccess(session)) {
     throw new Error("Admin access required");
   }
 

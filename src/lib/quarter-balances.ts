@@ -5,6 +5,7 @@ import {
   asc,
   eq,
   isNotNull,
+  isNull,
   ne,
   notInArray,
   or,
@@ -26,7 +27,10 @@ import { getDb } from "@/db";
 import { quarterBalanceSnapshots } from "@/db/schema";
 import type { QuarterSummary } from "@/lib/quarters";
 import { getQuarterEndsAtExclusive } from "@/lib/quarter-sync";
-import { listActiveBalanceAccounts } from "@/lib/treasury/accounts";
+import {
+  listActiveBalanceAccounts,
+  listTreasuryAccountNamesById,
+} from "@/lib/treasury/accounts";
 import {
   GNOSIS_TREASURY_ASSETS,
   OPERATOR_ERC20_ASSETS_BY_CHAIN,
@@ -229,7 +233,7 @@ async function findBlockAtOrAfterTimestamp({
   client: BalanceClient;
   timestamp: bigint;
 }) {
-  const latestBlock = await client.getBlock();
+  const latestBlock = await withRateLimitRetry(() => client.getBlock());
 
   if (timestamp > latestBlock.timestamp) {
     throw new Error("Quarter balance boundary is after the latest block");
@@ -240,7 +244,9 @@ async function findBlockAtOrAfterTimestamp({
 
   while (low < high) {
     const mid = (low + high) / BigInt(2);
-    const block = await client.getBlock({ blockNumber: mid });
+    const block = await withRateLimitRetry(() =>
+      client.getBlock({ blockNumber: mid }),
+    );
 
     if (block.timestamp < timestamp) {
       low = mid + BigInt(1);
@@ -282,8 +288,12 @@ async function getBoundaryBlocks({
     closingBoundaryBlock > BigInt(0)
       ? closingBoundaryBlock - BigInt(1)
       : BigInt(0);
-  const opening = await client.getBlock({ blockNumber: openingBlock });
-  const closing = await client.getBlock({ blockNumber: closingBlock });
+  const opening = await withRateLimitRetry(() =>
+    client.getBlock({ blockNumber: openingBlock }),
+  );
+  const closing = await withRateLimitRetry(() =>
+    client.getBlock({ blockNumber: closingBlock }),
+  );
 
   return {
     client,
@@ -432,29 +442,49 @@ async function deleteStaleQuarterBalanceRows({
   const db = getDb();
 
   for (const account of accounts) {
-    if (!account.treasuryAccountId) {
-      continue;
-    }
-
     const symbols = getTrackedAssetsForAccount(account).map(
       (asset) => asset.symbol,
     );
+    const accountScope = account.treasuryAccountId
+      ? eq(
+          quarterBalanceSnapshots.treasuryAccountId,
+          account.treasuryAccountId,
+        )
+      : and(
+          isNull(quarterBalanceSnapshots.treasuryAccountId),
+          eq(quarterBalanceSnapshots.chainId, account.chainId),
+          eq(quarterBalanceSnapshots.accountAddress, account.address),
+        );
 
     await db
       .delete(quarterBalanceSnapshots)
       .where(
         and(
           eq(quarterBalanceSnapshots.quarterId, quarterId),
-          eq(
-            quarterBalanceSnapshots.treasuryAccountId,
-            account.treasuryAccountId,
-          ),
+          accountScope,
           or(
             ne(quarterBalanceSnapshots.chainId, account.chainId),
             ne(quarterBalanceSnapshots.accountAddress, account.address),
             symbols.length > 0
               ? notInArray(quarterBalanceSnapshots.symbol, symbols)
               : undefined,
+          ),
+        ),
+      );
+  }
+
+  const treasuryAccount = accounts.find((account) => !account.treasuryAccountId);
+
+  if (treasuryAccount) {
+    await db
+      .delete(quarterBalanceSnapshots)
+      .where(
+        and(
+          eq(quarterBalanceSnapshots.quarterId, quarterId),
+          isNull(quarterBalanceSnapshots.treasuryAccountId),
+          or(
+            ne(quarterBalanceSnapshots.chainId, treasuryAccount.chainId),
+            ne(quarterBalanceSnapshots.accountAddress, treasuryAccount.address),
           ),
         ),
       );
@@ -473,6 +503,73 @@ async function deleteStaleQuarterBalanceRows({
         notInArray(quarterBalanceSnapshots.treasuryAccountId, accountIds),
       ),
     );
+}
+
+async function upsertQuarterBalanceRows(
+  rows: (typeof quarterBalanceSnapshots.$inferInsert)[],
+) {
+  const values = rows.map((row) => sql`(
+    gen_random_uuid(),
+    ${row.quarterId},
+    ${row.treasuryAccountId},
+    ${row.boundary},
+    ${row.accountAddress},
+    ${row.chainId},
+    ${row.blockNumber},
+    ${row.blockTimestamp},
+    ${row.symbol},
+    ${row.name},
+    ${row.decimals},
+    ${row.rawAmount},
+    ${row.balance},
+    ${row.usdPrice},
+    ${row.usdValue},
+    ${row.priceSource},
+    now(),
+    now()
+  )`);
+
+  await getDb().execute(sql`
+    insert into ${quarterBalanceSnapshots} (
+      id,
+      quarter_id,
+      treasury_account_id,
+      boundary,
+      account_address,
+      chain_id,
+      block_number,
+      block_timestamp,
+      symbol,
+      name,
+      decimals,
+      raw_amount,
+      balance,
+      usd_price,
+      usd_value,
+      price_source,
+      created_at,
+      updated_at
+    )
+    values ${sql.join(values, sql`, `)}
+    on conflict (
+      quarter_id,
+      boundary,
+      chain_id,
+      lower(account_address),
+      symbol
+    )
+    do update set
+      balance = excluded.balance,
+      block_number = excluded.block_number,
+      block_timestamp = excluded.block_timestamp,
+      decimals = excluded.decimals,
+      name = excluded.name,
+      price_source = excluded.price_source,
+      raw_amount = excluded.raw_amount,
+      usd_price = excluded.usd_price,
+      usd_value = excluded.usd_value,
+      updated_at = now()
+  `);
 }
 
 export async function syncQuarterBalances(quarter: QuarterBalanceQuarter) {
@@ -510,30 +607,7 @@ export async function syncQuarterBalances(quarter: QuarterBalanceQuarter) {
     return { syncedBalances: 0 };
   }
 
-  await getDb()
-    .insert(quarterBalanceSnapshots)
-    .values(rows)
-    .onConflictDoUpdate({
-      set: {
-        balance: sql`excluded.balance`,
-        blockNumber: sql`excluded.block_number`,
-        blockTimestamp: sql`excluded.block_timestamp`,
-        decimals: sql`excluded.decimals`,
-        name: sql`excluded.name`,
-        priceSource: sql`excluded.price_source`,
-        rawAmount: sql`excluded.raw_amount`,
-        usdPrice: sql`excluded.usd_price`,
-        usdValue: sql`excluded.usd_value`,
-        updatedAt: sql`now()`,
-      },
-      target: [
-        quarterBalanceSnapshots.quarterId,
-        quarterBalanceSnapshots.boundary,
-        quarterBalanceSnapshots.chainId,
-        quarterBalanceSnapshots.accountAddress,
-        quarterBalanceSnapshots.symbol,
-      ],
-    });
+  await upsertQuarterBalanceRows(rows);
 
   await deleteStaleQuarterBalanceRows({ accounts, quarterId: quarter.id });
 
@@ -566,13 +640,21 @@ export async function listQuarterBalanceRows(
       asc(quarterBalanceSnapshots.accountAddress),
       asc(quarterBalanceSnapshots.symbol),
     );
-  const accounts = await listActiveBalanceAccounts();
-  const namesById = new Map(accounts.map((account) => [account.id, account.name]));
+  const accountIds = [
+    ...new Set(
+      rows.flatMap((row) =>
+        row.treasuryAccountId ? [row.treasuryAccountId] : [],
+      ),
+    ),
+  ];
+  const namesById = await listTreasuryAccountNamesById(accountIds);
 
   return rows.map((row) => ({
     accountAddress: row.accountAddress,
     accountName:
-      mapAccountLabel(row) ?? namesById.get(row.treasuryAccountId ?? "") ?? "Account",
+      mapAccountLabel(row) ??
+      namesById.get(row.treasuryAccountId ?? "") ??
+      "Account",
     balance: row.balance,
     blockNumber: row.blockNumber,
     blockTimestamp: row.blockTimestamp.toISOString(),
@@ -592,7 +674,12 @@ export async function listQuarterBalanceRows(
 export async function listQuarterAccountBalanceSummaries(
   quarterId: string,
 ): Promise<QuarterAccountBalanceSummary[]> {
-  const rows = await listQuarterBalanceRows(quarterId);
+  return summarizeQuarterBalanceRows(await listQuarterBalanceRows(quarterId));
+}
+
+export function summarizeQuarterBalanceRows(
+  rows: QuarterBalanceRow[],
+): QuarterAccountBalanceSummary[] {
   const summaries = new Map<string, QuarterAccountBalanceSummary>();
 
   for (const row of rows) {

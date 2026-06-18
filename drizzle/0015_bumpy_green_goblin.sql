@@ -28,4 +28,4 @@ ALTER TABLE "quarter_sync_statuses" ADD COLUMN "balances_error" text;--> stateme
 ALTER TABLE "quarter_balance_snapshots" ADD CONSTRAINT "quarter_balance_snapshots_quarter_id_quarters_id_fk" FOREIGN KEY ("quarter_id") REFERENCES "public"."quarters"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "quarter_balance_snapshots" ADD CONSTRAINT "quarter_balance_snapshots_treasury_account_id_treasury_accounts_id_fk" FOREIGN KEY ("treasury_account_id") REFERENCES "public"."treasury_accounts"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "quarter_balance_snapshots_quarter_boundary_idx" ON "quarter_balance_snapshots" USING btree ("quarter_id","boundary");--> statement-breakpoint
-CREATE UNIQUE INDEX "quarter_balance_snapshots_unique" ON "quarter_balance_snapshots" USING btree ("quarter_id","boundary","chain_id","account_address","symbol");
+CREATE UNIQUE INDEX "quarter_balance_snapshots_unique" ON "quarter_balance_snapshots" USING btree ("quarter_id","boundary","chain_id",lower("account_address"),"symbol");

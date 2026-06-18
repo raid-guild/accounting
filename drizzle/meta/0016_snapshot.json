@@ -1551,8 +1551,8 @@
               "nulls": "last"
             },
             {
-              "expression": "account_address",
-              "isExpression": false,
+              "expression": "lower(\"account_address\")",
+              "isExpression": true,
               "asc": true,
               "nulls": "last"
             },

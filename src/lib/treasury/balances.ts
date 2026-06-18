@@ -230,13 +230,21 @@ function createSnapshot({
   status: TreasurySnapshotStatus;
   syncedAt: string | null;
 }): TreasuryBalanceSnapshot {
-  const assets = aggregateAssets(accounts.map((account) => account.assets));
+  const sortedAccounts = [...accounts].sort((left, right) => {
+    const totalDifference = toNumber(right.totalUsd) - toNumber(left.totalUsd);
+
+    return totalDifference || left.name.localeCompare(right.name);
+  }) as [TreasuryAccountBalance, ...TreasuryAccountBalance[]];
+  const assets = aggregateAssets(sortedAccounts.map((account) => account.assets));
   const totalUsd = formatUsd(
-    accounts.reduce((total, account) => total + toNumber(account.totalUsd), 0),
+    sortedAccounts.reduce(
+      (total, account) => total + toNumber(account.totalUsd),
+      0,
+    ),
   );
 
   return {
-    accounts,
+    accounts: sortedAccounts,
     assets,
     asOf: new Date().toISOString(),
     syncedAt,

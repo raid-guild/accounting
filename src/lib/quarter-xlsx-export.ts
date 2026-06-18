@@ -298,7 +298,7 @@ export async function buildQuarterXlsxExport(quarter: QuarterSummary) {
     balanceRows.map((row) => ({
       accountAddress: row.accountAddress,
       accountName: row.accountName,
-      balance: toNumber(row.balance),
+      balance: row.balance,
       blockNumber: row.blockNumber,
       blockTimestamp: row.blockTimestamp,
       boundary: row.boundary === "opening" ? "Opening" : "Closing",
@@ -310,6 +310,7 @@ export async function buildQuarterXlsxExport(quarter: QuarterSummary) {
       usdValue: toNumber(row.usdValue),
     })),
   );
+  balancesSheet.getColumn("balance").numFmt = "@";
   balancesSheet.getColumn("usdPrice").numFmt = USD_FORMAT;
   balancesSheet.getColumn("usdValue").numFmt = USD_FORMAT;
 

@@ -14,8 +14,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = (await request.json()) as ViewModeRequest;
-    const mode = body.mode === "member" ? "member" : "admin";
+    const body = (await request.json().catch(() => null)) as
+      | ViewModeRequest
+      | null;
+
+    if (body?.mode !== "admin" && body?.mode !== "member") {
+      return NextResponse.json({ error: "Invalid view mode" }, { status: 400 });
+    }
+
+    const mode = body.mode;
 
     session.viewMode = mode;
     await session.save();

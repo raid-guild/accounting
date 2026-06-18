@@ -37,19 +37,34 @@ export async function getAuthSession() {
   );
 }
 
+export function canUseAdminAccess(session: AuthSessionData) {
+  return Boolean(
+    session.address &&
+      session.permissions?.canAdmin &&
+      session.viewMode !== "member",
+  );
+}
+
+export function canUseRaidAccountingAccess(session: AuthSessionData) {
+  return Boolean(
+    session.address &&
+      session.permissions?.canWriteRaidAccounting &&
+      session.viewMode !== "member",
+  );
+}
+
 export function serializeSession(session: AuthSessionData) {
   const canUseMemberView = Boolean(session.permissions?.canAdmin);
   const viewMode: "admin" | "member" =
     canUseMemberView && session.viewMode === "member" ? "member" : "admin";
-  const memberViewRoles: AuthPermissions["roles"] = session.permissions?.roles
-    .filter((role) => role !== "admin") ?? ["member"];
+  const memberViewRoles: AuthPermissions["roles"] = ["member"];
   const permissions: AuthPermissions | null =
     session.permissions && viewMode === "member"
       ? {
           ...session.permissions,
           canAdmin: false,
           canWriteRaidAccounting: false,
-          roles: memberViewRoles.length > 0 ? memberViewRoles : ["member"],
+          roles: memberViewRoles,
         }
       : (session.permissions ?? null);
 

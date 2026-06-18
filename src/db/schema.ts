@@ -379,7 +379,7 @@ export const quarterBalanceSnapshots = pgTable(
       table.quarterId,
       table.boundary,
       table.chainId,
-      table.accountAddress,
+      sql`lower(${table.accountAddress})`,
       table.symbol,
     ),
   ],

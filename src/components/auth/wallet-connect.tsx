@@ -322,8 +322,8 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
 
       setSession(nextSession);
       router.refresh();
-    } catch (error) {
-      showToast(getFriendlyError(error));
+    } catch {
+      showToast("Could not switch view mode.");
     }
   }
 

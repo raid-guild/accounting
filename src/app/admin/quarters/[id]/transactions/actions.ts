@@ -15,7 +15,7 @@ import {
   treasuryTransactionTransfers,
 } from "@/db/schema";
 import { writeAuditEvent } from "@/lib/audit";
-import { getAuthSession } from "@/lib/auth/session";
+import { canUseAdminAccess, getAuthSession } from "@/lib/auth/session";
 import {
   buildBankCsvNote,
   parseBankCsvConfirmRows,
@@ -131,7 +131,7 @@ async function getExistingSourceExternalIds(sourceExternalIds: string[]) {
 async function requireAdminSession() {
   const session = await getAuthSession();
 
-  if (!session.address || !session.permissions?.canAdmin) {
+  if (!canUseAdminAccess(session)) {
     throw new Error("Admin access required");
   }
 

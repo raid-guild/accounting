@@ -39,8 +39,8 @@ import {
 } from "@/lib/quarter-sync";
 import { isQuarterExportReady } from "@/lib/quarter-export-readiness";
 import {
-  listQuarterAccountBalanceSummaries,
   listQuarterBalanceRows,
+  summarizeQuarterBalanceRows,
   type QuarterBalanceRow,
   type QuarterAccountBalanceSummary,
 } from "@/lib/quarter-balances";
@@ -1177,7 +1177,6 @@ export default async function QuarterTransactionsPage({
     manualEntries,
     summary,
     quarterSyncStatus,
-    balanceSummaries,
     balanceRows,
   ] = await Promise.all([
     listClassificationOptions(),
@@ -1188,9 +1187,9 @@ export default async function QuarterTransactionsPage({
     listManualLedgerEntryClassifications({ quarterId: quarter.id }),
     getQuarterClassificationSummary(quarter),
     getQuarterSyncStatus(quarter.id),
-    listQuarterAccountBalanceSummaries(quarter.id),
     listQuarterBalanceRows(quarter.id),
   ]);
+  const balanceSummaries = summarizeQuarterBalanceRows(balanceRows);
   const toastSyncStatus =
     query.synced === "1"
       ? "complete"
