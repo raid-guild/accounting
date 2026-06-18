@@ -1,6 +1,7 @@
 "use client";
 
 import { Coins, FileSpreadsheet, WalletCards } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { CopyAddressButton } from "@/components/treasury/copy-address-button";
@@ -39,6 +40,19 @@ function formatDate(value: string) {
 
 function formatAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function getChainName(chainId: number) {
+  switch (chainId) {
+    case 1:
+      return "Ethereum";
+    case 100:
+      return "Gnosis";
+    case 8453:
+      return "Base";
+    default:
+      return `Chain ${chainId}`;
+  }
 }
 
 function isTreasuryBalanceSnapshot(
@@ -195,111 +209,153 @@ export function TreasuryDashboard({
     [snapshot, isRefreshing],
   );
   const isPopulating = isRefreshing && !snapshot.syncedAt;
+  const sourceChainNames = [
+    ...new Set(snapshot.accounts.map((account) => getChainName(account.chainId))),
+  ];
+  const sourceLabel =
+    sourceChainNames.length > 1 ? "Multiple chains" : sourceChainNames[0];
+  const chainSummaries = sourceChainNames
+    .map((chainName) => {
+      const totalUsd = snapshot.accounts
+        .filter((account) => getChainName(account.chainId) === chainName)
+        .reduce((total, account) => total + Number(account.totalUsd), 0);
+
+      return { chainName, totalUsd };
+    })
+    .sort((left, right) => right.totalUsd - left.totalUsd);
 
   return (
     <section className="container-custom py-8 md:py-12">
-      <div className="grid items-stretch gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <section
-          className={`rounded-lg border border-border bg-card p-6 shadow-sm transition-all duration-500 ${
-            justUpdated ? "ring-2 ring-primary/30" : ""
-          }`}
-        >
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="type-label text-muted-foreground">
-                Current Treasury Balance
-              </p>
-              <p
-                className={`mt-4 text-4xl font-semibold tracking-normal transition-opacity duration-500 md:text-5xl ${
-                  isPopulating ? "opacity-40" : "opacity-100"
-                }`}
-              >
-                {formatCurrency(snapshot.totalUsd)}
-              </p>
-              <p className="mt-4 text-sm text-muted-foreground">{syncCopy}</p>
-              {justUpdated ? (
-                <p className="mt-2 text-sm font-medium text-primary">
-                  Updated just now
+      <section
+        className={`rounded-lg border border-border bg-card p-6 shadow-sm transition-all duration-500 ${
+          justUpdated ? "ring-2 ring-primary/30" : ""
+        }`}
+      >
+        <div className="grid gap-6 lg:grid-cols-[minmax(300px,0.85fr)_1.15fr]">
+          <div className="flex flex-col">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="type-label text-muted-foreground">
+                  Current Treasury Balance
                 </p>
-              ) : null}
+                <p
+                  className={`mt-4 text-4xl font-semibold tracking-normal transition-opacity duration-500 md:text-5xl ${
+                    isPopulating ? "opacity-40" : "opacity-100"
+                  }`}
+                >
+                  {formatCurrency(snapshot.totalUsd)}
+                </p>
+                <p className="mt-4 text-sm text-muted-foreground">{syncCopy}</p>
+                {justUpdated ? (
+                  <p className="mt-2 text-sm font-medium text-primary">
+                    Updated just now
+                  </p>
+                ) : null}
+              </div>
+              <SyncStatusBadge
+                isRefreshing={isRefreshing}
+                status={snapshot.status}
+              />
             </div>
-            <SyncStatusBadge
-              isRefreshing={isRefreshing}
-              status={snapshot.status}
-            />
-          </div>
 
-          <dl className="mt-8 grid gap-5 sm:grid-cols-3">
-            <div>
-              <dt className="type-label-sm text-muted-foreground">Accounts</dt>
-              <dd className="mt-2 text-xl font-semibold">
-                {snapshot.accounts.length}
-              </dd>
-            </div>
-            <div>
-              <dt className="type-label-sm text-muted-foreground">Assets</dt>
-              <dd className="mt-2 text-xl font-semibold">
-                {snapshot.assets.length}
-              </dd>
-            </div>
-            <div>
-              <dt className="type-label-sm text-muted-foreground">Source</dt>
-              <dd className="mt-2 text-sm font-medium">Gnosis accounts</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section className="rounded-lg border border-border bg-card p-6 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-                <WalletCards className="size-5" aria-hidden="true" />
+            <dl className="mt-8 grid gap-5 sm:grid-cols-3">
+              <div>
+                <dt className="type-label-sm text-muted-foreground">Accounts</dt>
+                <dd className="mt-2 text-xl font-semibold">
+                  {snapshot.accounts.length}
+                </dd>
               </div>
               <div>
-                <p className="type-label-sm text-muted-foreground">Account</p>
-                <h2 className="text-lg font-semibold">Included accounts</h2>
+                <dt className="type-label-sm text-muted-foreground">Assets</dt>
+                <dd className="mt-2 text-xl font-semibold">
+                  {snapshot.assets.length}
+                </dd>
+              </div>
+              <div>
+                <dt className="type-label-sm text-muted-foreground">Source</dt>
+                <dd className="mt-2 text-sm font-medium">{sourceLabel}</dd>
+                {sourceChainNames.length > 1 ? (
+                  <dd className="mt-1 text-xs font-medium text-muted-foreground">
+                    {sourceChainNames.join(", ")}
+                  </dd>
+                ) : null}
+              </div>
+            </dl>
+
+            <div className="mt-8 border-t border-border pt-5">
+              <p className="type-label-sm text-muted-foreground">
+                Balance by chain
+              </p>
+              <div className="mt-3 grid gap-2">
+                {chainSummaries.map((chain) => (
+                  <div
+                    key={chain.chainName}
+                    className="flex items-center justify-between gap-4 text-sm"
+                  >
+                    <span className="font-medium text-muted-foreground">
+                      {chain.chainName}
+                    </span>
+                    <span className="font-semibold">
+                      {formatCurrency(String(chain.totalUsd))}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
-            <span className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
-              {snapshot.accounts.length} accounts
-            </span>
           </div>
 
-          <div className="mt-5 grid gap-2 sm:grid-cols-2">
-            {snapshot.accounts.map((account) => (
-              <div
-                key={account.id}
-                className="rounded-md border border-border bg-background px-3 py-3"
-              >
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <p className="min-w-0 truncate text-sm font-semibold">
-                    {account.name}
-                  </p>
-                  <p
-                    className={`shrink-0 text-right text-sm font-semibold transition-opacity duration-500 ${
-                      isPopulating ? "opacity-40" : "opacity-100"
-                    }`}
-                  >
-                    {formatCurrency(account.totalUsd)}
-                  </p>
+          <div className="border-t border-border pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+                  <WalletCards className="size-5" aria-hidden="true" />
                 </div>
-                {account.address ? (
-                  <div className="mt-2 inline-flex max-w-full items-center gap-2">
-                    <code className="min-w-0 truncate text-xs font-medium text-muted-foreground">
-                      {formatAddress(account.address)}
-                    </code>
-                    <CopyAddressButton address={account.address} />
-                  </div>
-                ) : (
-                  <p className="mt-2 text-xs font-medium text-muted-foreground">
-                    Address not configured
-                  </p>
-                )}
+                <div>
+                  <p className="type-label-sm text-muted-foreground">Account</p>
+                  <h2 className="text-lg font-semibold">Included accounts</h2>
+                </div>
               </div>
-            ))}
+              <span className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
+                {snapshot.accounts.length} accounts
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              {snapshot.accounts.map((account) => (
+                <div
+                  key={account.id}
+                  className="rounded-md border border-border bg-background px-3 py-3"
+                >
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <p className="min-w-0 truncate text-sm font-semibold">
+                      {account.name}
+                    </p>
+                    <p
+                      className={`shrink-0 text-right text-sm font-semibold transition-opacity duration-500 ${
+                        isPopulating ? "opacity-40" : "opacity-100"
+                      }`}
+                    >
+                      {formatCurrency(account.totalUsd)}
+                    </p>
+                  </div>
+                  {account.address ? (
+                    <div className="mt-2 inline-flex max-w-full items-center gap-2">
+                      <code className="min-w-0 truncate text-xs font-medium text-muted-foreground">
+                        {formatAddress(account.address)}
+                      </code>
+                      <CopyAddressButton address={account.address} />
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs font-medium text-muted-foreground">
+                      Address not configured
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
       <section className="mt-6 rounded-lg border border-border bg-card p-6 shadow-sm">
         <div className="flex items-center gap-3">
@@ -316,15 +372,16 @@ export function TreasuryDashboard({
             isRefreshing ? "opacity-75" : "opacity-100"
           }`}
         >
-          <div className="grid grid-cols-[1fr_1fr] gap-3 border-b border-border bg-muted px-4 py-3 text-xs font-medium uppercase text-muted-foreground sm:grid-cols-[1fr_1fr_1fr]">
+          <div className="grid grid-cols-[1fr_1fr] gap-3 border-b border-border bg-muted px-4 py-3 text-xs font-medium uppercase text-muted-foreground sm:grid-cols-[1fr_0.9fr_1fr_1fr]">
             <span>Asset</span>
+            <span className="hidden sm:block">Chain</span>
             <span className="text-right sm:text-left">Balance</span>
             <span className="hidden text-right sm:block">USD Value</span>
           </div>
           {snapshot.assets.map((asset) => (
             <div
               key={asset.symbol}
-              className="grid grid-cols-[1fr_1fr] items-center gap-3 border-b border-border px-4 py-4 transition-colors duration-500 last:border-b-0 sm:grid-cols-[1fr_1fr_1fr]"
+              className="grid grid-cols-[1fr_1fr] items-center gap-3 border-b border-border px-4 py-4 transition-colors duration-500 last:border-b-0 sm:grid-cols-[1fr_0.9fr_1fr_1fr]"
             >
               <div>
                 <p className="text-sm font-semibold">{asset.symbol}</p>
@@ -332,6 +389,9 @@ export function TreasuryDashboard({
                   {asset.name}
                 </p>
               </div>
+              <p className="hidden text-sm font-medium text-muted-foreground sm:block">
+                {asset.chainIds.map(getChainName).join(", ")}
+              </p>
               <p className="text-right text-sm font-medium sm:text-left">
                 {formatNumber(asset.balance)} {asset.symbol}
               </p>
@@ -385,14 +445,21 @@ export function TreasuryDashboard({
                     ? formatTimestamp(quarter.publishedAt)
                     : "date unavailable"}
                 </p>
-                <button
-                  type="button"
-                  disabled
-                  className="mt-4 inline-flex h-8 items-center justify-center rounded-lg border border-border bg-muted px-2.5 text-sm font-medium text-muted-foreground"
-                >
-                  <FileSpreadsheet data-icon="inline-start" />
-                  Export
-                </button>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link
+                    href={`/reports/quarters/${quarter.id}`}
+                    className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-background px-2.5 text-sm font-medium transition-all hover:bg-muted"
+                  >
+                    View Report
+                  </Link>
+                  <Link
+                    href={`/reports/quarters/${quarter.id}/export.xlsx`}
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium transition-all hover:bg-muted"
+                  >
+                    <FileSpreadsheet data-icon="inline-start" />
+                    Export
+                  </Link>
+                </div>
               </article>
             ))}
           </div>

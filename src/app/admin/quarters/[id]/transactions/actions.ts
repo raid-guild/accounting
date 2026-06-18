@@ -33,6 +33,11 @@ import {
 import { syncMembershipActivitiesForPeriod } from "@/lib/membership-activity";
 import { syncQuarterBalances } from "@/lib/quarter-balances";
 import {
+  acknowledgeQuarterBalanceValidation,
+  deleteQuarterBalanceValidation,
+  runQuarterBalanceValidation,
+} from "@/lib/quarter-balance-validation";
+import {
   assertClassificationEntityMatchesCategory,
   assertRaidIsAvailable,
   getCounterpartyAddressForTransfer,
@@ -49,6 +54,7 @@ import {
   startOrResumeQuarterSync,
   type QuarterSyncStatus,
 } from "@/lib/quarter-sync";
+import { getQuarterClassificationSummary } from "@/lib/quarters";
 import { assertRipIsAvailable } from "@/lib/rips";
 import { syncTreasuryTransactions } from "@/lib/treasury/transactions";
 
@@ -594,6 +600,7 @@ export async function confirmBankCsvImport(
       summary: "Imported bank CSV rows",
     });
 
+    await invalidateQuarterValidation(quarter.id);
     revalidatePath("/admin/quarters");
     revalidatePath(getTransactionsPath(quarter.id));
 
@@ -698,6 +705,7 @@ export async function createManualProviderExpense(
       summary: "Created manual provider expense",
     });
 
+    await invalidateQuarterValidation(quarter.id);
     revalidatePath("/admin/quarters");
     revalidatePath(getTransactionsPath(quarter.id));
 
@@ -781,6 +789,7 @@ export async function syncQuarterTransactions(formData: FormData) {
     throw new Error("Quarter is required");
   }
 
+  await invalidateQuarterValidation(quarterId);
   let status = await startQuarterSync(quarterId);
   status = await syncQuarterTransactionsStep({
     quarterId,
@@ -818,8 +827,16 @@ export async function syncQuarterTransactions(formData: FormData) {
 function revalidateQuarterSyncPaths(quarterId: string) {
   revalidatePath("/admin/quarters");
   revalidatePath(getTransactionsPath(quarterId));
+  revalidatePath("/reports");
+  revalidatePath(`/reports/quarters/${quarterId}`);
   revalidatePath("/proposals");
   revalidatePath("/membership");
+}
+
+async function invalidateQuarterValidation(quarterId: string) {
+  await deleteQuarterBalanceValidation(quarterId);
+  revalidatePath("/reports");
+  revalidatePath(`/reports/quarters/${quarterId}`);
 }
 
 function throwIfStepFailed(status: QuarterSyncStatus, step: string) {
@@ -837,6 +854,78 @@ function throwIfStepFailed(status: QuarterSyncStatus, step: string) {
   if (status.overallStatus === "failed" && error) {
     throw new Error(error);
   }
+}
+
+export async function runBalanceValidation(formData: FormData) {
+  const session = await requireAdminSession();
+  const quarterId = getString(formData, "quarterId");
+
+  if (!quarterId) {
+    throw new Error("Quarter is required");
+  }
+
+  const quarter = await getQuarterById(quarterId);
+  const [classificationSummary, syncStatus] = await Promise.all([
+    getQuarterClassificationSummary({
+      endsOn: quarter.endsOn,
+      startsOn: quarter.startsOn,
+    }),
+    getQuarterSyncStatus(quarterId),
+  ]);
+  const validation = await runQuarterBalanceValidation({
+    classificationSummary,
+    quarter,
+    syncStatus,
+  });
+
+  await writeAuditEvent({
+    action: "update",
+    actorWalletAddress: session.address,
+    metadata: {
+      excludedCount: validation.excludedCount,
+      status: validation.status,
+      varianceCount: validation.varianceCount,
+    },
+    quarterId,
+    subjectId: validation.id,
+    subjectTable: "quarter_balance_validations",
+    summary: "Ran quarter balance validation",
+  });
+
+  revalidateQuarterSyncPaths(quarterId);
+  redirect(`${getTransactionsPath(quarterId)}?validation=${validation.status}`);
+}
+
+export async function acknowledgeBalanceVariance(formData: FormData) {
+  const session = await requireAdminSession();
+  const quarterId = getString(formData, "quarterId");
+  const note = getString(formData, "note");
+
+  if (!quarterId) {
+    throw new Error("Quarter is required");
+  }
+
+  const validation = await acknowledgeQuarterBalanceValidation({
+    note,
+    quarterId,
+    walletAddress: session.address ?? "",
+  });
+
+  await writeAuditEvent({
+    action: "update",
+    actorWalletAddress: session.address,
+    metadata: {
+      excludedCount: validation.excludedCount,
+      varianceCount: validation.varianceCount,
+    },
+    quarterId,
+    subjectId: validation.id,
+    subjectTable: "quarter_balance_validations",
+    summary: "Acknowledged quarter balance variance",
+  });
+
+  revalidateQuarterSyncPaths(quarterId);
+  redirect(`${getTransactionsPath(quarterId)}?validation=acknowledged`);
 }
 
 export async function startQuarterSync(quarterId: string) {
@@ -1229,8 +1318,11 @@ export async function classifyQuarterTransfer(formData: FormData) {
     summary: "Saved transaction classification",
   });
 
+  await invalidateQuarterValidation(quarterId);
   revalidatePath("/admin/quarters");
   revalidatePath(getTransactionsPath(quarterId));
+  revalidatePath("/reports");
+  revalidatePath(`/reports/quarters/${quarterId}`);
 
   const params = new URLSearchParams({
     classified: "1",
@@ -1344,8 +1436,11 @@ export async function updateLedgerEntryClassification(formData: FormData) {
     summary: "Updated ledger entry classification",
   });
 
+  await invalidateQuarterValidation(quarterId);
   revalidatePath("/admin/quarters");
   revalidatePath(getTransactionsPath(quarterId));
+  revalidatePath("/reports");
+  revalidatePath(`/reports/quarters/${quarterId}`);
 
   const params = new URLSearchParams({
     classified: "1",

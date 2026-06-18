@@ -179,6 +179,7 @@ export function AppHeader({ initialSession }: AppHeaderProps) {
               aria-label="Accounting sections"
             >
               <NavItem href="/">Dashboard</NavItem>
+              <NavItem href="/reports">Reports</NavItem>
               <NavItem href="/admin/quarters">Quarters</NavItem>
               <NavGroup
                 isOpen={openGroup === "accounting"}

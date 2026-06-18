@@ -14,7 +14,7 @@ import {
   type LedgerCategory,
 } from "@/lib/transaction-classification";
 
-type ExportLedgerRow = {
+export type QuarterExportLedgerRow = {
   account: string;
   assetAmount: string;
   assetSymbol: string;
@@ -102,7 +102,7 @@ function addRowsSheet(
   return worksheet;
 }
 
-function sumUsd(rows: ExportLedgerRow[], categories: LedgerCategory[]) {
+function sumUsd(rows: QuarterExportLedgerRow[], categories: LedgerCategory[]) {
   return rows.reduce((total, row) => {
     if (!row.category || !categories.includes(row.category)) {
       return total;
@@ -112,7 +112,7 @@ function sumUsd(rows: ExportLedgerRow[], categories: LedgerCategory[]) {
   }, 0);
 }
 
-function getQuarterRaidRows(ledgerRows: ExportLedgerRow[]) {
+function getQuarterRaidRows(ledgerRows: QuarterExportLedgerRow[]) {
   const rows = new Map<string, QuarterRaidExportRow>();
 
   for (const ledgerRow of ledgerRows) {
@@ -158,7 +158,7 @@ function getQuarterRaidRows(ledgerRows: ExportLedgerRow[]) {
   });
 }
 
-function buildLedgerRows({ quarter }: { quarter: QuarterSummary }) {
+export function buildQuarterLedgerRows({ quarter }: { quarter: QuarterSummary }) {
   return Promise.all([
     listClassificationOptions(),
     listTreasuryTransferClassifications({ quarter, status: "all" }),
@@ -171,7 +171,7 @@ function buildLedgerRows({ quarter }: { quarter: QuarterSummary }) {
       options.raids.map((raid) => [raid.id, `${raid.name} (${raid.clientName})`]),
     );
     const ripsById = new Map(options.rips.map((rip) => [rip.id, rip.title]));
-    const rows: ExportLedgerRow[] = [
+    const rows: QuarterExportLedgerRow[] = [
       ...transfers.map((transfer) => ({
         account: transfer.accountName,
         assetAmount: transfer.assetAmount,
@@ -231,7 +231,7 @@ export async function buildQuarterXlsxExport(quarter: QuarterSummary) {
 
   const [ledgerRows, membershipReport, proposalActivity, balanceRows] =
     await Promise.all([
-      buildLedgerRows({ quarter }),
+      buildQuarterLedgerRows({ quarter }),
       getMembershipActivityReport({ visibility: "admin" }),
       listProposalActivity({ visibility: "admin" }),
       listQuarterBalanceRows(quarter.id),

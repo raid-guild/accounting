@@ -12,6 +12,7 @@ import {
   getAuthSession,
 } from "@/lib/auth/session";
 import { encryptField } from "@/lib/encryption";
+import { deleteQuarterBalanceValidation } from "@/lib/quarter-balance-validation";
 import {
   lookupManualTransaction,
   type ManualTransactionLookupResult,
@@ -463,9 +464,12 @@ export async function saveManualRaidRevenue(
       summary: "Saved manual raid revenue",
     });
 
+    await deleteQuarterBalanceValidation(quarter.id);
     revalidatePath("/raids");
     revalidatePath("/admin/quarters");
     revalidatePath(`/admin/quarters/${quarter.id}/transactions`);
+    revalidatePath("/reports");
+    revalidatePath(`/reports/quarters/${quarter.id}`);
 
     return {
       error: null,
@@ -594,9 +598,12 @@ export async function saveManualRaidPayout(
       summary: "Saved manual raid payout",
     });
 
+    await deleteQuarterBalanceValidation(quarter.id);
     revalidatePath("/raids");
     revalidatePath("/admin/quarters");
     revalidatePath(`/admin/quarters/${quarter.id}/transactions`);
+    revalidatePath("/reports");
+    revalidatePath(`/reports/quarters/${quarter.id}`);
 
     return {
       error: null,
@@ -690,9 +697,12 @@ export async function removeManualRaidLedgerEntry(
       summary: `Removed manual raid ${kind}`,
     });
 
+    await deleteQuarterBalanceValidation(row.quarter.id);
     revalidatePath("/raids");
     revalidatePath("/admin/quarters");
     revalidatePath(`/admin/quarters/${row.quarter.id}/transactions`);
+    revalidatePath("/reports");
+    revalidatePath(`/reports/quarters/${row.quarter.id}`);
 
     return { error: null, removed: true };
   } catch (error) {

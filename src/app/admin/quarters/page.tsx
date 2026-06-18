@@ -2,8 +2,8 @@ import {
   ArrowLeft,
   CheckCircle2,
   Download,
+  Eye,
   History,
-  LockKeyhole,
   RotateCcw,
   Save,
   Tags,
@@ -15,6 +15,7 @@ import {
   createQ1ReportingPeriod,
   updateQuarterStatus,
 } from "@/app/admin/quarters/actions";
+import { PublishQuarterConfirmation } from "@/app/admin/quarters/publish-quarter-confirmation";
 import { AppHeader } from "@/components/app-header";
 import { QuarterWorkflowProgress } from "@/components/quarters/quarter-workflow-progress";
 import { Button } from "@/components/ui/button";
@@ -205,13 +206,24 @@ function QuarterCard({
       {canManage || canExport ? (
         <div className="mt-6 flex flex-wrap gap-2">
           {canExport ? (
-            <Link
-              href={`/admin/quarters/${quarter.id}/export.xlsx`}
-              className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
-            >
-              <Download data-icon="inline-start" />
-              Export XLSX
-            </Link>
+            <>
+              <Link
+                href={`/reports/quarters/${quarter.id}`}
+                className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
+              >
+                <Eye data-icon="inline-start" />
+                {quarter.status === "published"
+                  ? "View Report"
+                  : "Preview Report"}
+              </Link>
+              <Link
+                href={`/reports/quarters/${quarter.id}/export.xlsx`}
+                className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
+              >
+                <Download data-icon="inline-start" />
+                Export XLSX
+              </Link>
+            </>
           ) : null}
           {canManage ? (
             <>
@@ -244,18 +256,14 @@ function QuarterCard({
                 <CheckCircle2 data-icon="inline-start" />
                 Mark Ready
               </StatusAction>
-              <StatusAction
-                quarter={quarter}
-                status="published"
-                variant="default"
+              <PublishQuarterConfirmation
                 disabled={
                   quarter.status === "published" ||
                   publishStep?.status !== "current"
                 }
-              >
-                <LockKeyhole data-icon="inline-start" />
-                Publish Quarter
-              </StatusAction>
+                quarterId={quarter.id}
+                quarterLabel={quarter.label}
+              />
             </>
           ) : null}
         </div>

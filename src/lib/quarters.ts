@@ -16,6 +16,10 @@ import {
   type QuarterSyncStatus,
   type QuarterWorkflowStep,
 } from "@/lib/quarter-sync";
+import {
+  getQuarterBalanceValidationMap,
+  type QuarterBalanceValidation,
+} from "@/lib/quarter-balance-validation";
 
 export type QuarterStatus = (typeof quarterStatusEnum.enumValues)[number];
 
@@ -52,6 +56,7 @@ export type QuarterReportingPeriod = QuarterSummary & {
   classificationSummary: QuarterClassificationSummary;
   history: QuarterHistoryEvent[];
   syncStatus: QuarterSyncStatus | null;
+  balanceValidation: QuarterBalanceValidation | null;
   workflowSteps: QuarterWorkflowStep[];
 };
 
@@ -250,9 +255,13 @@ export async function listQuarterReportingPeriods(): Promise<
   const syncStatusByQuarter = await getQuarterSyncStatusMap(
     quarterRows.map((quarter) => quarter.id),
   );
+  const validationByQuarter = await getQuarterBalanceValidationMap(
+    quarterRows.map((quarter) => quarter.id),
+  );
 
   return quarterRows.map((quarter, index) => ({
     ...quarter,
+    balanceValidation: validationByQuarter.get(quarter.id) ?? null,
     classificationSummary: summaries[index],
     history: historyByQuarter.get(quarter.id) ?? [],
     syncStatus: syncStatusByQuarter.get(quarter.id) ?? null,
@@ -260,6 +269,7 @@ export async function listQuarterReportingPeriods(): Promise<
       classificationSummary: summaries[index],
       quarter,
       syncStatus: syncStatusByQuarter.get(quarter.id) ?? null,
+      validation: validationByQuarter.get(quarter.id) ?? null,
     }),
   }));
 }

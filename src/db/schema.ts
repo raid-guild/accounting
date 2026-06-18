@@ -103,6 +103,11 @@ export const quarterBalanceBoundaryEnum = pgEnum("quarter_balance_boundary", [
   "closing",
 ]);
 
+export const quarterBalanceValidationStatusEnum = pgEnum(
+  "quarter_balance_validation_status",
+  ["not_ready", "needs_review", "validated", "acknowledged"],
+);
+
 export const auditActionEnum = pgEnum("audit_action", [
   "create",
   "update",
@@ -382,6 +387,38 @@ export const quarterBalanceSnapshots = pgTable(
       sql`lower(${table.accountAddress})`,
       table.symbol,
     ),
+  ],
+);
+
+export const quarterBalanceValidations = pgTable(
+  "quarter_balance_validations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    quarterId: uuid("quarter_id")
+      .notNull()
+      .references(() => quarters.id, { onDelete: "cascade" }),
+    status: quarterBalanceValidationStatusEnum("status").notNull(),
+    checkedCount: integer("checked_count").default(0).notNull(),
+    varianceCount: integer("variance_count").default(0).notNull(),
+    excludedCount: integer("excluded_count").default(0).notNull(),
+    totalVarianceUsd: numeric("total_variance_usd", {
+      precision: 18,
+      scale: 2,
+    })
+      .default("0")
+      .notNull(),
+    details: jsonb("details").notNull(),
+    acknowledgementNoteEncrypted: jsonb("acknowledgement_note_encrypted"),
+    acknowledgedByWalletAddress: text("acknowledged_by_wallet_address"),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+    sourceSyncRunId: text("source_sync_run_id"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("quarter_balance_validations_quarter_id_unique").on(
+      table.quarterId,
+    ),
+    index("quarter_balance_validations_status_idx").on(table.status),
   ],
 );
 
