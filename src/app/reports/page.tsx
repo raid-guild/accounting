@@ -100,7 +100,13 @@ export default async function ReportsPage() {
                         {quarter.label}
                       </h2>
                     </div>
-                    <span className="rounded-md border border-emerald-600/25 bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-800">
+                    <span
+                      className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                        isPreview
+                          ? "border-amber-500/30 bg-amber-500/10 text-amber-800"
+                          : "border-emerald-600/25 bg-emerald-600/10 text-emerald-800"
+                      }`}
+                    >
                       {isPreview ? "Admin Preview" : "Published"}
                     </span>
                   </div>

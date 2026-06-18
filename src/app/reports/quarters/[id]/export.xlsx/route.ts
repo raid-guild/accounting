@@ -47,7 +47,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
   if (!isQuarterExportReady(quarter)) {
     return responseText(
-      "Quarter export is not ready. Sync activity and classify every transaction first.",
+      "Quarter export is not ready. Sync activity, classify transactions, and complete balance validation first.",
       409,
     );
   }

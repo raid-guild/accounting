@@ -30,6 +30,7 @@ export type QuarterReportData = {
     net: number;
     revenue: number;
     spoilsReceived: number;
+    subcontractorPayouts: number;
   };
   providerExpenses: QuarterReportLinkedRow[];
   ripExpenses: QuarterReportLinkedRow[];
@@ -52,6 +53,16 @@ function sumRows(
 ) {
   return rows.reduce((total, row) => {
     if (!row.category || !categories.includes(row.category)) {
+      return total;
+    }
+
+    return total + toNumber(row.usdAmount);
+  }, 0);
+}
+
+function sumRaidLinkedSubcontractorPayouts(rows: QuarterExportLedgerRow[]) {
+  return rows.reduce((total, row) => {
+    if (row.category !== "subcontractor_payout" || !row.raid) {
       return total;
     }
 
@@ -115,6 +126,7 @@ export async function getQuarterReportData(
     "subcontractor_payout",
   ]);
   const spoilsReceived = sumRows(ledgerRows, ["raid_spoils"]);
+  const subcontractorPayouts = sumRaidLinkedSubcontractorPayouts(ledgerRows);
 
   return {
     balances: summarizeQuarterBalanceRows(balanceRows),
@@ -124,6 +136,7 @@ export async function getQuarterReportData(
       net: revenue - expenses,
       revenue,
       spoilsReceived,
+      subcontractorPayouts,
     },
     providerExpenses: summarizeLinkedRows({
       category: "provider_expense",

@@ -898,6 +898,7 @@ export async function runBalanceValidation(formData: FormData) {
 
 export async function acknowledgeBalanceVariance(formData: FormData) {
   const session = await requireAdminSession();
+  const walletAddress = session.address;
   const quarterId = getString(formData, "quarterId");
   const note = getString(formData, "note");
 
@@ -905,15 +906,19 @@ export async function acknowledgeBalanceVariance(formData: FormData) {
     throw new Error("Quarter is required");
   }
 
+  if (!walletAddress) {
+    throw new Error("Admin wallet address is required");
+  }
+
   const validation = await acknowledgeQuarterBalanceValidation({
     note,
     quarterId,
-    walletAddress: session.address ?? "",
+    walletAddress,
   });
 
   await writeAuditEvent({
     action: "update",
-    actorWalletAddress: session.address,
+    actorWalletAddress: walletAddress,
     metadata: {
       excludedCount: validation.excludedCount,
       varianceCount: validation.varianceCount,

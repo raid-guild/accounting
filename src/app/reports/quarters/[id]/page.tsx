@@ -20,6 +20,14 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+function formatPercent(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 0,
+    style: "percent",
+  }).format(value);
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
@@ -69,9 +77,11 @@ function ReportGate({
 }
 
 function MetricCard({
+  detail,
   label,
   value,
 }: {
+  detail?: string;
   label: string;
   value: number;
 }) {
@@ -79,6 +89,11 @@ function MetricCard({
     <div className="rounded-md border border-border bg-background p-4">
       <p className="type-label-sm text-muted-foreground">{label}</p>
       <p className="mt-2 text-2xl font-semibold">{formatCurrency(value)}</p>
+      {detail ? (
+        <p className="mt-2 text-xs font-medium text-muted-foreground">
+          {detail}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -303,6 +318,10 @@ export default async function QuarterReportPage({
   }
 
   const report = await getQuarterReportData(quarter);
+  const subcontractorExpensePercent =
+    report.metrics.expenses > 0
+      ? report.metrics.subcontractorPayouts / report.metrics.expenses
+      : 0;
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -347,7 +366,11 @@ export default async function QuarterReportPage({
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <MetricCard label="Revenue" value={report.metrics.revenue} />
-            <MetricCard label="Expenses" value={report.metrics.expenses} />
+            <MetricCard
+              detail={`${formatCurrency(report.metrics.subcontractorPayouts)} / ${formatPercent(subcontractorExpensePercent)} to raiders`}
+              label="Expenses"
+              value={report.metrics.expenses}
+            />
             <MetricCard label="Net" value={report.metrics.net} />
             <MetricCard
               label="Spoils Received"

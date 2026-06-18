@@ -81,24 +81,65 @@ type QuarterValidationInput = Pick<
 type BalanceRow = typeof quarterBalanceSnapshots.$inferSelect;
 type ManualLedgerEntry = typeof ledgerEntries.$inferSelect;
 
-const TOKEN_TOLERANCE = 0.000001;
+const ZERO = BigInt(0);
+const ONE = BigInt(1);
+const NEGATIVE_ONE = BigInt(-1);
+const DECIMAL_SCALE = BigInt(10) ** BigInt(18);
+const TOKEN_TOLERANCE = BigInt(10) ** BigInt(12); // 0.000001 at 18-decimal precision.
 
-function toNumber(value: string | null | undefined) {
-  if (!value) {
-    return 0;
+function parseFixedDecimal(value: string | null | undefined) {
+  if (!value?.trim()) {
+    return ZERO;
   }
 
-  const number = Number(value);
+  const trimmed = value.trim();
+  const sign = trimmed.startsWith("-") ? NEGATIVE_ONE : ONE;
+  const unsigned = trimmed.replace(/^[+-]/, "");
+  const [whole = "0", fraction = ""] = unsigned.split(".");
 
-  return Number.isFinite(number) ? number : 0;
+  if (!/^\d*$/.test(whole) || !/^\d*$/.test(fraction)) {
+    return ZERO;
+  }
+
+  const wholeValue = BigInt(whole || "0") * DECIMAL_SCALE;
+  const fractionValue = BigInt(
+    fraction.padEnd(18, "0").slice(0, 18) || "0",
+  );
+
+  return sign * (wholeValue + fractionValue);
 }
 
-function formatToken(value: number) {
-  return value.toFixed(18).replace(/\.?0+$/, "") || "0";
+function absFixed(value: bigint) {
+  return value < ZERO ? -value : value;
 }
 
-function formatUsd(value: number) {
-  return value.toFixed(2);
+function formatFixedDecimal(value: bigint, fractionDigits = 18) {
+  const sign = value < ZERO ? "-" : "";
+  const absolute = absFixed(value);
+  const whole = absolute / DECIMAL_SCALE;
+  const fraction = absolute % DECIMAL_SCALE;
+  const fractionText = fraction
+    .toString()
+    .padStart(18, "0")
+    .slice(0, fractionDigits)
+    .replace(/0+$/, "");
+
+  return `${sign}${whole.toString()}${fractionText ? `.${fractionText}` : ""}`;
+}
+
+function multiplyFixed(left: bigint, right: bigint) {
+  return (left * right) / DECIMAL_SCALE;
+}
+
+function formatUsd(value: bigint) {
+  const sign = value < ZERO ? "-" : "";
+  const cents =
+    (absFixed(value) * BigInt(100) + DECIMAL_SCALE / BigInt(2)) /
+    DECIMAL_SCALE;
+  const dollars = cents / BigInt(100);
+  const pennies = cents % BigInt(100);
+
+  return `${sign}${dollars.toString()}.${pennies.toString().padStart(2, "0")}`;
 }
 
 function getKey({
@@ -284,12 +325,18 @@ function getTransferMovementSign({
   toAddress: string;
 }) {
   const account = accountAddress.toLowerCase();
+  const from = fromAddress.toLowerCase();
+  const to = toAddress.toLowerCase();
 
-  if (toAddress.toLowerCase() === account) {
+  if (from === account && to === account) {
+    return 0;
+  }
+
+  if (to === account) {
     return 1;
   }
 
-  if (fromAddress.toLowerCase() === account) {
+  if (from === account) {
     return -1;
   }
 
@@ -347,7 +394,7 @@ export async function runQuarterBalanceValidation({
   ]);
   const openingByKey = new Map<string, BalanceRow>();
   const closingByKey = new Map<string, BalanceRow>();
-  const movements = new Map<string, number>();
+  const movements = new Map<string, bigint>();
   const trackedAccounts = new Set<string>();
   const accountNames = new Map<string, string>();
   const treasuryAccountIds = [
@@ -423,7 +470,7 @@ export async function runQuarterBalanceValidation({
       toAddress: transfer.toAddress,
     });
 
-    if (!sign) {
+    if (sign === null) {
       excludedRows.push({
         assetAmount: transfer.amount,
         assetSymbol: transfer.assetSymbol,
@@ -443,7 +490,8 @@ export async function runQuarterBalanceValidation({
 
     movements.set(
       key,
-      (movements.get(key) ?? 0) + sign * toNumber(transfer.amount),
+      (movements.get(key) ?? ZERO) +
+        BigInt(sign) * parseFixedDecimal(transfer.amount),
     );
     balanceKeys.add(key);
   }
@@ -463,7 +511,7 @@ export async function runQuarterBalanceValidation({
 
     const sign = getManualMovementSign(entry.category);
 
-    if (!sign || !entry.chainId) {
+    if (sign === null || !entry.chainId) {
       excludedRows.push({
         assetAmount: entry.assetAmount,
         assetSymbol: entry.assetSymbol,
@@ -500,7 +548,8 @@ export async function runQuarterBalanceValidation({
 
     movements.set(
       key,
-      (movements.get(key) ?? 0) + sign * toNumber(entry.assetAmount),
+      (movements.get(key) ?? ZERO) +
+        BigInt(sign) * parseFixedDecimal(entry.assetAmount),
     );
     balanceKeys.add(key);
   }
@@ -511,38 +560,52 @@ export async function runQuarterBalanceValidation({
     const [chainIdText, accountAddress, assetSymbol] = key.split(":");
     const opening = openingByKey.get(key);
     const closing = closingByKey.get(key);
-    const openingAmount = toNumber(opening?.balance);
-    const actualClosing = toNumber(closing?.balance);
-    const movement = movements.get(key) ?? 0;
+    const openingAmount = parseFixedDecimal(opening?.balance);
+    const actualClosing = parseFixedDecimal(closing?.balance);
+    const movement = movements.get(key) ?? ZERO;
     const expectedClosing = openingAmount + movement;
     const difference = actualClosing - expectedClosing;
 
-    if (Math.abs(difference) <= TOKEN_TOLERANCE) {
+    if (absFixed(difference) <= TOKEN_TOLERANCE) {
       continue;
     }
 
     const chainId = Number(chainIdText);
-    const usdPrice = toNumber(closing?.usdPrice ?? opening?.usdPrice);
-    const varianceUsd = Math.abs(difference) * usdPrice;
+    const usdPrice = parseFixedDecimal(closing?.usdPrice ?? opening?.usdPrice);
+    const varianceUsd = multiplyFixed(absFixed(difference), usdPrice);
     const accountKey = `${chainId}:${accountAddress.toLowerCase()}`;
 
     variances.push({
       accountAddress,
       accountName: accountNames.get(accountKey) ?? "Unknown Account",
-      actualClosing: formatToken(actualClosing),
+      actualClosing: formatFixedDecimal(actualClosing),
       assetSymbol,
       chainId,
-      difference: formatToken(difference),
-      expectedClosing: formatToken(expectedClosing),
-      movement: formatToken(movement),
-      opening: formatToken(openingAmount),
+      difference: formatFixedDecimal(difference),
+      expectedClosing: formatFixedDecimal(expectedClosing),
+      movement: formatFixedDecimal(movement),
+      opening: formatFixedDecimal(openingAmount),
       usdPrice: formatUsd(usdPrice),
       varianceUsd: formatUsd(varianceUsd),
     });
   }
 
   variances.sort(
-    (left, right) => Number(right.varianceUsd) - Number(left.varianceUsd),
+    (left, right) => {
+      const difference =
+        parseFixedDecimal(right.varianceUsd) -
+        parseFixedDecimal(left.varianceUsd);
+
+      if (difference > ZERO) {
+        return 1;
+      }
+
+      if (difference < ZERO) {
+        return -1;
+      }
+
+      return 0;
+    },
   );
 
   const status: QuarterBalanceValidationStatus =
@@ -550,8 +613,8 @@ export async function runQuarterBalanceValidation({
       ? "validated"
       : "needs_review";
   const totalVarianceUsd = variances.reduce(
-    (total, variance) => total + toNumber(variance.varianceUsd),
-    0,
+    (total, variance) => total + parseFixedDecimal(variance.varianceUsd),
+    ZERO,
   );
 
   const [validation] = await db
@@ -612,6 +675,10 @@ export async function acknowledgeQuarterBalanceValidation({
     throw new Error("This quarter has no variance to acknowledge");
   }
 
+  if (existing.status !== "needs_review") {
+    throw new Error("Re-run validation before acknowledging variance");
+  }
+
   if (!note.trim()) {
     throw new Error("Variance note is required");
   }
@@ -625,8 +692,17 @@ export async function acknowledgeQuarterBalanceValidation({
       status: "acknowledged",
       updatedAt: sql`now()`,
     })
-    .where(eq(quarterBalanceValidations.quarterId, quarterId))
+    .where(
+      and(
+        eq(quarterBalanceValidations.quarterId, quarterId),
+        eq(quarterBalanceValidations.status, "needs_review"),
+      ),
+    )
     .returning();
+
+  if (!validation) {
+    throw new Error("Validation status changed. Re-run validation and try again.");
+  }
 
   return mapValidation(validation);
 }
