@@ -3,7 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { getIronSession, type SessionOptions } from "iron-session";
 
-import type { AuthSessionData } from "@/lib/auth/types";
+import type { AuthPermissions, AuthSessionData } from "@/lib/auth/types";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
@@ -38,10 +38,27 @@ export async function getAuthSession() {
 }
 
 export function serializeSession(session: AuthSessionData) {
+  const canUseMemberView = Boolean(session.permissions?.canAdmin);
+  const viewMode: "admin" | "member" =
+    canUseMemberView && session.viewMode === "member" ? "member" : "admin";
+  const memberViewRoles: AuthPermissions["roles"] = session.permissions?.roles
+    .filter((role) => role !== "admin") ?? ["member"];
+  const permissions: AuthPermissions | null =
+    session.permissions && viewMode === "member"
+      ? {
+          ...session.permissions,
+          canAdmin: false,
+          canWriteRaidAccounting: false,
+          roles: memberViewRoles.length > 0 ? memberViewRoles : ["member"],
+        }
+      : (session.permissions ?? null);
+
   return {
     address: session.address ?? null,
-    authenticated: Boolean(session.address && session.permissions?.canAccess),
+    authenticated: Boolean(session.address && permissions?.canAccess),
+    canUseMemberView,
     chainId: session.chainId ?? null,
-    permissions: session.permissions ?? null,
+    permissions,
+    viewMode,
   };
 }

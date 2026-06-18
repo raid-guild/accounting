@@ -7,6 +7,7 @@ import { useState, useTransition } from "react";
 import {
   finalizeQuarterSyncStep,
   startQuarterSync,
+  syncQuarterBalancesStep,
   syncQuarterMembershipStep,
   syncQuarterProposalsStep,
   syncQuarterTransactionsStep,
@@ -23,6 +24,7 @@ const SYNC_STEPS: {
   label: string;
   statusKey:
     | "finalizeStatus"
+    | "balancesStatus"
     | "membershipStatus"
     | "proposalsStatus"
     | "transactionsStatus";
@@ -41,6 +43,11 @@ const SYNC_STEPS: {
     key: "membership",
     label: "Membership",
     statusKey: "membershipStatus",
+  },
+  {
+    key: "balances",
+    label: "Balances",
+    statusKey: "balancesStatus",
   },
   {
     key: "finalize",
@@ -79,6 +86,7 @@ function getError(status: QuarterSyncStatus | null) {
     status?.transactionsError ??
     status?.proposalsError ??
     status?.membershipError ??
+    status?.balancesError ??
     status?.finalizeError ??
     null
   );
@@ -128,6 +136,11 @@ export function SyncTransactionsForm({
             });
           } else if (step.key === "membership") {
             nextStatus = await syncQuarterMembershipStep({
+              quarterId,
+              runId: nextStatus.runId,
+            });
+          } else if (step.key === "balances") {
+            nextStatus = await syncQuarterBalancesStep({
               quarterId,
               runId: nextStatus.runId,
             });
@@ -195,7 +208,7 @@ export function SyncTransactionsForm({
         {isSyncing ? "Syncing Activity" : "Sync Activity"}
       </Button>
       {showStepDetails ? (
-        <ol className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <ol className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           {SYNC_STEPS.map((step) => {
             const stepStatus = getStepStatus(status, step, activeStep);
             const Icon = getStepIcon(stepStatus);

@@ -1,0 +1,1 @@
+ALTER TYPE "public"."treasury_account_type" ADD VALUE 'bank';

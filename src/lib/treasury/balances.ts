@@ -9,8 +9,9 @@ import {
   http,
   isAddress,
   type Address,
+  type Chain,
 } from "viem";
-import { gnosis } from "viem/chains";
+import { base, gnosis, mainnet } from "viem/chains";
 
 import { getDb } from "@/db";
 import {
@@ -18,10 +19,14 @@ import {
   treasuryBalanceSnapshots,
 } from "@/db/schema";
 import {
-  listActiveGnosisBalanceAccounts,
+  listActiveBalanceAccounts,
   type TreasuryBalanceAccountSource,
 } from "@/lib/treasury/accounts";
-import { GNOSIS_TREASURY_ASSETS } from "@/lib/treasury/assets";
+import {
+  GNOSIS_TREASURY_ASSETS,
+  OPERATOR_ERC20_ASSETS_BY_CHAIN,
+  type TrackedTreasuryAsset,
+} from "@/lib/treasury/assets";
 import type {
   TreasuryAccountBalance,
   TreasuryAssetBalance,
@@ -31,11 +36,22 @@ import type {
 } from "@/lib/treasury/types";
 
 const SNAPSHOT_TTL_MS = 60 * 60 * 1000;
-const MULTI_ACCOUNT_SYNC_KEY = `${gnosis.id}:treasury-accounts`;
+const MULTI_ACCOUNT_SYNC_KEY = "treasury-accounts";
+const ALCHEMY_NETWORK_BY_CHAIN_ID = new Map<number, string>([
+  [mainnet.id, "eth-mainnet"],
+  [base.id, "base-mainnet"],
+]);
 
 const inProgressSyncs = new Map<string, Promise<TreasuryBalanceSnapshot>>();
 
-const TRACKED_TREASURY_ASSETS = GNOSIS_TREASURY_ASSETS;
+const ALL_TRACKED_TREASURY_ASSETS = [
+  ...new Map(
+    [
+      ...GNOSIS_TREASURY_ASSETS,
+      ...Object.values(OPERATOR_ERC20_ASSETS_BY_CHAIN).flat(),
+    ].map((asset) => [asset.symbol, asset]),
+  ).values(),
+];
 
 type BalanceAccountSource = {
   id: string;
@@ -79,6 +95,49 @@ function getGnosisRpcUrl() {
   return rpcUrl;
 }
 
+function getRpcUrl(chainId: number) {
+  if (chainId === gnosis.id) {
+    return getGnosisRpcUrl();
+  }
+
+  const alchemyNetwork = ALCHEMY_NETWORK_BY_CHAIN_ID.get(chainId);
+
+  if (alchemyNetwork) {
+    const apiKey = process.env.ALCHEMY_API_KEY;
+
+    if (!apiKey) {
+      throw new Error(`ALCHEMY_API_KEY is required for chain ${chainId}`);
+    }
+
+    return `https://${alchemyNetwork}.g.alchemy.com/v2/${apiKey}`;
+  }
+
+  throw new Error(`RPC URL is required for chain ${chainId}`);
+}
+
+function getChain(chainId: number): Chain {
+  if (chainId === gnosis.id) {
+    return gnosis;
+  }
+
+  if (chainId === mainnet.id) {
+    return mainnet;
+  }
+
+  if (chainId === base.id) {
+    return base;
+  }
+
+  throw new Error(`Unsupported balance chain ${chainId}`);
+}
+
+function getPublicClient(chainId: number) {
+  return createPublicClient({
+    chain: getChain(chainId),
+    transport: http(getRpcUrl(chainId)),
+  });
+}
+
 function getTreasuryAccountSource(): BalanceAccountSource {
   return {
     id: "treasury",
@@ -92,7 +151,7 @@ async function getTrackedAccountSources(): Promise<
   [BalanceAccountSource, ...BalanceAccountSource[]]
 > {
   const treasury = getTreasuryAccountSource();
-  const extraAccounts = await listActiveGnosisBalanceAccounts();
+  const extraAccounts = await listActiveBalanceAccounts();
   const seenAccounts = new Set<string>();
 
   if (treasury.address) {
@@ -122,7 +181,7 @@ async function getTrackedAccountSources(): Promise<
 }
 
 function createEmptyAssetBalance(
-  asset: (typeof TRACKED_TREASURY_ASSETS)[number],
+  asset: TrackedTreasuryAsset,
 ): TreasuryAssetBalance {
   return {
     symbol: asset.symbol,
@@ -135,16 +194,26 @@ function createEmptyAssetBalance(
   };
 }
 
+function getTrackedAssetsForAccount(account: Pick<BalanceAccountSource, "chainId">) {
+  if (account.chainId === gnosis.id) {
+    return [...GNOSIS_TREASURY_ASSETS];
+  }
+
+  return [...(OPERATOR_ERC20_ASSETS_BY_CHAIN[account.chainId] ?? [])];
+}
+
 function createEmptyAccountBalance(
   account: BalanceAccountSource,
 ): TreasuryAccountBalance {
+  const trackedAssets = getTrackedAssetsForAccount(account);
+
   return {
     id: account.id,
     name: account.name,
     address: account.address,
     chainId: account.chainId,
     totalUsd: "0.00",
-    assets: TRACKED_TREASURY_ASSETS.map(createEmptyAssetBalance),
+    assets: trackedAssets.map(createEmptyAssetBalance),
   };
 }
 
@@ -259,7 +328,7 @@ function getAggregateStatus(
 function aggregateAssets(
   accountAssets: TreasuryAssetBalance[][],
 ): TreasuryAssetBalance[] {
-  const aggregatedAssets = TRACKED_TREASURY_ASSETS.map((asset) => {
+  const aggregatedAssets = ALL_TRACKED_TREASURY_ASSETS.map((asset) => {
     const matchingAssets = accountAssets
       .flat()
       .filter((accountAsset) => accountAsset.symbol === asset.symbol);
@@ -347,10 +416,11 @@ async function getLatestCachedAccountSnapshot(
   const assetMap = new Map(
     assets.map((asset) => [asset.symbol, mapCachedAsset(asset)]),
   );
-  const orderedAssets = TRACKED_TREASURY_ASSETS.map(
+  const orderedAssets = getTrackedAssetsForAccount(account).map(
     (asset) => assetMap.get(asset.symbol) ?? createEmptyAssetBalance(asset),
   );
-  const isStale = isSyncedAtStale(snapshot.syncedAt);
+  const isFailed = snapshot.status === "failed";
+  const isStale = isFailed || isSyncedAtStale(snapshot.syncedAt);
 
   return {
     account: {
@@ -363,7 +433,7 @@ async function getLatestCachedAccountSnapshot(
     },
     errorMessage: snapshot.errorMessage,
     isStale,
-    status: isStale ? "stale_syncing" : snapshot.status,
+    status: isFailed ? "failed" : isStale ? "stale_syncing" : snapshot.status,
     syncedAt: snapshot.syncedAt,
   };
 }
@@ -415,21 +485,23 @@ async function getCoinGeckoUsdPrices(coinIds: string[]) {
 async function fetchLiveAssetBalances({
   address,
   client,
+  trackedAssets,
   pricePromise,
 }: {
   address: Address;
   client: ReturnType<typeof createPublicClient>;
+  trackedAssets: TrackedTreasuryAsset[];
   pricePromise: Promise<Map<string, number>>;
 }) {
   const rawBalances = await Promise.all(
-    TRACKED_TREASURY_ASSETS.map(async (asset) => {
+    trackedAssets.map(async (asset) => {
       if (!asset.tokenAddress) {
         return client.getBalance({ address });
       }
 
       return client.readContract({
         abi: erc20Abi,
-        address: asset.tokenAddress,
+        address: getAddress(asset.tokenAddress),
         functionName: "balanceOf",
         args: [address],
       });
@@ -445,7 +517,7 @@ async function fetchLiveAssetBalances({
     priceError = error instanceof Error ? error : new Error("Price unavailable");
   }
 
-  const missingPriceIds = TRACKED_TREASURY_ASSETS.flatMap((asset) =>
+  const missingPriceIds = trackedAssets.flatMap((asset) =>
     asset.stableUsd || !asset.coingeckoId || prices.has(asset.coingeckoId)
       ? []
       : [asset.coingeckoId],
@@ -457,7 +529,7 @@ async function fetchLiveAssetBalances({
     );
   }
 
-  const assets = TRACKED_TREASURY_ASSETS.map((asset, index) => {
+  const assets = trackedAssets.map((asset, index) => {
     const rawAmount = rawBalances[index];
     const balance = formatUnits(rawAmount, asset.decimals);
     const usdPrice = asset.stableUsd
@@ -493,9 +565,11 @@ async function syncAccountBalanceSnapshot({
   pricePromise: Promise<Map<string, number>>;
 }): Promise<SyncedAccountSnapshot> {
   try {
+    const trackedAssets = getTrackedAssetsForAccount(account);
     const { assets, priceError } = await fetchLiveAssetBalances({
       address: account.address,
       client,
+      trackedAssets,
       pricePromise,
     });
     const totalUsd = formatUsd(
@@ -580,6 +654,9 @@ function createAggregateSnapshot(
     .map((snapshot) => snapshot.syncedAt)
     .filter((syncedAt): syncedAt is Date => syncedAt !== null);
   const hasMissingSnapshot = syncedAts.length < snapshots.length;
+  const hasFailedSnapshot = snapshots.some(
+    (snapshot) => snapshot.status === "failed",
+  );
   const hasStaleSnapshot = snapshots.some(
     (snapshot) => "isStale" in snapshot && snapshot.isStale,
   );
@@ -590,7 +667,7 @@ function createAggregateSnapshot(
     accounts,
     errorMessage:
       snapshots.find((snapshot) => snapshot.errorMessage)?.errorMessage ?? null,
-    isStale: hasMissingSnapshot || hasStaleSnapshot,
+    isStale: hasFailedSnapshot || hasMissingSnapshot || hasStaleSnapshot,
     status:
       status === "synced" && (hasMissingSnapshot || hasStaleSnapshot)
         ? "stale_syncing"
@@ -641,13 +718,9 @@ async function syncTreasuryAccountBalances(): Promise<TreasuryBalanceSnapshot> {
     );
   }
 
-  const client = createPublicClient({
-    chain: gnosis,
-    transport: http(getGnosisRpcUrl()),
-  });
   const syncedAt = new Date();
   const pricePromise = getCoinGeckoUsdPrices(
-    TRACKED_TREASURY_ASSETS.flatMap((asset) =>
+    ALL_TRACKED_TREASURY_ASSETS.flatMap((asset) =>
       asset.stableUsd || !asset.coingeckoId ? [] : [asset.coingeckoId],
     ),
   );
@@ -655,7 +728,7 @@ async function syncTreasuryAccountBalances(): Promise<TreasuryBalanceSnapshot> {
     syncableAccounts.map((account) =>
       syncAccountBalanceSnapshot({
         account,
-        client,
+        client: getPublicClient(account.chainId),
         syncedAt,
         pricePromise,
       }),

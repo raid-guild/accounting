@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   BadgeCheck,
   CircleDollarSign,
+  Download,
   Pencil,
   ExternalLink,
   FileText,
@@ -36,6 +37,13 @@ import {
   buildQuarterWorkflowSteps,
   getQuarterSyncStatus,
 } from "@/lib/quarter-sync";
+import { isQuarterExportReady } from "@/lib/quarter-export-readiness";
+import {
+  listQuarterAccountBalanceSummaries,
+  listQuarterBalanceRows,
+  type QuarterBalanceRow,
+  type QuarterAccountBalanceSummary,
+} from "@/lib/quarter-balances";
 import {
   getCategoryLabel,
   IMPORTED_TRANSFER_CLASSIFICATION_CATEGORIES,
@@ -110,6 +118,13 @@ function formatCurrency(value: string | null) {
   }).format(Number(value));
 }
 
+function formatCurrencyNumber(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    style: "currency",
+  }).format(value);
+}
+
 function formatUsdAmount(value: string) {
   const numericValue = Number(value);
 
@@ -156,6 +171,177 @@ function formatDate(value: string) {
     dateStyle: "medium",
     timeZone: "UTC",
   }).format(new Date(`${value}T00:00:00.000Z`));
+}
+
+function QuarterBalancesPanel({
+  balances,
+  rows,
+}: {
+  balances: QuarterAccountBalanceSummary[];
+  rows: QuarterBalanceRow[];
+}) {
+  if (balances.length === 0) {
+    return null;
+  }
+
+  const rowsByAccount = new Map<string, QuarterBalanceRow[]>();
+
+  for (const row of rows) {
+    const key = `${row.chainId}:${row.accountAddress.toLowerCase()}`;
+    const accountRows = rowsByAccount.get(key) ?? [];
+
+    accountRows.push(row);
+    rowsByAccount.set(key, accountRows);
+  }
+
+  const totalBalance = balances.reduce(
+    (total, balance) => ({
+      closingUsd: total.closingUsd + balance.closingUsd,
+      netChangeUsd: total.netChangeUsd + balance.netChangeUsd,
+      openingUsd: total.openingUsd + balance.openingUsd,
+    }),
+    { closingUsd: 0, netChangeUsd: 0, openingUsd: 0 },
+  );
+
+  return (
+    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="type-label-sm text-muted-foreground">Balances</p>
+          <h2 className="mt-1 text-lg font-semibold">Quarter Balances</h2>
+        </div>
+        <span className="rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
+          {balances.length} account{balances.length === 1 ? "" : "s"}
+        </span>
+      </div>
+      <div className="mt-4 grid gap-3">
+        <div className="grid gap-3 rounded-md border border-primary/20 bg-primary/5 px-3 py-3 text-sm md:grid-cols-[minmax(180px,1fr)_repeat(3,minmax(110px,auto))] md:items-center">
+          <div>
+            <p className="font-semibold">Total</p>
+            <p className="mt-1 text-xs font-medium text-muted-foreground">
+              {balances.length} account{balances.length === 1 ? "" : "s"}
+            </p>
+          </div>
+          <div className="md:text-right">
+            <p className="type-label-sm text-muted-foreground">Opening</p>
+            <p className="mt-1 font-semibold">
+              {formatCurrencyNumber(totalBalance.openingUsd)}
+            </p>
+          </div>
+          <div className="md:text-right">
+            <p className="type-label-sm text-muted-foreground">Closing</p>
+            <p className="mt-1 font-semibold">
+              {formatCurrencyNumber(totalBalance.closingUsd)}
+            </p>
+          </div>
+          <div className="md:text-right">
+            <p className="type-label-sm text-muted-foreground">Net Change</p>
+            <p className="mt-1 font-semibold">
+              {formatCurrencyNumber(totalBalance.netChangeUsd)}
+            </p>
+          </div>
+        </div>
+        {balances.map((balance) => {
+          const accountRows =
+            rowsByAccount.get(
+              `${balance.chainId}:${balance.accountAddress.toLowerCase()}`,
+            ) ?? [];
+          const assetSymbols = [...new Set(accountRows.map((row) => row.symbol))];
+
+          return (
+            <details
+              key={`${balance.chainId}:${balance.accountAddress}`}
+              className="rounded-md border border-border bg-background"
+            >
+              <summary className="grid cursor-pointer gap-3 px-3 py-3 text-sm md:grid-cols-[minmax(180px,1fr)_repeat(3,minmax(110px,auto))] md:items-center">
+                <div>
+                  <p className="font-medium">{balance.accountName}</p>
+                  <p className="mt-1 font-mono text-xs text-muted-foreground">
+                    {formatAddress(balance.accountAddress)}
+                  </p>
+                </div>
+                <div className="md:text-right">
+                  <p className="type-label-sm text-muted-foreground">Opening</p>
+                  <p className="mt-1 font-medium">
+                    {formatCurrencyNumber(balance.openingUsd)}
+                  </p>
+                </div>
+                <div className="md:text-right">
+                  <p className="type-label-sm text-muted-foreground">Closing</p>
+                  <p className="mt-1 font-medium">
+                    {formatCurrencyNumber(balance.closingUsd)}
+                  </p>
+                </div>
+                <div className="md:text-right">
+                  <p className="type-label-sm text-muted-foreground">
+                    Net Change
+                  </p>
+                  <p className="mt-1 font-medium">
+                    {formatCurrencyNumber(balance.netChangeUsd)}
+                  </p>
+                </div>
+              </summary>
+              <div className="overflow-x-auto border-t border-border">
+                <table className="w-full min-w-[640px] text-left text-xs">
+                  <thead className="border-b border-border text-muted-foreground uppercase">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">Asset</th>
+                      <th className="px-3 py-2 text-right font-medium">
+                        Opening Balance
+                      </th>
+                      <th className="px-3 py-2 text-right font-medium">
+                        Closing Balance
+                      </th>
+                      <th className="px-3 py-2 text-right font-medium">
+                        Opening USD
+                      </th>
+                      <th className="px-3 py-2 text-right font-medium">
+                        Closing USD
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {assetSymbols.map((symbol) => {
+                      const opening = accountRows.find(
+                        (row) =>
+                          row.symbol === symbol && row.boundary === "opening",
+                      );
+                      const closing = accountRows.find(
+                        (row) =>
+                          row.symbol === symbol && row.boundary === "closing",
+                      );
+
+                      return (
+                        <tr key={symbol}>
+                          <td className="px-3 py-2 font-medium">{symbol}</td>
+                          <td className="px-3 py-2 text-right">
+                            {opening ? formatTokenAmount(opening.balance) : "-"}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {closing ? formatTokenAmount(closing.balance) : "-"}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {opening
+                              ? formatCurrencyNumber(Number(opening.usdValue))
+                              : "-"}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {closing
+                              ? formatCurrencyNumber(Number(closing.usdValue))
+                              : "-"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          );
+        })}
+      </div>
+    </section>
+  );
 }
 
 function formatTimestamp(value: string) {
@@ -985,17 +1171,26 @@ export default async function QuarterTransactionsPage({
     );
   }
 
-  const [options, transfers, manualEntries, summary, quarterSyncStatus] =
-    await Promise.all([
-      listClassificationOptions(),
-      listTreasuryTransferClassifications({
-        quarter,
-        status: "all",
-      }),
-      listManualLedgerEntryClassifications({ quarterId: quarter.id }),
-      getQuarterClassificationSummary(quarter),
-      getQuarterSyncStatus(quarter.id),
-    ]);
+  const [
+    options,
+    transfers,
+    manualEntries,
+    summary,
+    quarterSyncStatus,
+    balanceSummaries,
+    balanceRows,
+  ] = await Promise.all([
+    listClassificationOptions(),
+    listTreasuryTransferClassifications({
+      quarter,
+      status: "all",
+    }),
+    listManualLedgerEntryClassifications({ quarterId: quarter.id }),
+    getQuarterClassificationSummary(quarter),
+    getQuarterSyncStatus(quarter.id),
+    listQuarterAccountBalanceSummaries(quarter.id),
+    listQuarterBalanceRows(quarter.id),
+  ]);
   const toastSyncStatus =
     query.synced === "1"
       ? "complete"
@@ -1012,6 +1207,11 @@ export default async function QuarterTransactionsPage({
   });
   const syncComplete =
     workflowSteps.find((step) => step.key === "sync")?.status === "complete";
+  const canExport = isQuarterExportReady({
+    ...quarter,
+    classificationSummary: summary,
+    syncStatus: quarterSyncStatus,
+  });
   const reviewItems = [
     ...manualEntries.map(
       (entry): QuarterReviewItem => ({
@@ -1059,18 +1259,29 @@ export default async function QuarterTransactionsPage({
               <ArrowLeft className="size-4" aria-hidden="true" />
               Quarters
             </Link>
-            <div className="mt-4 flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
-                <Tags className="size-5" aria-hidden="true" />
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+                  <Tags className="size-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <p className="type-label-sm text-muted-foreground">
+                    {formatDate(quarter.startsOn)} - {formatDate(quarter.endsOn)}
+                  </p>
+                  <h1 className="text-2xl font-semibold">
+                    {quarter.label} Transaction Review
+                  </h1>
+                </div>
               </div>
-              <div>
-                <p className="type-label-sm text-muted-foreground">
-                  {formatDate(quarter.startsOn)} - {formatDate(quarter.endsOn)}
-                </p>
-                <h1 className="text-2xl font-semibold">
-                  {quarter.label} Transaction Review
-                </h1>
-              </div>
+              {canExport ? (
+                <Link
+                  href={`/admin/quarters/${quarter.id}/export.xlsx`}
+                  className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
+                >
+                  <Download data-icon="inline-start" />
+                  Export XLSX
+                </Link>
+              ) : null}
             </div>
           </div>
           <div className="grid gap-4 rounded-lg border border-border bg-card p-4 shadow-sm lg:grid-cols-[minmax(180px,240px)_1fr]">
@@ -1097,6 +1308,7 @@ export default async function QuarterTransactionsPage({
             />
           </div>
           <QuarterWorkflowProgress steps={workflowSteps} />
+          <QuarterBalancesPanel balances={balanceSummaries} rows={balanceRows} />
           <BankCsvImportPanel quarterId={quarter.id} />
         </div>
 

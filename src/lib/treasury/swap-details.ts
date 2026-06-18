@@ -146,7 +146,7 @@ async function getReceiptSwapDetail(
     const asset = trackedAssets.find(
       (candidate) =>
         candidate.tokenAddress &&
-        isAddressEqual(candidate.tokenAddress, log.address),
+        isAddressEqual(getAddress(candidate.tokenAddress), log.address),
     );
 
     if (!asset?.tokenAddress) {
