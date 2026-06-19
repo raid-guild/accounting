@@ -16,6 +16,7 @@ import type { ReactNode } from "react";
 import { AppHeader } from "@/components/app-header";
 import { Button } from "@/components/ui/button";
 import { BankCsvImportPanel } from "@/app/admin/quarters/[id]/transactions/bank-csv-import-panel";
+import { CancelClassificationEditButton } from "@/app/admin/quarters/[id]/transactions/cancel-classification-edit-button";
 import { ClassificationLinkedFields } from "@/app/admin/quarters/[id]/transactions/classification-linked-fields";
 import { ManualProviderExpenseButton } from "@/app/admin/quarters/[id]/transactions/manual-provider-expense-panel";
 import { updateQuarterStatus } from "@/app/admin/quarters/actions";
@@ -27,6 +28,7 @@ import {
 } from "@/app/admin/quarters/[id]/transactions/actions";
 import { RemoveManualLedgerEntryForm } from "@/app/raids/remove-manual-revenue-form";
 import { QuarterWorkflowProgress } from "@/components/quarters/quarter-workflow-progress";
+import { CopyableAddress } from "@/components/copyable-address";
 import { SyncTransactionsForm } from "@/app/admin/quarters/[id]/transactions/sync-transactions-form";
 import { TransactionReviewToast } from "@/app/admin/quarters/[id]/transactions/transaction-review-toast";
 import { UsdAmountField } from "@/app/admin/quarters/[id]/transactions/usd-amount-field";
@@ -84,10 +86,6 @@ type SearchParams = Promise<{
   syncId?: string;
   synced?: string;
 }>;
-
-function formatAddress(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
 
 function formatHash(hash: string) {
   return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
@@ -266,9 +264,10 @@ function QuarterBalancesPanel({
               <summary className="grid cursor-pointer gap-3 px-3 py-3 text-sm md:grid-cols-[minmax(180px,1fr)_repeat(3,minmax(110px,auto))] md:items-center">
                 <div>
                   <p className="font-medium">{balance.accountName}</p>
-                  <p className="mt-1 font-mono text-xs text-muted-foreground">
-                    {formatAddress(balance.accountAddress)}
-                  </p>
+                  <CopyableAddress
+                    address={balance.accountAddress}
+                    className="mt-1 text-xs text-muted-foreground"
+                  />
                 </div>
                 <div className="md:text-right">
                   <p className="type-label-sm text-muted-foreground">Opening</p>
@@ -468,9 +467,10 @@ function BalanceValidationPanel({
                 >
                   <td className="px-3 py-2">
                     <p className="font-medium">{variance.accountName}</p>
-                    <p className="mt-1 font-mono text-muted-foreground">
-                      {formatAddress(variance.accountAddress)}
-                    </p>
+                    <CopyableAddress
+                      address={variance.accountAddress}
+                      className="mt-1 text-muted-foreground"
+                    />
                   </td>
                   <td className="px-3 py-2 font-medium">
                     {variance.assetSymbol}
@@ -520,9 +520,13 @@ function BalanceValidationPanel({
             {validation.acknowledgementNote}
           </p>
           <p className="mt-2 text-xs text-amber-900/70">
-            {validation.acknowledgedByWalletAddress
-              ? formatAddress(validation.acknowledgedByWalletAddress)
-              : "Unknown wallet"}
+            {validation.acknowledgedByWalletAddress ? (
+              <CopyableAddress
+                address={validation.acknowledgedByWalletAddress}
+              />
+            ) : (
+              "Unknown wallet"
+            )}
             {validation.acknowledgedAt
               ? ` · ${formatTimestamp(validation.acknowledgedAt)}`
               : ""}
@@ -803,9 +807,10 @@ function ClassificationForm({
                 ) : (
                   <>
                     <span className="font-medium">{counterpartyLabel}</span>
-                    <span className="ml-2 font-mono text-muted-foreground">
-                      {formatAddress(counterpartyAddress)}
-                    </span>
+                    <CopyableAddress
+                      address={counterpartyAddress}
+                      className="ml-2 text-muted-foreground"
+                    />
                   </>
                 )}
                 <input type="hidden" name="counterpartyEntityId" value="" />
@@ -852,11 +857,12 @@ function ClassificationForm({
           className="min-h-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
         />
       </Field>
-      <div>
+      <div className="flex flex-wrap gap-2">
         <Button type="submit">
           <Save data-icon="inline-start" />
           Save Classification
         </Button>
+        <CancelClassificationEditButton />
       </div>
     </form>
   );
@@ -908,11 +914,12 @@ function LedgerEntryEditForm({
           className="rounded-md border border-input bg-background px-3 py-2 text-sm"
         />
       </label>
-      <div>
+      <div className="flex flex-wrap gap-2">
         <Button type="submit">
           <Save data-icon="inline-start" />
           Save Classification
         </Button>
+        <CancelClassificationEditButton />
       </div>
     </form>
   );
@@ -1035,12 +1042,15 @@ function TransferCard({
               ) : null}
               <span>
                 Counterparty:{" "}
-                <span className="font-mono text-foreground">
-                  {isSwap
-                    ? "Asset swap"
-                    : `${counterpartyLabel ? `${counterpartyLabel} ` : ""}${formatAddress(
-                        counterpartyAddress,
-                      )}`}
+                <span className="text-foreground">
+                  {isSwap ? (
+                    "Asset swap"
+                  ) : (
+                    <CopyableAddress
+                      address={counterpartyAddress}
+                      label={counterpartyLabel ?? undefined}
+                    />
+                  )}
                 </span>
               </span>
               <ProposalInline proposal={transfer.daoProposal} />
@@ -1131,7 +1141,7 @@ function TransferCard({
             <p className="font-medium">{counterpartyLabel}</p>
           ) : null}
           {isSwap ? null : (
-            <p className="font-mono">{formatAddress(counterpartyAddress)}</p>
+            <CopyableAddress address={counterpartyAddress} />
           )}
           <p className="mt-1 text-xs text-muted-foreground">
             {isSwap ? "Transaction type" : "Counterparty"}
@@ -1144,9 +1154,10 @@ function TransferCard({
           <dt className="type-label-sm text-muted-foreground">Account</dt>
           <dd className="mt-1">
             <span className="font-medium">{transfer.accountName}</span>
-            <span className="ml-2 font-mono text-muted-foreground">
-              {formatAddress(transfer.accountAddress)}
-            </span>
+            <CopyableAddress
+              address={transfer.accountAddress}
+              className="ml-2 text-muted-foreground"
+            />
           </dd>
         </div>
         <div>

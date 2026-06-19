@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { getDb } from "@/db";
 import { entities, ledgerEntries, quarters, raids } from "@/db/schema";
@@ -22,9 +22,19 @@ import { getHistoricalUsdPricing } from "@/lib/treasury/pricing";
 
 export type TransactionLookupState = {
   error: string | null;
+  existingEntries?: ExistingManualTransferEntry[];
   result: ManualTransactionLookupResult | null;
   saved: boolean;
   savedEntry: SavedManualRaidLedgerEntry | null;
+};
+
+export type ExistingManualTransferEntry = {
+  category: typeof ledgerEntries.$inferSelect.category;
+  id: string;
+  quarterId: string;
+  quarterLabel: string;
+  sourceExternalId: string;
+  transferIndex: number;
 };
 
 export type SavedManualRaidLedgerEntry = {
@@ -293,6 +303,57 @@ function getSourceExternalId({
   return `manual-onchain:${chainId}:${txHash.toLowerCase()}:${transferIndex}`;
 }
 
+async function getExistingManualTransferEntries({
+  chainId,
+  transferCount,
+  txHash,
+}: {
+  chainId: number;
+  transferCount: number;
+  txHash: string;
+}): Promise<ExistingManualTransferEntry[]> {
+  const sourceExternalIds = Array.from({ length: transferCount }, (_, index) =>
+    getSourceExternalId({ chainId, transferIndex: index, txHash }),
+  );
+
+  if (sourceExternalIds.length === 0) {
+    return [];
+  }
+
+  const rows = await getDb()
+    .select({
+      category: ledgerEntries.category,
+      id: ledgerEntries.id,
+      quarterId: quarters.id,
+      quarterLabel: quarters.label,
+      sourceExternalId: ledgerEntries.sourceExternalId,
+    })
+    .from(ledgerEntries)
+    .innerJoin(quarters, eq(ledgerEntries.quarterId, quarters.id))
+    .where(inArray(ledgerEntries.sourceExternalId, sourceExternalIds));
+
+  return rows.flatMap((row) => {
+    if (!row.sourceExternalId) {
+      return [];
+    }
+
+    const transferIndex = sourceExternalIds.indexOf(row.sourceExternalId);
+
+    if (transferIndex === -1) {
+      return [];
+    }
+
+    return {
+      category: row.category,
+      id: row.id,
+      quarterId: row.quarterId,
+      quarterLabel: row.quarterLabel,
+      sourceExternalId: row.sourceExternalId,
+      transferIndex,
+    };
+  });
+}
+
 export async function lookupRaidTransaction(
   _previousState: TransactionLookupState,
   formData: FormData,
@@ -304,11 +365,23 @@ export async function lookupRaidTransaction(
     const txHash = getString(formData, "txHash");
 
     const result = await lookupManualTransaction({ chainId, txHash });
+    const existingEntries = await getExistingManualTransferEntries({
+      chainId,
+      transferCount: result.transfers.length,
+      txHash: result.txHash,
+    });
 
-    return { error: null, result, saved: false, savedEntry: null };
+    return {
+      error: null,
+      existingEntries,
+      result,
+      saved: false,
+      savedEntry: null,
+    };
   } catch (error) {
     return {
       error: getErrorMessage(error),
+      existingEntries: [],
       result: null,
       saved: false,
       savedEntry: null,

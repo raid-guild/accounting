@@ -23,10 +23,12 @@ import {
   removeManualRaidLedgerEntry,
   saveManualRaidPayout,
   saveManualRaidRevenue,
+  type ExistingManualTransferEntry,
   type ManualRaidLedgerKind,
   type SavedManualRaidLedgerEntry,
   type TransactionLookupState,
 } from "@/app/raids/transaction-lookup-actions";
+import { CopyableAddress } from "@/components/copyable-address";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import type { CoreEntityView, RaidView } from "@/lib/core-entities";
@@ -39,6 +41,7 @@ import type {
 
 const INITIAL_STATE: TransactionLookupState = {
   error: null,
+  existingEntries: [],
   result: null,
   saved: false,
   savedEntry: null,
@@ -111,6 +114,30 @@ function formatUsd(value: string | null) {
     minimumFractionDigits: 2,
     style: "currency",
   }).format(number);
+}
+
+function getLedgerCategoryLabel(category: string) {
+  if (category === "raid_revenue") {
+    return "raid revenue";
+  }
+
+  if (category === "subcontractor_payout") {
+    return "raid payout";
+  }
+
+  if (category === "raid_spoils") {
+    return "raid spoils";
+  }
+
+  if (category === "provider_expense") {
+    return "provider expense";
+  }
+
+  if (category === "treasury_transfer") {
+    return "treasury transfer";
+  }
+
+  return "ledger entry";
 }
 
 function LookupSubmitButton({
@@ -213,9 +240,12 @@ function TransferRow({ transfer }: { transfer: ManualLookupTransfer }) {
             {transfer.transferType === "native"
               ? "Native transfer"
               : "ERC20 transfer"}
-            {transfer.tokenAddress
-              ? ` · ${formatAddress(transfer.tokenAddress)}`
-              : ""}
+            {transfer.tokenAddress ? (
+              <>
+                {" "}
+                · <CopyableAddress address={transfer.tokenAddress} />
+              </>
+            ) : null}
           </p>
         </div>
         {usdAmount ? (
@@ -225,12 +255,12 @@ function TransferRow({ transfer }: { transfer: ManualLookupTransfer }) {
         ) : null}
       </div>
       <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-sm">
-        <span className="font-mono">{formatAddress(transfer.fromAddress)}</span>
+        <CopyableAddress address={transfer.fromAddress} />
         <ArrowRight
           className="size-4 text-muted-foreground"
           aria-hidden="true"
         />
-        <span className="font-mono">{formatAddress(transfer.toAddress)}</span>
+        <CopyableAddress address={transfer.toAddress} />
       </div>
     </div>
   );
@@ -296,12 +326,14 @@ function SavedLedgerEntryPanel({
 }
 
 function ManualEntrySaveForm({
+  existingEntries,
   kind,
   onSaved,
   raids,
   result,
   subcontractors,
 }: {
+  existingEntries: ExistingManualTransferEntry[];
   kind: ManualRaidLedgerKind;
   onSaved: (savedEntry: SavedManualRaidLedgerEntry) => void;
   raids: RaidView[];
@@ -345,6 +377,10 @@ function ManualEntrySaveForm({
       : [];
   const matchedSubcontractor =
     matchedSubcontractors.length === 1 ? matchedSubcontractors[0] : null;
+  const selectedExistingEntry =
+    existingEntries.find(
+      (entry) => String(entry.transferIndex) === selectedTransferIndex,
+    ) ?? null;
 
   useEffect(() => {
     if (saveState.savedEntry) {
@@ -416,6 +452,9 @@ function ManualEntrySaveForm({
               <option key={index} value={index}>
                 {formatAmount(transfer)} from{" "}
                 {formatAddress(transfer.fromAddress)}
+                {existingEntries.some((entry) => entry.transferIndex === index)
+                  ? " · already saved"
+                  : ""}
               </option>
             ))}
           </select>
@@ -473,7 +512,7 @@ function ManualEntrySaveForm({
           {matchedSubcontractor ? (
             <p className="text-xs font-normal text-muted-foreground">
               Matched from recipient address{" "}
-              {formatAddress(selectedTransfer.toAddress)}.
+              <CopyableAddress address={selectedTransfer.toAddress} />.
             </p>
           ) : matchedSubcontractors.length > 1 ? (
             <p className="text-xs font-normal text-muted-foreground">
@@ -543,12 +582,29 @@ function ManualEntrySaveForm({
           <p>{saveState.error}</p>
         </div>
       ) : null}
+      {selectedExistingEntry ? (
+        <div className="flex gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-medium">
+              This transfer is already saved to{" "}
+              {selectedExistingEntry.quarterLabel}.
+            </p>
+            <p className="mt-1 text-amber-900/80">
+              It is currently recorded as{" "}
+              {getLedgerCategoryLabel(selectedExistingEntry.category)}. Choose a
+              different transfer if this transaction contains another payout.
+            </p>
+          </div>
+        </div>
+      ) : null}
       <div>
         <SaveSubmitButton
           disabled={
             !hasTransfers ||
             !hasRaids ||
-            (kind === "payout" && !hasSubcontractors)
+            (kind === "payout" && !hasSubcontractors) ||
+            Boolean(selectedExistingEntry)
           }
           kind={kind}
           pending={savePending}
@@ -669,17 +725,21 @@ export function TransactionLookupPanel({
           <div className="grid gap-3 md:grid-cols-2">
             <div className="rounded-md border border-border bg-background p-3">
               <p className="type-label-sm text-muted-foreground">Sender</p>
-              <p className="mt-1 font-mono text-sm">
-                {formatAddress(result.fromAddress)}
-              </p>
+              <CopyableAddress
+                address={result.fromAddress}
+                className="mt-1 text-sm"
+              />
             </div>
             <div className="rounded-md border border-border bg-background p-3">
               <p className="type-label-sm text-muted-foreground">Recipient</p>
-              <p className="mt-1 font-mono text-sm">
-                {result.toAddress
-                  ? formatAddress(result.toAddress)
-                  : "Contract creation"}
-              </p>
+              {result.toAddress ? (
+                <CopyableAddress
+                  address={result.toAddress}
+                  className="mt-1 text-sm"
+                />
+              ) : (
+                <p className="mt-1 text-sm">Contract creation</p>
+              )}
             </div>
           </div>
 
@@ -705,6 +765,7 @@ export function TransactionLookupPanel({
 
           <ManualEntrySaveForm
             key={`${kind}:${result.chainId}:${result.txHash}`}
+            existingEntries={lookupState.existingEntries ?? []}
             kind={kind}
             onSaved={setSavedEntry}
             raids={raids}

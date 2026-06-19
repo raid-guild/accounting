@@ -1242,7 +1242,7 @@ export async function classifyQuarterTransfer(formData: FormData) {
     }
     counterpartyEntityId = null;
     raidId = null;
-  } else {
+  } else if (category !== "subcontractor_payout") {
     ripId = null;
   }
 
@@ -1390,7 +1390,7 @@ export async function updateLedgerEntryClassification(formData: FormData) {
     }
     counterpartyEntityId = null;
     raidId = null;
-  } else {
+  } else if (category !== "subcontractor_payout") {
     ripId = null;
   }
 

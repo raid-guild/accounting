@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { AppHeader } from "@/components/app-header";
+import { CopyableAddress } from "@/components/copyable-address";
 import { Button } from "@/components/ui/button";
 import { getDb } from "@/db";
 import { ledgerEntries } from "@/db/schema";
@@ -58,10 +59,6 @@ function formatCurrency(value: string | number) {
     minimumFractionDigits: 2,
     style: "currency",
   }).format(number);
-}
-
-function formatAddress(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 async function getProviderSpendSummaries(providers: CoreEntityView[]) {
@@ -201,6 +198,7 @@ function ProviderLauncher({ canManage }: { canManage: boolean }) {
         </div>
         <Link
           href={getProviderModalHref("add-provider")}
+          scroll={false}
           className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-sm transition-all hover:border-primary/40 hover:bg-muted"
         >
           <Building2 className="size-5" aria-hidden="true" />
@@ -227,6 +225,7 @@ function ModalShell({
     <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(41,16,10,0.72)] px-4 py-6 backdrop-blur-sm">
       <Link
         href="/admin/providers"
+        scroll={false}
         aria-label="Close modal"
         className="absolute inset-0 cursor-default"
       />
@@ -248,6 +247,7 @@ function ModalShell({
           </div>
           <Link
             href="/admin/providers"
+            scroll={false}
             className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
           >
             Close
@@ -277,7 +277,7 @@ function AddressList({
               className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
             >
               <div className="min-w-0">
-                <p className="font-mono">{formatAddress(address.address)}</p>
+                <CopyableAddress address={address.address} />
                 <p className="text-xs text-muted-foreground">
                   {address.label ? `${address.label} · ` : ""}
                   {address.chainId !== null
@@ -502,13 +502,18 @@ function ProviderRankingTable({
                     className="transition-colors hover:bg-muted/50"
                   >
                     <td className="p-0">
-                      <Link href={href} className="block px-3 py-3 font-medium">
+                      <Link
+                        href={href}
+                        scroll={false}
+                        className="block px-3 py-3 font-medium"
+                      >
                         {provider.name}
                       </Link>
                     </td>
                     <td className="p-0">
                       <Link
                         href={href}
+                        scroll={false}
                         className="block px-3 py-3 text-right font-medium"
                       >
                         {formatCurrency(spend?.totalUsd ?? "0")}
@@ -517,6 +522,7 @@ function ProviderRankingTable({
                     <td className="p-0">
                       <Link
                         href={href}
+                        scroll={false}
                         className="block px-3 py-3 text-right text-muted-foreground"
                       >
                         {spend?.entryCount ?? 0}
@@ -525,18 +531,27 @@ function ProviderRankingTable({
                     <td className="p-0">
                       <Link
                         href={href}
+                        scroll={false}
                         className="block truncate px-3 py-3 text-muted-foreground"
                       >
                         {provider.website || "Not recorded"}
                       </Link>
                     </td>
                     <td className="p-0">
-                      <Link href={href} className="block px-3 py-3 text-right">
+                      <Link
+                        href={href}
+                        scroll={false}
+                        className="block px-3 py-3 text-right"
+                      >
                         {provider.addresses.length}
                       </Link>
                     </td>
                     <td className="p-0">
-                      <Link href={href} className="block px-3 py-3">
+                      <Link
+                        href={href}
+                        scroll={false}
+                        className="block px-3 py-3"
+                      >
                         {provider.archivedAt ? (
                           <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
                             Archived

@@ -2,6 +2,7 @@ import { ArrowLeft, ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 import { AppHeader } from "@/components/app-header";
+import { CopyableAddress } from "@/components/copyable-address";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
 import {
   formatMembershipCurrency,
@@ -163,15 +164,19 @@ function MembershipActivityTable({ rows }: { rows: MembershipActivityRow[] }) {
                 ) : null}
               </td>
               <td className="px-4 py-4">
-                <p className="font-mono font-medium">
-                  {formatAddress(row.memberAddress)}
-                </p>
+                <CopyableAddress
+                  address={row.memberAddress}
+                  className="font-medium"
+                />
                 {row.recipientAddress &&
                 row.recipientAddress.toLowerCase() !==
                   row.memberAddress.toLowerCase() ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    To {formatAddress(row.recipientAddress)}
-                  </p>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    <CopyableAddress
+                      address={row.recipientAddress}
+                      label="To"
+                    />
+                  </div>
                 ) : null}
               </td>
               <td className="px-4 py-4 text-muted-foreground">

@@ -85,7 +85,7 @@ export function ClassificationLinkedFields({
     category === "provider_expense" ||
     category === "raid_revenue" ||
     category === "subcontractor_payout";
-  const isRipLinkedCategory = isRipExpense;
+  const isRipLinkedCategory = isRipExpense || category === "subcontractor_payout";
   const counterpartyType =
     category === "subcontractor_payout"
       ? "subcontractor"

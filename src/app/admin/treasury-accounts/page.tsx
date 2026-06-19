@@ -14,6 +14,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { AppHeader } from "@/components/app-header";
+import { CopyableAddress } from "@/components/copyable-address";
 import { Button } from "@/components/ui/button";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
 import { getTreasuryBalanceSnapshot } from "@/lib/treasury/balances";
@@ -198,6 +199,7 @@ function AccountLauncher({ canManage }: { canManage: boolean }) {
         </div>
         <Link
           href={getAccountModalHref("add-account")}
+          scroll={false}
           className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-sm transition-all hover:border-primary/40 hover:bg-muted"
         >
           <Wallet className="size-5" aria-hidden="true" />
@@ -224,6 +226,7 @@ function ModalShell({
     <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(41,16,10,0.72)] px-4 py-6 backdrop-blur-sm">
       <Link
         href="/admin/treasury-accounts"
+        scroll={false}
         aria-label="Close modal"
         className="absolute inset-0 cursor-default"
       />
@@ -245,6 +248,7 @@ function ModalShell({
           </div>
           <Link
             href="/admin/treasury-accounts"
+            scroll={false}
             className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
           >
             Close
@@ -319,8 +323,8 @@ function AccountDetails({
         </div>
         <div>
           <dt className="type-label-sm text-muted-foreground">Address</dt>
-          <dd className="mt-1 truncate font-mono text-sm">
-            {formatAddress(account.address)}
+          <dd className="mt-1 text-sm">
+            <CopyableAddress address={account.address} />
           </dd>
         </div>
       </dl>
@@ -473,40 +477,58 @@ function AccountRankingTable({
                     className="transition-colors hover:bg-muted/50"
                   >
                     <td className="p-0">
-                      <Link href={href} className="block px-3 py-3 font-medium">
+                      <Link
+                        href={href}
+                        scroll={false}
+                        className="block px-3 py-3 font-medium"
+                      >
                         {account.name}
                       </Link>
                     </td>
                     <td className="p-0">
                       <Link
                         href={href}
+                        scroll={false}
                         className="block px-3 py-3 text-right font-medium"
                       >
                         {getAccountBalanceLabel({ linkedBalance })}
                       </Link>
                     </td>
                     <td className="p-0">
-                      <Link href={href} className="block px-3 py-3">
+                      <Link
+                        href={href}
+                        scroll={false}
+                        className="block px-3 py-3"
+                      >
                         {getAccountTypeLabel(
                           account.type as EditableTreasuryAccountType,
                         )}
                       </Link>
                     </td>
                     <td className="p-0">
-                      <Link href={href} className="block px-3 py-3">
+                      <Link
+                        href={href}
+                        scroll={false}
+                        className="block px-3 py-3"
+                      >
                         {account.chainName}
                       </Link>
                     </td>
                     <td className="p-0">
                       <Link
                         href={href}
+                        scroll={false}
                         className="block px-3 py-3 font-mono text-muted-foreground"
                       >
                         {formatAddress(account.address)}
                       </Link>
                     </td>
                     <td className="p-0">
-                      <Link href={href} className="block px-3 py-3">
+                      <Link
+                        href={href}
+                        scroll={false}
+                        className="block px-3 py-3"
+                      >
                         <StatusBadge account={account} />
                       </Link>
                     </td>
