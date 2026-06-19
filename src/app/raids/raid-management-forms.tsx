@@ -125,6 +125,7 @@ export function RaidEntityCreateForm({
         </Button>
         <Link
           href="/raids"
+          scroll={false}
           className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg px-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted"
         >
           Cancel

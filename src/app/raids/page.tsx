@@ -18,6 +18,7 @@ import type { ReactNode } from "react";
 import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { AppHeader } from "@/components/app-header";
+import { CopyableAddress } from "@/components/copyable-address";
 import { Button } from "@/components/ui/button";
 import { getDb } from "@/db";
 import { ledgerEntries, quarters } from "@/db/schema";
@@ -342,6 +343,7 @@ function FlowButton({
   return (
     <Link
       href={getAddModalHref(flow)}
+      scroll={false}
       className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-sm transition-all hover:border-primary/40 hover:bg-muted"
     >
       {icon}
@@ -379,6 +381,7 @@ function FlowLauncher() {
           />
           <Link
             href={getManualAccountingModalHref("revenue")}
+            scroll={false}
             className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-sm transition-all hover:border-primary/40 hover:bg-muted"
           >
             <ReceiptText className="size-5" aria-hidden="true" />
@@ -387,6 +390,7 @@ function FlowLauncher() {
           </Link>
           <Link
             href={getManualAccountingModalHref("payout")}
+            scroll={false}
             className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-sm transition-all hover:border-primary/40 hover:bg-muted"
           >
             <HandCoins className="size-5" aria-hidden="true" />
@@ -440,6 +444,7 @@ function TableLinkCell({
     <td className="p-0">
       <Link
         href={href}
+        scroll={false}
         className={`block px-3 py-3 ${className}`}
       >
         {children}
@@ -746,7 +751,7 @@ function AddressList({
               className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm"
             >
               <div className="min-w-0">
-                <p className="font-mono">{formatAddress(address.address)}</p>
+                <CopyableAddress address={address.address} />
                 <p className="text-xs text-muted-foreground">
                   {address.label ? `${address.label} · ` : ""}
                   {address.chainId !== null
@@ -939,6 +944,7 @@ function EntityRow({ entity }: { entity: CoreEntityView }) {
   return (
     <Link
       href={getEntityHref(entity.id)}
+      scroll={false}
       className="grid gap-3 px-4 py-3 transition-colors hover:bg-muted/50 sm:grid-cols-[minmax(0,1fr)_9rem_7rem]"
     >
       <div className="min-w-0">
@@ -995,6 +1001,7 @@ function CreateRaidFlow({ clients }: { clients: CoreEntityView[] }) {
         </Button>
         <Link
           href="/raids"
+          scroll={false}
           className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg px-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted"
         >
           Cancel
@@ -1295,6 +1302,7 @@ function RaidRow({ raid }: { raid: RaidView }) {
   return (
     <Link
       href={getRaidHref(raid.id)}
+      scroll={false}
       className="grid gap-3 px-4 py-3 transition-colors hover:bg-muted/50 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,0.45fr)_7rem]"
     >
       <div className="min-w-0">
@@ -1409,6 +1417,7 @@ function ModalShell({
     <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(41,16,10,0.72)] px-4 py-6 backdrop-blur-sm">
       <Link
         href="/raids"
+        scroll={false}
         aria-label="Close modal"
         className="absolute inset-0 cursor-default"
       />
@@ -1430,6 +1439,7 @@ function ModalShell({
           </div>
           <Link
             href="/raids"
+            scroll={false}
             className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
           >
             Close

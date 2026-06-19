@@ -74,6 +74,7 @@ function ModalShell({
     <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(41,16,10,0.72)] px-4 py-6 backdrop-blur-sm">
       <Link
         href="/rips"
+        scroll={false}
         aria-label="Close modal"
         className="absolute inset-0 cursor-default"
       />
@@ -95,6 +96,7 @@ function ModalShell({
           </div>
           <Link
             href="/rips"
+            scroll={false}
             className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted"
           >
             Close
@@ -116,6 +118,7 @@ function RipLauncher() {
         </div>
         <Link
           href={getRipModalHref("add-rip")}
+          scroll={false}
           className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium shadow-sm transition-all hover:border-primary/40 hover:bg-muted"
         >
           <LinkIcon className="size-5" aria-hidden="true" />
@@ -256,33 +259,47 @@ function RipTable({ rips }: { rips: RipView[] }) {
               return (
                 <tr key={rip.id} className="transition-colors hover:bg-muted/50">
                   <td className="p-0">
-                    <Link href={href} className="block px-3 py-3 font-medium">
+                    <Link
+                      href={href}
+                      scroll={false}
+                      className="block px-3 py-3 font-medium"
+                    >
                       {rip.title}
                     </Link>
                   </td>
                   <td className="p-0">
                     <Link
                       href={href}
+                      scroll={false}
                       className="block px-3 py-3 text-muted-foreground"
                     >
                       {formatTimestamp(rip.createdAt)}
                     </Link>
                   </td>
                   <td className="p-0">
-                    <Link href={href} className="block px-3 py-3 text-right">
+                    <Link
+                      href={href}
+                      scroll={false}
+                      className="block px-3 py-3 text-right"
+                    >
                       {formatCurrency(rip.totalUsd)}
                     </Link>
                   </td>
                   <td className="p-0">
                     <Link
                       href={href}
+                      scroll={false}
                       className="block px-3 py-3 text-right text-muted-foreground"
                     >
                       {rip.entryCount}
                     </Link>
                   </td>
                   <td className="p-0">
-                    <Link href={href} className="flex justify-end px-3 py-3">
+                    <Link
+                      href={href}
+                      scroll={false}
+                      className="flex justify-end px-3 py-3"
+                    >
                       <span className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium transition-all hover:bg-muted">
                         <Pencil className="size-3.5" aria-hidden="true" />
                         Edit

@@ -6,6 +6,7 @@ import {
 import Link from "next/link";
 
 import { AppHeader } from "@/components/app-header";
+import { CopyableAddress } from "@/components/copyable-address";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
 import { isQuarterExportReady } from "@/lib/quarter-export-readiness";
 import { getQuarterReportData } from "@/lib/quarter-report";
@@ -40,10 +41,6 @@ function formatTimestamp(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
-}
-
-function formatAddress(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 function ReportGate({
@@ -221,9 +218,10 @@ function BalanceTable({
                 <tr key={`${balance.chainId}:${balance.accountAddress}`}>
                   <td className="px-3 py-3">
                     <p className="font-medium">{balance.accountName}</p>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">
-                      {formatAddress(balance.accountAddress)}
-                    </p>
+                    <CopyableAddress
+                      address={balance.accountAddress}
+                      className="mt-1 text-xs text-muted-foreground"
+                    />
                   </td>
                   <td className="px-3 py-3 text-right">
                     {formatCurrency(balance.openingUsd)}
