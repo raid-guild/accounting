@@ -31,8 +31,8 @@ export type TransactionLookupState = {
 export type ExistingManualTransferEntry = {
   category: typeof ledgerEntries.$inferSelect.category;
   id: string;
-  quarterId: string;
-  quarterLabel: string;
+  quarterId: string | null;
+  quarterLabel: string | null;
   sourceExternalId: string;
   transferIndex: number;
 };
@@ -303,6 +303,14 @@ function getSourceExternalId({
   return `manual-onchain:${chainId}:${txHash.toLowerCase()}:${transferIndex}`;
 }
 
+function getTransferIndexFromSourceExternalId(sourceExternalId: string) {
+  const transferIndex = Number(sourceExternalId.split(":").at(-1));
+
+  return Number.isInteger(transferIndex) && transferIndex >= 0
+    ? transferIndex
+    : null;
+}
+
 async function getExistingManualTransferEntries({
   chainId,
   transferCount,
@@ -324,12 +332,12 @@ async function getExistingManualTransferEntries({
     .select({
       category: ledgerEntries.category,
       id: ledgerEntries.id,
-      quarterId: quarters.id,
+      quarterId: ledgerEntries.quarterId,
       quarterLabel: quarters.label,
       sourceExternalId: ledgerEntries.sourceExternalId,
     })
     .from(ledgerEntries)
-    .innerJoin(quarters, eq(ledgerEntries.quarterId, quarters.id))
+    .leftJoin(quarters, eq(ledgerEntries.quarterId, quarters.id))
     .where(inArray(ledgerEntries.sourceExternalId, sourceExternalIds));
 
   return rows.flatMap((row) => {
@@ -337,9 +345,11 @@ async function getExistingManualTransferEntries({
       return [];
     }
 
-    const transferIndex = sourceExternalIds.indexOf(row.sourceExternalId);
+    const transferIndex = getTransferIndexFromSourceExternalId(
+      row.sourceExternalId,
+    );
 
-    if (transferIndex === -1) {
+    if (transferIndex === null) {
       return [];
     }
 

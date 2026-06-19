@@ -4,6 +4,7 @@ import { Check, Copy } from "lucide-react";
 import { type MouseEvent, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
 
 function formatAddress(address: string) {
@@ -20,6 +21,7 @@ export function CopyableAddress({
   label?: string;
 }) {
   const [didCopy, setDidCopy] = useState(false);
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (!didCopy) {
@@ -40,10 +42,15 @@ export function CopyableAddress({
     event.stopPropagation();
 
     try {
+      if (!navigator.clipboard) {
+        throw new Error("Clipboard unavailable");
+      }
+
       await navigator.clipboard.writeText(address);
       setDidCopy(true);
     } catch {
       setDidCopy(false);
+      showToast("Could not copy address.");
     }
   }
 

@@ -588,7 +588,7 @@ function ManualEntrySaveForm({
           <div>
             <p className="font-medium">
               This transfer is already saved to{" "}
-              {selectedExistingEntry.quarterLabel}.
+              {selectedExistingEntry.quarterLabel ?? "a quarter ledger"}.
             </p>
             <p className="mt-1 text-amber-900/80">
               It is currently recorded as{" "}
