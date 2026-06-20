@@ -110,7 +110,32 @@ function getTransactionExplorerUrl({
     return `https://basescan.org/tx/${txHash}`;
   }
 
+  if (chainId === 42161) {
+    return `https://arbiscan.io/tx/${txHash}`;
+  }
+
+  if (chainId === 10) {
+    return `https://optimistic.etherscan.io/tx/${txHash}`;
+  }
+
   return null;
+}
+
+function getManualSourceExternalTransaction(
+  sourceExternalId: string | null,
+): { chainId: number; txHash: string } | null {
+  if (!sourceExternalId?.startsWith("manual-onchain:")) {
+    return null;
+  }
+
+  const [, rawChainId, txHash] = sourceExternalId.split(":");
+  const chainId = Number(rawChainId);
+
+  if (!Number.isInteger(chainId) || !txHash?.startsWith("0x")) {
+    return null;
+  }
+
+  return { chainId, txHash };
 }
 
 function formatCurrency(value: string | null) {
@@ -948,14 +973,18 @@ function SwapDetailLine({ detail }: { detail: SwapDetail | null }) {
 function TransferCard({
   isSwap,
   options,
+  position,
   quarter,
   swapDetail,
+  total,
   transfer,
 }: {
   isSwap: boolean;
   options: ClassificationOptions;
+  position: number;
   quarter: QuarterSummary;
   swapDetail: SwapDetail | null;
+  total: number;
   transfer: TreasuryTransferClassificationView;
 }) {
   const usdAmount = getDefaultUsdAmount(transfer);
@@ -984,6 +1013,9 @@ function TransferCard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
+                {position} / {total}
+              </span>
               <span className="inline-flex items-center gap-1 rounded-md border border-emerald-600/20 bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-800">
                 <BadgeCheck className="size-3" aria-hidden="true" />
                 Classified
@@ -1108,6 +1140,9 @@ function TransferCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
+              {position} / {total}
+            </span>
+            <span className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
               {isSwap ? "Swap" : getDirectionLabel(transfer.direction)}
             </span>
             {transfer.ledgerEntryId ? (
@@ -1213,17 +1248,26 @@ function TransferCard({
 function ManualLedgerEntryCard({
   entry,
   options,
+  position,
   quarter,
+  total,
 }: {
   entry: ManualLedgerEntryClassificationView;
   options: ClassificationOptions;
+  position: number;
   quarter: QuarterSummary;
+  total: number;
 }) {
+  const externalTransaction = getManualSourceExternalTransaction(
+    entry.sourceExternalId,
+  );
+  const explorerChainId = entry.chainId ?? externalTransaction?.chainId ?? null;
+  const explorerTxHash = entry.txHash ?? externalTransaction?.txHash ?? null;
   const transactionExplorerUrl =
-    entry.chainId && entry.txHash
+    explorerChainId && explorerTxHash
       ? getTransactionExplorerUrl({
-          chainId: entry.chainId,
-          txHash: entry.txHash,
+          chainId: explorerChainId,
+          txHash: explorerTxHash,
         })
       : null;
   const linkedEntity = options.entities.find(
@@ -1250,6 +1294,9 @@ function ManualLedgerEntryCard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
+              {position} / {total}
+            </span>
             {isClassified ? (
               <span className="inline-flex items-center gap-1 rounded-md border border-emerald-600/20 bg-emerald-600/10 px-2 py-1 text-xs font-medium text-emerald-800">
                 <BadgeCheck className="size-3" aria-hidden="true" />
@@ -1313,14 +1360,14 @@ function ManualLedgerEntryCard({
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {transactionExplorerUrl && entry.txHash ? (
+          {transactionExplorerUrl && explorerTxHash ? (
             <a
               href={transactionExplorerUrl}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
-              {formatHash(entry.txHash)}
+              {formatHash(explorerTxHash)}
               <ExternalLink className="size-3" aria-hidden="true" />
               <span className="sr-only">Open transaction explorer</span>
             </a>
@@ -1604,13 +1651,18 @@ export default async function QuarterTransactionsPage({
 
         <section className="grid gap-4">
           {reviewItems.length > 0 ? (
-            reviewItems.map((item) =>
-              item.type === "ledger" ? (
+            reviewItems.map((item, index) => {
+              const position = index + 1;
+              const total = reviewItems.length;
+
+              return item.type === "ledger" ? (
                 <ManualLedgerEntryCard
                   key={`ledger:${item.entry.id}`}
                   entry={item.entry}
                   options={options}
+                  position={position}
                   quarter={quarter}
+                  total={total}
                 />
               ) : (
                 <TransferCard
@@ -1619,15 +1671,17 @@ export default async function QuarterTransactionsPage({
                     getTransferGroupKey(item.transfer),
                   )}
                   options={options}
+                  position={position}
                   quarter={quarter}
                   swapDetail={
                     swapDetailsByGroupKey.get(getTransferGroupKey(item.transfer)) ??
                     null
                   }
+                  total={total}
                   transfer={item.transfer}
                 />
-              ),
-            )
+              );
+            })
           ) : (
             <div className="rounded-lg border border-dashed border-border bg-card p-8 text-sm text-muted-foreground">
               No treasury, bank, or manual activity found for this quarter.

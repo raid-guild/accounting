@@ -1246,6 +1246,15 @@ export async function classifyQuarterTransfer(formData: FormData) {
     ripId = null;
   }
 
+  if (
+    category === "subcontractor_payout" &&
+    Boolean(raidId) === Boolean(ripId)
+  ) {
+    throw new Error(
+      "Choose exactly one: a raid or RIP for subcontractor payouts",
+    );
+  }
+
   if (category === "provider_expense") {
     raidId = null;
   }
@@ -1392,6 +1401,15 @@ export async function updateLedgerEntryClassification(formData: FormData) {
     raidId = null;
   } else if (category !== "subcontractor_payout") {
     ripId = null;
+  }
+
+  if (
+    category === "subcontractor_payout" &&
+    Boolean(raidId) === Boolean(ripId)
+  ) {
+    throw new Error(
+      "Choose exactly one: a raid or RIP for subcontractor payouts",
+    );
   }
 
   if (category === "raid_spoils") {

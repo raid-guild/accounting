@@ -101,6 +101,7 @@ export type ManualLedgerEntryClassificationView = {
   quarterId: string | null;
   raidId: string | null;
   ripId: string | null;
+  sourceExternalId: string | null;
   source: "bank_csv" | "manual";
   txHash: string | null;
   usdAmount: string;
@@ -411,6 +412,7 @@ export async function listManualLedgerEntryClassifications({
     quarterId: entry.quarterId,
     raidId: entry.raidId,
     ripId: entry.ripId,
+    sourceExternalId: entry.sourceExternalId,
     source: entry.source as "bank_csv" | "manual",
     txHash: entry.txHash,
     usdAmount: entry.usdAmount,
