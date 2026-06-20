@@ -37,6 +37,7 @@ import {
   type RaidAccountingSummary,
   type SubcontractorAccountingSummary,
 } from "@/lib/raid-accounting";
+import { decryptField, type EncryptedField } from "@/lib/encryption";
 import {
   archiveRaid,
   archiveRaidEntity,
@@ -79,6 +80,7 @@ type ManualRaidLedgerEntryView = {
   counterpartyEntityId: string | null;
   id: string;
   kind: ManualRaidLedgerKind | "spoils";
+  notes: string | null;
   occurredAt: Date;
   quarterId: string;
   quarterLabel: string;
@@ -248,6 +250,7 @@ async function listRaidLedgerEntries(
       category: ledgerEntries.category,
       counterpartyEntityId: ledgerEntries.counterpartyEntityId,
       id: ledgerEntries.id,
+      notesEncrypted: ledgerEntries.notesEncrypted,
       occurredAt: ledgerEntries.occurredAt,
       quarterId: quarters.id,
       quarterLabel: quarters.label,
@@ -271,7 +274,7 @@ async function listRaidLedgerEntries(
     )
     .orderBy(desc(ledgerEntries.occurredAt));
 
-  return rows.map(({ category, ...row }) => ({
+  return rows.map(({ category, notesEncrypted, ...row }) => ({
     ...row,
     kind:
       category === "subcontractor_payout"
@@ -279,6 +282,9 @@ async function listRaidLedgerEntries(
         : category === "raid_spoils"
           ? "spoils"
           : "revenue",
+    notes: notesEncrypted
+      ? decryptField(notesEncrypted as EncryptedField)
+      : null,
   }));
 }
 
@@ -1075,6 +1081,11 @@ function ManualRaidLedgerRows({
                     <p className="mt-1 truncate text-xs text-muted-foreground">
                       {kind === "payout" ? "Paid to" : "Linked to"}{" "}
                       {counterparty.name}
+                    </p>
+                  ) : null}
+                  {entry.notes ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Notes: {entry.notes}
                     </p>
                   ) : null}
                 </div>
