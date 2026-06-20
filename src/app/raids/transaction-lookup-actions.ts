@@ -52,6 +52,11 @@ export type RemoveManualRaidLedgerEntryState = {
   removed: boolean;
 };
 
+export type UpdateManualRaidLedgerEntryState = {
+  error: string | null;
+  updated: boolean;
+};
+
 export type ManualTransferPriceState = {
   error: string | null;
   priceSource: string | null;
@@ -73,10 +78,12 @@ const USER_FACING_ERRORS = new Set([
   "Raid accounting access required",
   "Raid is required",
   "Raid not found",
+  "Revenue can only be edited while the quarter is draft",
   "Revenue can only be removed while the quarter is draft",
   "Revenue entry not found",
   "Subcontractor is required",
   "Subcontractor not found",
+  "Payout can only be edited while the quarter is draft",
   "That transaction transfer is already saved",
   "Transaction not found",
   "USD amount must be greater than zero",
@@ -112,7 +119,7 @@ async function requireRaidAccountingAccess() {
   return session;
 }
 
-function getErrorMessage(error: unknown) {
+function getUserFacingErrorMessage(error: unknown) {
   if (error instanceof Error) {
     if (
       USER_FACING_ERRORS.has(error.message) ||
@@ -122,7 +129,21 @@ function getErrorMessage(error: unknown) {
     }
   }
 
-  return "Transaction lookup failed. Check the selected chain and try again.";
+  return null;
+}
+
+function getErrorMessage(error: unknown) {
+  return (
+    getUserFacingErrorMessage(error) ??
+    "Transaction lookup failed. Check the selected chain and try again."
+  );
+}
+
+function getManualLedgerUpdateErrorMessage(error: unknown) {
+  return (
+    getUserFacingErrorMessage(error) ??
+    "Manual ledger entry update failed. Check the entry and try again."
+  );
 }
 
 function getPricingErrorMessage(error: unknown) {
@@ -790,5 +811,102 @@ export async function removeManualRaidLedgerEntry(
     return { error: null, removed: true };
   } catch (error) {
     return { error: getErrorMessage(error), removed: false };
+  }
+}
+
+export async function updateManualRaidLedgerEntry(
+  _previousState: UpdateManualRaidLedgerEntryState,
+  formData: FormData,
+): Promise<UpdateManualRaidLedgerEntryState> {
+  try {
+    const session = await requireRaidAccountingAccess();
+    const id = getString(formData, "ledgerEntryId");
+    const kind = getManualRaidLedgerKind(getString(formData, "kind"));
+    const category =
+      kind === "payout" ? "subcontractor_payout" : "raid_revenue";
+    const label = kind === "payout" ? "Payout" : "Revenue";
+    const raidId = getString(formData, "raidId");
+    const notes = getString(formData, "notes");
+    const usdAmount = getUsdAmount(getString(formData, "usdAmount"));
+
+    if (!id) {
+      throw new Error(`${label} entry not found`);
+    }
+
+    const [row] = await getDb()
+      .select({ entry: ledgerEntries, quarter: quarters })
+      .from(ledgerEntries)
+      .innerJoin(quarters, eq(ledgerEntries.quarterId, quarters.id))
+      .where(
+        and(
+          eq(ledgerEntries.id, id),
+          eq(ledgerEntries.source, "manual"),
+          eq(ledgerEntries.category, category),
+        ),
+      )
+      .limit(1);
+
+    if (!row) {
+      throw new Error(`${label} entry not found`);
+    }
+
+    if (row.quarter.status !== "draft") {
+      throw new Error(`${label} can only be edited while the quarter is draft`);
+    }
+
+    const { client, raid } = await getRaidForManualLedgerEntry(raidId);
+    const counterpartyEntityId =
+      kind === "payout"
+        ? (await getSubcontractorForPayout(getString(formData, "subcontractorId")))
+            .id
+        : client.id;
+
+    const [updatedEntry] = await getDb()
+      .update(ledgerEntries)
+      .set({
+        counterpartyEntityId,
+        notesEncrypted: notes ? encryptField(notes) : null,
+        raidId: raid.id,
+        usdAmount,
+      })
+      .where(
+        and(
+          eq(ledgerEntries.id, row.entry.id),
+          eq(ledgerEntries.source, "manual"),
+          eq(ledgerEntries.category, category),
+        ),
+      )
+      .returning();
+
+    if (!updatedEntry) {
+      throw new Error(`${label} entry not found`);
+    }
+
+    await writeAuditEvent({
+      action: "update",
+      actorWalletAddress: session.address,
+      metadata: {
+        category,
+        previousRaidId: row.entry.raidId,
+        raidId: raid.id,
+        sourceExternalId: row.entry.sourceExternalId,
+        txHash: row.entry.txHash,
+      },
+      quarterId: row.quarter.id,
+      subjectId: row.entry.id,
+      subjectTable: "ledger_entries",
+      summary: `Updated manual raid ${kind}`,
+    });
+
+    await deleteQuarterBalanceValidation(row.quarter.id);
+    revalidatePath("/raids");
+    revalidatePath("/admin/quarters");
+    revalidatePath(`/admin/quarters/${row.quarter.id}/transactions`);
+    revalidatePath("/reports");
+    revalidatePath(`/reports/quarters/${row.quarter.id}`);
+
+    return { error: null, updated: true };
+  } catch (error) {
+    return { error: getManualLedgerUpdateErrorMessage(error), updated: false };
   }
 }
