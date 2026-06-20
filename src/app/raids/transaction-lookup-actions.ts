@@ -119,7 +119,7 @@ async function requireRaidAccountingAccess() {
   return session;
 }
 
-function getErrorMessage(error: unknown) {
+function getUserFacingErrorMessage(error: unknown) {
   if (error instanceof Error) {
     if (
       USER_FACING_ERRORS.has(error.message) ||
@@ -129,7 +129,21 @@ function getErrorMessage(error: unknown) {
     }
   }
 
-  return "Transaction lookup failed. Check the selected chain and try again.";
+  return null;
+}
+
+function getErrorMessage(error: unknown) {
+  return (
+    getUserFacingErrorMessage(error) ??
+    "Transaction lookup failed. Check the selected chain and try again."
+  );
+}
+
+function getManualLedgerUpdateErrorMessage(error: unknown) {
+  return (
+    getUserFacingErrorMessage(error) ??
+    "Manual ledger entry update failed. Check the entry and try again."
+  );
 }
 
 function getPricingErrorMessage(error: unknown) {
@@ -893,6 +907,6 @@ export async function updateManualRaidLedgerEntry(
 
     return { error: null, updated: true };
   } catch (error) {
-    return { error: getErrorMessage(error), updated: false };
+    return { error: getManualLedgerUpdateErrorMessage(error), updated: false };
   }
 }

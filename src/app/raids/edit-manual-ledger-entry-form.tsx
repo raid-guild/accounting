@@ -117,7 +117,7 @@ export function EditManualLedgerEntryForm({
               name="usdAmount"
               defaultValue={defaultUsdAmount}
               inputMode="decimal"
-              pattern="\d+(\.\d{1,2})?"
+              pattern={String.raw`\d+(\.\d{1,2})?`}
               title="Enter a positive dollar amount with up to 2 decimals"
               className="h-9 rounded-md border border-input bg-background px-3 text-sm"
               required
