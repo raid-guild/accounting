@@ -101,10 +101,16 @@ export function ClassificationLinkedFields({
     : entities;
   const counterpartyDisabled =
     isTreasuryTransfer || !isCounterpartyLinkedCategory;
+  const hasSelectedRaid = Boolean(selectedRaidId);
+  const hasSelectedRip = Boolean(selectedRipId);
   const raidDisabled =
-    isTreasuryTransfer || !isRaidLinkedCategory || Boolean(selectedRipId);
+    isTreasuryTransfer ||
+    !isRaidLinkedCategory ||
+    (!hasSelectedRaid && hasSelectedRip);
   const ripDisabled =
-    isTreasuryTransfer || !isRipLinkedCategory || Boolean(selectedRaidId);
+    isTreasuryTransfer ||
+    !isRipLinkedCategory ||
+    (!hasSelectedRip && hasSelectedRaid);
   const counterpartyCreateFlow: QuickCreateFlow =
     category === "subcontractor_payout" ? "subcontractor" : "provider";
   const counterpartyCreateLabel =
@@ -208,7 +214,15 @@ export function ClassificationLinkedFields({
           <select
             name={raidDisabled ? undefined : "raidId"}
             value={selectedRaidId}
-            onChange={(event) => setSelectedRaidId(event.target.value)}
+            onChange={(event) => {
+              const nextRaidId = event.target.value;
+
+              setSelectedRaidId(nextRaidId);
+
+              if (nextRaidId) {
+                setSelectedRipId("");
+              }
+            }}
             disabled={raidDisabled}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
           >
@@ -248,7 +262,15 @@ export function ClassificationLinkedFields({
         <select
           name={ripDisabled ? undefined : "ripId"}
           value={selectedRipId}
-          onChange={(event) => setSelectedRipId(event.target.value)}
+          onChange={(event) => {
+            const nextRipId = event.target.value;
+
+            setSelectedRipId(nextRipId);
+
+            if (nextRipId) {
+              setSelectedRaidId("");
+            }
+          }}
           disabled={ripDisabled}
           className="h-9 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
         >
