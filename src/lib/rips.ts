@@ -6,6 +6,11 @@ import { getDb } from "@/db";
 import { ledgerEntries, rips } from "@/db/schema";
 import { decryptField, type EncryptedField } from "@/lib/encryption";
 
+const RIP_LINKED_SPEND_CATEGORIES = [
+  "rip_expense",
+  "subcontractor_payout",
+] as const;
+
 export type RipOption = {
   id: string;
   title: string;
@@ -52,7 +57,7 @@ export async function listRipsWithTotals(): Promise<RipView[]> {
     .from(ledgerEntries)
     .where(
       and(
-        eq(ledgerEntries.category, "rip_expense"),
+        inArray(ledgerEntries.category, RIP_LINKED_SPEND_CATEGORIES),
         inArray(
           ledgerEntries.ripId,
           ripRows.map((rip) => rip.id),
