@@ -98,15 +98,28 @@ function getPreferredSubcontractorMatches({
         normalizeAddress(address.address) === normalizedRecipientAddress,
     ),
   );
-  const chainMatches = addressMatches.filter((subcontractor) =>
+  const exactChainMatches = addressMatches.filter((subcontractor) =>
     subcontractor.addresses.some(
       (address) =>
         normalizeAddress(address.address) === normalizedRecipientAddress &&
-        (address.chainId === null || address.chainId === chainId),
+        address.chainId === chainId,
+    ),
+  );
+  const chainAgnosticMatches = addressMatches.filter((subcontractor) =>
+    subcontractor.addresses.some(
+      (address) =>
+        normalizeAddress(address.address) === normalizedRecipientAddress &&
+        address.chainId === null,
     ),
   );
 
-  return chainMatches.length > 0 ? chainMatches : addressMatches;
+  if (exactChainMatches.length > 0) {
+    return exactChainMatches;
+  }
+
+  return chainAgnosticMatches.length > 0
+    ? chainAgnosticMatches
+    : addressMatches;
 }
 
 function getSingleMatchedSubcontractor({
