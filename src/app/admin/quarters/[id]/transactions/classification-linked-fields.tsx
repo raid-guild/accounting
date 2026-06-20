@@ -75,6 +75,8 @@ export function ClassificationLinkedFields({
 }) {
   const [category, setCategory] = useState(defaultCategory ?? "");
   const [createFlow, setCreateFlow] = useState<QuickCreateFlow | null>(null);
+  const [selectedRaidId, setSelectedRaidId] = useState(defaultRaidId ?? "");
+  const [selectedRipId, setSelectedRipId] = useState(defaultRipId ?? "");
   const isTreasuryTransfer = category === "treasury_transfer";
   const isRipExpense = category === "rip_expense";
   const isRaidLinkedCategory =
@@ -99,8 +101,10 @@ export function ClassificationLinkedFields({
     : entities;
   const counterpartyDisabled =
     isTreasuryTransfer || !isCounterpartyLinkedCategory;
-  const raidDisabled = isTreasuryTransfer || !isRaidLinkedCategory;
-  const ripDisabled = isTreasuryTransfer || !isRipLinkedCategory;
+  const raidDisabled =
+    isTreasuryTransfer || !isRaidLinkedCategory || Boolean(selectedRipId);
+  const ripDisabled =
+    isTreasuryTransfer || !isRipLinkedCategory || Boolean(selectedRaidId);
   const counterpartyCreateFlow: QuickCreateFlow =
     category === "subcontractor_payout" ? "subcontractor" : "provider";
   const counterpartyCreateLabel =
@@ -116,7 +120,26 @@ export function ClassificationLinkedFields({
           <select
             name="category"
             value={category}
-            onChange={(event) => setCategory(event.target.value)}
+            onChange={(event) => {
+              const nextCategory = event.target.value;
+
+              setCategory(nextCategory);
+
+              if (
+                nextCategory !== "raid_revenue" &&
+                nextCategory !== "raid_spoils" &&
+                nextCategory !== "subcontractor_payout"
+              ) {
+                setSelectedRaidId("");
+              }
+
+              if (
+                nextCategory !== "rip_expense" &&
+                nextCategory !== "subcontractor_payout"
+              ) {
+                setSelectedRipId("");
+              }
+            }}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             required
           >
@@ -184,12 +207,17 @@ export function ClassificationLinkedFields({
         >
           <select
             name={raidDisabled ? undefined : "raidId"}
-            defaultValue={defaultRaidId ?? ""}
+            value={selectedRaidId}
+            onChange={(event) => setSelectedRaidId(event.target.value)}
             disabled={raidDisabled}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
           >
             <option value="">
-              {raidDisabled ? "Not needed for this category" : "No raid link"}
+              {selectedRipId
+                ? "Clear RIP to link a raid"
+                : raidDisabled
+                  ? "Not needed for this category"
+                  : "No raid link"}
             </option>
             {raids.map((raid) => (
               <option key={raid.id} value={raid.id}>
@@ -219,12 +247,17 @@ export function ClassificationLinkedFields({
       >
         <select
           name={ripDisabled ? undefined : "ripId"}
-          defaultValue={defaultRipId ?? ""}
+          value={selectedRipId}
+          onChange={(event) => setSelectedRipId(event.target.value)}
           disabled={ripDisabled}
           className="h-9 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
         >
           <option value="">
-            {ripDisabled ? "Not needed for this category" : "No RIP link"}
+            {selectedRaidId
+              ? "Clear raid to link a RIP"
+              : ripDisabled
+                ? "Not needed for this category"
+                : "No RIP link"}
           </option>
           {rips.map((rip) => (
             <option key={rip.id} value={rip.id}>
