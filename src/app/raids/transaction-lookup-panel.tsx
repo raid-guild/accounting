@@ -75,7 +75,56 @@ function formatAddress(address: string) {
 }
 
 function normalizeAddress(address: string) {
-  return address.toLowerCase();
+  return address.trim().toLowerCase();
+}
+
+function getPreferredSubcontractorMatches({
+  chainId,
+  recipientAddress,
+  subcontractors,
+}: {
+  chainId: number;
+  recipientAddress: string | null;
+  subcontractors: CoreEntityView[];
+}) {
+  if (!recipientAddress) {
+    return [];
+  }
+
+  const normalizedRecipientAddress = normalizeAddress(recipientAddress);
+  const addressMatches = subcontractors.filter((subcontractor) =>
+    subcontractor.addresses.some(
+      (address) =>
+        normalizeAddress(address.address) === normalizedRecipientAddress,
+    ),
+  );
+  const chainMatches = addressMatches.filter((subcontractor) =>
+    subcontractor.addresses.some(
+      (address) =>
+        normalizeAddress(address.address) === normalizedRecipientAddress &&
+        (address.chainId === null || address.chainId === chainId),
+    ),
+  );
+
+  return chainMatches.length > 0 ? chainMatches : addressMatches;
+}
+
+function getSingleMatchedSubcontractor({
+  chainId,
+  recipientAddress,
+  subcontractors,
+}: {
+  chainId: number;
+  recipientAddress: string | null;
+  subcontractors: CoreEntityView[];
+}) {
+  const matches = getPreferredSubcontractorMatches({
+    chainId,
+    recipientAddress,
+    subcontractors,
+  });
+
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function formatTimestamp(value: string) {
@@ -350,7 +399,16 @@ function ManualEntrySaveForm({
     INITIAL_STATE,
   );
   const [selectedTransferIndex, setSelectedTransferIndex] = useState("0");
-  const [selectedSubcontractorId, setSelectedSubcontractorId] = useState("");
+  const [selectedSubcontractorId, setSelectedSubcontractorId] = useState(
+    () =>
+      kind === "payout"
+        ? (getSingleMatchedSubcontractor({
+            chainId: result.chainId,
+            recipientAddress: result.transfers[0]?.toAddress ?? null,
+            subcontractors,
+          })?.id ?? "")
+        : "",
+  );
   const [usdAmount, setUsdAmount] = useState(
     result.transfers[0]?.usdAmount ?? "",
   );
@@ -365,15 +423,12 @@ function ManualEntrySaveForm({
   const hasRaids = raids.length > 0;
   const hasSubcontractors = subcontractors.length > 0;
   const matchedSubcontractors =
-    kind === "payout" && selectedTransfer
-      ? subcontractors.filter((subcontractor) =>
-          subcontractor.addresses.some(
-            (address) =>
-              normalizeAddress(address.address) ===
-                normalizeAddress(selectedTransfer.toAddress) &&
-              (address.chainId === null || address.chainId === result.chainId),
-          ),
-        )
+    kind === "payout"
+      ? getPreferredSubcontractorMatches({
+          chainId: result.chainId,
+          recipientAddress: selectedTransfer?.toAddress ?? null,
+          subcontractors,
+        })
       : [];
   const matchedSubcontractor =
     matchedSubcontractors.length === 1 ? matchedSubcontractors[0] : null;
@@ -440,7 +495,15 @@ function ManualEntrySaveForm({
 
               latestPriceRequestRef.current += 1;
               setSelectedTransferIndex(nextIndex);
-              setSelectedSubcontractorId("");
+              setSelectedSubcontractorId(
+                kind === "payout"
+                  ? (getSingleMatchedSubcontractor({
+                      chainId: result.chainId,
+                      recipientAddress: nextTransfer?.toAddress ?? null,
+                      subcontractors,
+                    })?.id ?? "")
+                  : "",
+              );
               setUsdAmount(nextTransfer?.usdAmount ?? "");
               setPriceMessage(null);
             }}
@@ -492,7 +555,7 @@ function ManualEntrySaveForm({
           ) : null}
           <select
             name="subcontractorId"
-            value={matchedSubcontractor?.id ?? selectedSubcontractorId}
+            value={selectedSubcontractorId}
             onChange={(event) => setSelectedSubcontractorId(event.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 text-sm"
             disabled={!hasSubcontractors || Boolean(matchedSubcontractor)}
