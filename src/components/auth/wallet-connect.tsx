@@ -1,6 +1,12 @@
 "use client";
 
-import { ChevronDown, LogOut, ShieldCheck, UserCircle, Wallet } from "lucide-react";
+import {
+  ChevronDown,
+  LogOut,
+  ShieldCheck,
+  UserCircle,
+  Wallet,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { SiweMessage } from "siwe";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -19,9 +25,10 @@ type SessionResponse = {
   address: string | null;
   authenticated: boolean;
   canUseMemberView?: boolean;
+  canUseRolePreview?: boolean;
   chainId: number | null;
   permissions: AuthPermissions | null;
-  viewMode?: "admin" | "member";
+  viewMode?: "admin" | "cleric" | "member";
 };
 
 type WalletConnectProps = {
@@ -32,6 +39,7 @@ const emptySession: SessionResponse = {
   address: null,
   authenticated: false,
   canUseMemberView: false,
+  canUseRolePreview: false,
   chainId: null,
   permissions: null,
   viewMode: "admin",
@@ -301,9 +309,7 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
     }
   }
 
-  async function toggleViewMode() {
-    const nextMode = session.viewMode === "member" ? "admin" : "member";
-
+  async function setViewMode(nextMode: "admin" | "cleric" | "member") {
     try {
       const response = await fetch("/api/auth/view-mode", {
         body: JSON.stringify({ mode: nextMode }),
@@ -321,6 +327,7 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
       }
 
       setSession(nextSession);
+      setIsProfileMenuOpen(false);
       router.refresh();
     } catch {
       showToast("Could not switch view mode.");
@@ -329,8 +336,8 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
 
   if (session.authenticated && session.address) {
     const roleLabel = session.permissions?.roles.join(", ") ?? "member";
-    const isMemberPreview = session.viewMode === "member";
-    const viewLabel = isMemberPreview ? "member" : "admin";
+    const viewMode = session.viewMode ?? "admin";
+    const isPreview = viewMode !== "admin";
 
     return (
       <div className="relative" ref={profileMenuRef}>
@@ -342,8 +349,8 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
         >
           <UserCircle className="size-4 shrink-0 text-scroll-200" aria-hidden="true" />
           <span className="font-medium">{formatAddress(session.address)}</span>
-          <span className="hidden max-w-24 truncate text-scroll-300 sm:inline">
-            {viewLabel}
+          <span className="hidden max-w-24 truncate text-scroll-300 sm:inline capitalize">
+            {viewMode}
           </span>
           <ChevronDown
             className={`size-3.5 shrink-0 transition-transform ${isProfileMenuOpen ? "rotate-180" : ""}`}
@@ -358,19 +365,28 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
                 {formatAddress(session.address)}
               </p>
               <p className="mt-1 text-xs text-scroll-300">
-                {isMemberPreview
-                  ? "Viewing the app as a member"
+                {isPreview
+                  ? `Viewing the app as a ${viewMode}`
                   : `Signed in as ${roleLabel}`}
               </p>
             </div>
-            {session.canUseMemberView ? (
-              <button
-                type="button"
-                onClick={toggleViewMode}
-                className="flex h-10 w-full items-center justify-between rounded-md px-3 text-left text-sm font-medium transition-colors hover:bg-scroll-100/10"
-              >
-                <span>{isMemberPreview ? "View as admin" : "View as member"}</span>
-              </button>
+            {session.canUseRolePreview ?? session.canUseMemberView ? (
+              <div className="grid gap-1 border-y border-scroll-300/15 py-1">
+                {(["admin", "cleric", "member"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setViewMode(mode)}
+                    disabled={viewMode === mode}
+                    className="flex h-10 w-full cursor-pointer items-center justify-between rounded-md px-3 text-left text-sm font-medium capitalize transition-colors hover:bg-scroll-100/10 disabled:cursor-default disabled:bg-scroll-100 disabled:text-moloch-800"
+                  >
+                    <span>View as {mode}</span>
+                    {viewMode === mode ? (
+                      <span className="text-xs normal-case">current</span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
             ) : null}
             <button
               type="button"

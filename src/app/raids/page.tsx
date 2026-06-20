@@ -54,6 +54,7 @@ import {
   RaidAddressForm,
   RaidEntityCreateForm,
 } from "@/app/raids/raid-management-forms";
+import { EditManualLedgerEntryForm } from "@/app/raids/edit-manual-ledger-entry-form";
 import { RaidManagementToast } from "@/app/raids/raid-management-toast";
 import { RemoveManualLedgerEntryForm } from "@/app/raids/remove-manual-revenue-form";
 import { TransactionLookupPanel } from "@/app/raids/transaction-lookup-panel";
@@ -1021,10 +1022,14 @@ function ManualRaidLedgerRows({
   entries,
   kind,
   counterparties,
+  raids,
+  subcontractors,
 }: {
   counterparties?: CoreEntityView[];
   entries: ManualRaidLedgerEntryView[];
   kind: ManualRaidLedgerKind | "spoils";
+  raids: RaidView[];
+  subcontractors: CoreEntityView[];
 }) {
   const title =
     kind === "payout"
@@ -1114,6 +1119,22 @@ function ManualRaidLedgerRows({
                     </span>
                   )}
                 </div>
+                {entry.kind !== "spoils" &&
+                entry.source === "manual" &&
+                entry.quarterStatus === "draft" ? (
+                  <div className="md:col-span-3">
+                    <EditManualLedgerEntryForm
+                      defaultNotes={entry.notes}
+                      defaultRaidId={entry.raidId}
+                      defaultSubcontractorId={entry.counterpartyEntityId}
+                      defaultUsdAmount={entry.usdAmount}
+                      kind={entry.kind}
+                      ledgerEntryId={entry.id}
+                      raids={raids}
+                      subcontractors={subcontractors}
+                    />
+                  </div>
+                ) : null}
               </div>
             );
           })}
@@ -1165,11 +1186,13 @@ function RaidDetails({
   clients,
   ledgerEntries,
   raid,
+  raids,
   subcontractors,
 }: {
   clients: CoreEntityView[];
   ledgerEntries: ManualRaidLedgerEntryView[];
   raid: RaidView;
+  raids: RaidView[];
   subcontractors: CoreEntityView[];
 }) {
   const clientOptions = clients.some(
@@ -1200,15 +1223,21 @@ function RaidDetails({
       <ManualRaidLedgerRows
         entries={ledgerEntries.filter((entry) => entry.kind === "revenue")}
         kind="revenue"
+        raids={raids}
+        subcontractors={subcontractors}
       />
       <ManualRaidLedgerRows
         entries={ledgerEntries.filter((entry) => entry.kind === "spoils")}
         kind="spoils"
+        raids={raids}
+        subcontractors={subcontractors}
       />
       <ManualRaidLedgerRows
         counterparties={subcontractors}
         entries={ledgerEntries.filter((entry) => entry.kind === "payout")}
         kind="payout"
+        raids={raids}
+        subcontractors={subcontractors}
       />
 
       <details className="mt-4 rounded-md border border-border bg-background">
@@ -1587,6 +1616,7 @@ function ActiveModal({
             (entry) => entry.raidId === selectedRaid.id,
           )}
           raid={selectedRaid}
+          raids={raids}
           subcontractors={subcontractors}
         />
       </ModalShell>

@@ -14,9 +14,10 @@ type AppHeaderSession = {
   address: `0x${string}` | null;
   authenticated: boolean;
   canUseMemberView?: boolean;
+  canUseRolePreview?: boolean;
   chainId: number | null;
   permissions: AuthPermissions | null;
-  viewMode?: "admin" | "member";
+  viewMode?: "admin" | "cleric" | "member";
 };
 
 type AppHeaderProps = {

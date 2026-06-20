@@ -18,7 +18,11 @@ export async function POST(request: Request) {
       | ViewModeRequest
       | null;
 
-    if (body?.mode !== "admin" && body?.mode !== "member") {
+    if (
+      body?.mode !== "admin" &&
+      body?.mode !== "cleric" &&
+      body?.mode !== "member"
+    ) {
       return NextResponse.json({ error: "Invalid view mode" }, { status: 400 });
     }
 

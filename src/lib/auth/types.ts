@@ -1,4 +1,5 @@
 export type AuthRole = "admin" | "cleric" | "member";
+export type AuthViewMode = AuthRole;
 
 export type AuthPermissions = {
   canAccess: boolean;
@@ -13,5 +14,5 @@ export type AuthSessionData = {
   chainId?: number;
   nonce?: string;
   permissions?: AuthPermissions;
-  viewMode?: "admin" | "member";
+  viewMode?: AuthViewMode;
 };
