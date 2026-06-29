@@ -40,13 +40,13 @@ Then run the proxy-friendly dev server:
 pnpm dev:proxy
 ```
 
-Point your local proxy at [http://localhost:3001](http://localhost:3001).
+Point your local proxy at [http://127.0.0.1:3001](http://127.0.0.1:3001).
 Keep machine-specific proxy hostnames and URLs out of committed source.
 
 ## Scripts
 
 - `pnpm dev`: start the local Next.js dev server.
-- `pnpm dev:proxy`: start the local Next.js dev server on `localhost:3001` for a local HTTPS proxy or remote development tunnel.
+- `pnpm dev:proxy`: start the local Next.js dev server on `127.0.0.1:3001` for a local HTTPS proxy or remote development tunnel.
 - `pnpm build`: create a production build.
 - `pnpm start`: run the production build.
 - `pnpm lint`: run ESLint.

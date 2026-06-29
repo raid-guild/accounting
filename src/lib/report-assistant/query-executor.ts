@@ -21,11 +21,6 @@ const EXPENSE_CATEGORIES: NonNullable<QuarterExportLedgerRow["category"]>[] = [
   "rip_expense",
   "subcontractor_payout",
 ];
-const REPORT_TOTAL_CATEGORIES = [
-  ...REVENUE_CATEGORIES,
-  ...EXPENSE_CATEGORIES,
-  "raid_spoils",
-] satisfies NonNullable<QuarterExportLedgerRow["category"]>[];
 
 function toNumber(value: string | null | undefined) {
   if (!value) {
@@ -185,9 +180,11 @@ function summarizeTopMonthByExpenses(rows: ReportAssistantTableRow[]) {
 function summarizeCategoriesByMonth({
   categories,
   ledgerRows,
+  sortByValue,
 }: {
   categories: NonNullable<QuarterExportLedgerRow["category"]>[];
   ledgerRows: QuarterExportLedgerRow[];
+  sortByValue: boolean;
 }) {
   const rows = new Map<string, ReportAssistantTableRow>();
 
@@ -216,7 +213,7 @@ function summarizeCategoriesByMonth({
   return Array.from(rows.entries())
     .map(([monthKey, row]) => ({ monthKey, ...row }))
     .sort((left, right) => {
-      if (left.value !== right.value) {
+      if (sortByValue && left.value !== right.value) {
         return right.value - left.value;
       }
 
@@ -365,6 +362,7 @@ export function executeReportAssistantPlan({
       summarizeCategoriesByMonth({
         categories: REVENUE_CATEGORIES,
         ledgerRows: report.ledgerRows,
+        sortByValue: plan.limit === 1,
       }),
       plan.limit,
     );
@@ -385,6 +383,7 @@ export function executeReportAssistantPlan({
       summarizeCategoriesByMonth({
         categories: EXPENSE_CATEGORIES,
         ledgerRows: report.ledgerRows,
+        sortByValue: plan.limit === 1,
       }),
       plan.limit,
     );
@@ -401,25 +400,25 @@ export function executeReportAssistantPlan({
   }
 
   const rows = limitRows(
-    Object.entries(
-      report.ledgerRows.reduce<Record<string, ReportAssistantTableRow>>(
+    EXPENSE_CATEGORIES.map((category) =>
+      report.ledgerRows.reduce<ReportAssistantTableRow>(
         (summary, row) => {
-          if (!row.category || !REPORT_TOTAL_CATEGORIES.includes(row.category)) {
+          if (row.category !== category) {
             return summary;
           }
 
-          const label = getCategoryLabel(row.category);
-          const existing = summary[label] ?? { entries: 0, label, value: 0 };
-
-          existing.entries = (existing.entries ?? 0) + 1;
-          existing.value += toNumber(row.usdAmount);
-          summary[label] = existing;
+          summary.entries = (summary.entries ?? 0) + 1;
+          summary.value += toNumber(row.usdAmount);
           return summary;
         },
-        {},
+        {
+          entries: 0,
+          label: getCategoryLabel(category),
+          value: 0,
+        },
       ),
     )
-      .map(([, row]) => row)
+      .filter((row) => row.value > 0)
       .sort((left, right) => right.value - left.value),
     plan.limit,
   );
@@ -429,10 +428,10 @@ export function executeReportAssistantPlan({
     chart: chartFromRows({
       plan,
       rows,
-      title: "Expenses and Revenue by Category",
+      title: "Expenses by Category",
     }),
-    grouping: "Category",
-    metric: "Ledger USD totals",
+    grouping: "Expense category",
+    metric: "Expense USD totals",
     plan,
     quarter,
     table: rows,

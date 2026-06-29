@@ -127,6 +127,13 @@
       "when": 1781793308630,
       "tag": "0017_happy_silver_fox",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782744358925,
+      "tag": "0018_workable_miss_america",
+      "breakpoints": true
     }
   ]
 }

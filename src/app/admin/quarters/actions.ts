@@ -26,6 +26,13 @@ export type QuarterStatusFormState = {
   saved: boolean;
 };
 
+class QuarterStatusBusinessError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "QuarterStatusBusinessError";
+  }
+}
+
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
 
@@ -42,7 +49,7 @@ function getTargetStatus(value: string): QuarterStatus {
     return value;
   }
 
-  throw new Error("Unsupported quarter status");
+  throw new QuarterStatusBusinessError("Unsupported quarter status");
 }
 
 async function requireAdminSession() {
@@ -64,7 +71,7 @@ async function getQuarterById(id: string) {
     .limit(1);
 
   if (!quarter) {
-    throw new Error("Quarter not found");
+    throw new QuarterStatusBusinessError("Quarter not found");
   }
 
   return quarter;
@@ -93,25 +100,31 @@ function assertAllowedTransition({
   targetStatus: QuarterStatus;
 }) {
   if (currentStatus === targetStatus) {
-    throw new Error("Quarter is already in that status");
+    throw new QuarterStatusBusinessError("Quarter is already in that status");
   }
 
   if (targetStatus === "reopened") {
     if (currentStatus !== "published") {
-      throw new Error("Only published quarters can be reopened");
+      throw new QuarterStatusBusinessError(
+        "Only published quarters can be reopened",
+      );
     }
 
     if (!reason) {
-      throw new Error("Reopen reason is required");
+      throw new QuarterStatusBusinessError("Reopen reason is required");
     }
   }
 
   if (currentStatus === "published" && targetStatus !== "reopened") {
-    throw new Error("Published quarters must be reopened before editing");
+    throw new QuarterStatusBusinessError(
+      "Published quarters must be reopened before editing",
+    );
   }
 
   if (targetStatus === "published" && currentStatus !== "ready_for_review") {
-    throw new Error("Mark the quarter ready before publishing");
+    throw new QuarterStatusBusinessError(
+      "Mark the quarter ready before publishing",
+    );
   }
 }
 
@@ -160,7 +173,7 @@ export async function updateQuarterStatus(formData: FormData) {
   const reason = getString(formData, "reason");
 
   if (!id) {
-    throw new Error("Quarter is required");
+    throw new QuarterStatusBusinessError("Quarter is required");
   }
 
   const quarter = await getQuarterById(id);
@@ -174,7 +187,7 @@ export async function updateQuarterStatus(formData: FormData) {
   if (targetStatus === "ready_for_review" || targetStatus === "published") {
     const syncStatus = await getQuarterSyncStatus(id);
     if (!isQuarterSyncFresh({ quarter, syncStatus })) {
-      throw new Error(
+      throw new QuarterStatusBusinessError(
         targetStatus === "published"
           ? "Sync quarter activity after the quarter has ended before publishing"
           : "Sync quarter activity after the quarter has ended before marking it ready",
@@ -187,7 +200,7 @@ export async function updateQuarterStatus(formData: FormData) {
     });
 
     if (summary.unclassifiedTransfers > 0) {
-      throw new Error(
+      throw new QuarterStatusBusinessError(
         targetStatus === "published"
           ? "Classify all imported transactions before publishing this quarter"
           : "Classify all imported transactions before marking this quarter ready",
@@ -197,7 +210,7 @@ export async function updateQuarterStatus(formData: FormData) {
     const validation = await getQuarterBalanceValidation(id);
 
     if (!isQuarterBalanceValidationSatisfied(validation)) {
-      throw new Error(
+      throw new QuarterStatusBusinessError(
         targetStatus === "published"
           ? "Validate balances before publishing this quarter"
           : "Validate balances before marking this quarter ready",
@@ -221,7 +234,9 @@ export async function updateQuarterStatus(formData: FormData) {
     .returning();
 
   if (!updatedQuarter) {
-    throw new Error("Quarter status changed. Refresh and try again.");
+    throw new QuarterStatusBusinessError(
+      "Quarter status changed. Refresh and try again.",
+    );
   }
 
   await writeAuditEvent({
@@ -257,11 +272,12 @@ export async function updateQuarterStatusWithState(
   try {
     await updateQuarterStatus(formData);
   } catch (error) {
+    if (!(error instanceof QuarterStatusBusinessError)) {
+      throw error;
+    }
+
     return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Quarter status could not be updated.",
+      error: error.message,
       saved: false,
     };
   }

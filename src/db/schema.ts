@@ -130,6 +130,19 @@ const timestamps = {
     .notNull(),
 };
 
+export const reportAssistantRateLimits = pgTable(
+  "report_assistant_rate_limits",
+  {
+    key: text("key").primaryKey(),
+    count: integer("count").default(0).notNull(),
+    resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("report_assistant_rate_limits_reset_at_idx").on(table.resetAt),
+  ],
+);
+
 export const appUsers = pgTable(
   "app_users",
   {

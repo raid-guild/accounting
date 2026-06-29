@@ -192,48 +192,63 @@ export async function planReportAssistantQuery({
     throw new Error("OPENAI_API_KEY is required for the report assistant.");
   }
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    body: JSON.stringify({
-      input: [
-        {
-          content:
-            [
-              "You convert RaidGuild published accounting report questions into one allowed JSON query plan.",
-              "Prefer concise text answers. Set chart to null unless the user explicitly asks for a chart, graph, visual, plot, or breakdown visualization.",
-              "Use limit 1 for winner questions such as 'which', 'who', 'most', 'highest', 'largest', or 'top subcontractor'.",
-              "Use revenue_by_month for questions about best revenue month, highest revenue month, monthly revenue, or revenue by month.",
-              "Use expenses_by_month for questions about highest expense month, most expensive month, monthly expenses, spending by month, or expenses by month.",
-              "Use the requested limit for top-N questions. If no limit is stated for a ranking/list question, use 5.",
-              "Use unsupported_report_question with unsupportedReason outside_report_data when the question asks about data not in this published report analysis surface, including member joins, new members, individual members, proposal details, raw transactions, wallet identity, or private/internal context.",
-              "Use unsupported_report_question with unsupportedReason small_talk for greetings, thanks, acknowledgements, or other conversational messages that are not report questions.",
-              "Use unsupported_report_question with unsupportedReason nonsense when the question is gibberish, a joke request, unrelated trivia, or not an accounting/report question.",
-              "Only use ranking, summary, and chart intents. Never request raw records, secrets, audit metadata, draft data, SQL, or database access.",
-            ].join(" "),
-          role: "developer",
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  let response: Response;
+
+  try {
+    response = await fetch("https://api.openai.com/v1/responses", {
+      body: JSON.stringify({
+        input: [
+          {
+            content:
+              [
+                "You convert RaidGuild published accounting report questions into one allowed JSON query plan.",
+                "Prefer concise text answers. Set chart to null unless the user explicitly asks for a chart, graph, visual, plot, or breakdown visualization.",
+                "Use limit 1 for winner questions such as 'which', 'who', 'most', 'highest', 'largest', or 'top subcontractor'.",
+                "Use revenue_by_month for questions about best revenue month, highest revenue month, monthly revenue, or revenue by month.",
+                "Use expenses_by_month for questions about highest expense month, most expensive month, monthly expenses, spending by month, or expenses by month.",
+                "Use the requested limit for top-N questions. If no limit is stated for a ranking/list question, use 5.",
+                "Use unsupported_report_question with unsupportedReason outside_report_data when the question asks about data not in this published report analysis surface, including member joins, new members, individual members, proposal details, raw transactions, wallet identity, or private/internal context.",
+                "Use unsupported_report_question with unsupportedReason small_talk for greetings, thanks, acknowledgements, or other conversational messages that are not report questions.",
+                "Use unsupported_report_question with unsupportedReason nonsense when the question is gibberish, a joke request, unrelated trivia, or not an accounting/report question.",
+                "Only use ranking, summary, and chart intents. Never request raw records, secrets, audit metadata, draft data, SQL, or database access.",
+              ].join(" "),
+            role: "developer",
+          },
+          {
+            content: `Question: ${prompt}`,
+            role: "user",
+          },
+        ],
+        max_output_tokens: 250,
+        model: getPlannerModel(),
+        store: false,
+        text: {
+          format: {
+            name: "report_assistant_plan",
+            schema: PLAN_SCHEMA,
+            strict: true,
+            type: "json_schema",
+          },
         },
-        {
-          content: `Question: ${prompt}`,
-          role: "user",
-        },
-      ],
-      max_output_tokens: 250,
-      model: getPlannerModel(),
-      store: false,
-      text: {
-        format: {
-          name: "report_assistant_plan",
-          schema: PLAN_SCHEMA,
-          strict: true,
-          type: "json_schema",
-        },
+      }),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-    }),
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-  });
+      method: "POST",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("OpenAI planner request timed out.");
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);

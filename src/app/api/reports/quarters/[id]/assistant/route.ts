@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
 import { isQuarterExportReady } from "@/lib/quarter-export-readiness";
@@ -7,6 +8,10 @@ import { listQuarterReportingPeriods } from "@/lib/quarters";
 import { planReportAssistantQuery } from "@/lib/report-assistant/openai-planner";
 import { guardReportAssistantPrompt } from "@/lib/report-assistant/prompt-guard";
 import { executeReportAssistantPlan } from "@/lib/report-assistant/query-executor";
+import {
+  checkReportAssistantRateLimit,
+  ReportAssistantRateLimitError,
+} from "@/lib/report-assistant/rate-limit";
 
 type RouteParams = {
   params: Promise<{ id: string }>;
@@ -14,26 +19,41 @@ type RouteParams = {
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_REQUESTS = 12;
-const rateLimits = new Map<string, { count: number; resetAt: number }>();
 
-function checkRateLimit(key: string) {
-  const now = Date.now();
-  const current = rateLimits.get(key);
+const CLIENT_SAFE_ERROR_MESSAGES = new Set([
+  "Ask a report question first.",
+  "Ask a shorter report question.",
+  "Ask a question about published report totals or rankings.",
+]);
 
-  if (!current || current.resetAt <= now) {
-    rateLimits.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return;
+function getActorLogIdentifier(address: string | null) {
+  if (!address) {
+    return null;
   }
 
-  if (current.count >= RATE_LIMIT_MAX_REQUESTS) {
-    throw new Error("Report assistant rate limit reached. Try again in a minute.");
-  }
-
-  current.count += 1;
+  return createHash("sha256")
+    .update(address.toLowerCase())
+    .digest("hex")
+    .slice(0, 16);
 }
 
 function errorResponse(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
+}
+
+function getAssistantErrorResponse(error: unknown) {
+  if (error instanceof ReportAssistantRateLimitError) {
+    return errorResponse(error.message, 429);
+  }
+
+  if (
+    error instanceof Error &&
+    CLIENT_SAFE_ERROR_MESSAGES.has(error.message)
+  ) {
+    return errorResponse(error.message, 400);
+  }
+
+  return errorResponse("Report assistant failed.", 500);
 }
 
 export async function POST(request: Request, { params }: RouteParams) {
@@ -57,7 +77,11 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   try {
-    checkRateLimit(`${session.address ?? "unknown"}:${id}`);
+    await checkReportAssistantRateLimit({
+      key: `${session.address ?? "unknown"}:${id}`,
+      maxRequests: RATE_LIMIT_MAX_REQUESTS,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+    });
     const payload = (await request.json().catch(() => null)) as {
       prompt?: unknown;
     } | null;
@@ -67,7 +91,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     const result = executeReportAssistantPlan({ plan, quarter, report });
 
     console.info("report_assistant_query", {
-      actorWalletAddress: session.address ?? null,
+      actorWalletHash: getActorLogIdentifier(session.address),
       chart: plan.chart,
       grouping: result.provenance.grouping,
       intent: plan.intent,
@@ -81,14 +105,11 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json(result);
   } catch (error) {
     console.warn("report_assistant_error", {
-      actorWalletAddress: session.address ?? null,
+      actorWalletHash: getActorLogIdentifier(session.address),
       error: error instanceof Error ? error.message : "Unknown error",
       quarterId: quarter.id,
     });
 
-    return errorResponse(
-      error instanceof Error ? error.message : "Report assistant failed.",
-      error instanceof Error && error.message.includes("rate limit") ? 429 : 400,
-    );
+    return getAssistantErrorResponse(error);
   }
 }

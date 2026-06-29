@@ -35,6 +35,30 @@ function getPinnedStorageKey(quarterId: string, walletAddress: string | null) {
   return `raidguild-report-assistant:${quarterId}:${walletAddress ?? "member"}`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object";
+}
+
+function isStoredPinnedResponse(
+  value: unknown,
+): value is ReportAssistantResponse {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const { answer, plan, provenance, table } = value;
+
+  return (
+    typeof answer === "string" &&
+    isRecord(plan) &&
+    typeof plan.intent === "string" &&
+    isRecord(provenance) &&
+    typeof provenance.metric === "string" &&
+    typeof provenance.grouping === "string" &&
+    Array.isArray(table)
+  );
+}
+
 function getStoredPinnedResponses(storageKey: string) {
   try {
     const stored = window.localStorage.getItem(storageKey);
@@ -45,10 +69,14 @@ function getStoredPinnedResponses(storageKey: string) {
 
     const parsed = JSON.parse(stored);
 
-    return Array.isArray(parsed) ? (parsed as ReportAssistantResponse[]) : [];
+    return Array.isArray(parsed) ? parsed.filter(isStoredPinnedResponse) : [];
   } catch {
     return [];
   }
+}
+
+function isErrorPayload(value: unknown): value is { error: string } {
+  return isRecord(value) && typeof value.error === "string";
 }
 
 function getResponseKey(response: ReportAssistantResponse) {
@@ -262,12 +290,16 @@ export function ReportAssistant({
           method: "POST",
         },
       );
-      const payload = (await response.json()) as
-        | ReportAssistantResponse
-        | { error: string };
+      const payload = (await response.json()) as unknown;
 
-      if (!response.ok || "error" in payload) {
-        throw new Error("error" in payload ? payload.error : "Assistant failed.");
+      if (!response.ok || isErrorPayload(payload)) {
+        throw new Error(
+          isErrorPayload(payload) ? payload.error : "Assistant failed.",
+        );
+      }
+
+      if (!isStoredPinnedResponse(payload)) {
+        throw new Error("Assistant returned an unexpected response.");
       }
 
       setResponses((current) => [payload, ...current]);

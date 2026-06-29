@@ -43,9 +43,9 @@ export type QuarterReportData = {
   metrics: {
     expenses: number;
     net: number;
+    raidLinkedSubcontractorPayouts: number;
     revenue: number;
     spoilsReceived: number;
-    subcontractorPayouts: number;
   };
   providerExpenses: QuarterReportLinkedRow[];
   raidEconomics: QuarterReportRaidEconomicsRow[];
@@ -203,9 +203,9 @@ export async function getQuarterReportData(
     metrics: {
       expenses,
       net: revenue - expenses,
+      raidLinkedSubcontractorPayouts,
       revenue,
       spoilsReceived,
-      subcontractorPayouts: raidLinkedSubcontractorPayouts,
     },
     providerExpenses: summarizeLinkedRows({
       category: "provider_expense",
