@@ -22,17 +22,33 @@ export type QuarterReportLinkedRow = {
   entries: number;
 };
 
+export type QuarterReportRaidEconomicsRow = {
+  expectedSpoils: number;
+  payouts: number;
+  raid: string;
+  remainingPool: number;
+  revenue: number;
+  spoilsReceived: number;
+};
+
 export type QuarterReportData = {
   balances: QuarterAccountBalanceSummary[];
+  expenseBreakdown: {
+    providerExpenses: number;
+    ragequits: number;
+    ripExpenses: number;
+    subcontractorPayouts: number;
+  };
   ledgerRows: QuarterExportLedgerRow[];
   metrics: {
     expenses: number;
     net: number;
+    raidLinkedSubcontractorPayouts: number;
     revenue: number;
     spoilsReceived: number;
-    subcontractorPayouts: number;
   };
   providerExpenses: QuarterReportLinkedRow[];
+  raidEconomics: QuarterReportRaidEconomicsRow[];
   ripExpenses: QuarterReportLinkedRow[];
   topRaids: QuarterReportLinkedRow[];
 };
@@ -68,6 +84,52 @@ function sumRaidLinkedSubcontractorPayouts(rows: QuarterExportLedgerRow[]) {
 
     return total + toNumber(row.usdAmount);
   }, 0);
+}
+
+function getQuarterRaidEconomicsRows(ledgerRows: QuarterExportLedgerRow[]) {
+  const rows = new Map<string, QuarterReportRaidEconomicsRow>();
+
+  for (const ledgerRow of ledgerRows) {
+    if (!ledgerRow.raid) {
+      continue;
+    }
+
+    const row =
+      rows.get(ledgerRow.raid) ??
+      ({
+        expectedSpoils: 0,
+        payouts: 0,
+        raid: ledgerRow.raid,
+        remainingPool: 0,
+        revenue: 0,
+        spoilsReceived: 0,
+      } satisfies QuarterReportRaidEconomicsRow);
+    const usdAmount = toNumber(ledgerRow.usdAmount);
+
+    if (ledgerRow.category === "raid_revenue") {
+      row.revenue += usdAmount;
+    }
+
+    if (ledgerRow.category === "raid_spoils") {
+      row.spoilsReceived += usdAmount;
+    }
+
+    if (ledgerRow.category === "subcontractor_payout") {
+      row.payouts += usdAmount;
+    }
+
+    row.expectedSpoils = row.revenue / 10;
+    row.remainingPool = row.revenue - row.expectedSpoils - row.payouts;
+    rows.set(ledgerRow.raid, row);
+  }
+
+  return Array.from(rows.values()).sort((left, right) => {
+    if (left.revenue !== right.revenue) {
+      return right.revenue - left.revenue;
+    }
+
+    return left.raid.localeCompare(right.raid);
+  });
 }
 
 function summarizeLinkedRows({
@@ -119,24 +181,31 @@ export async function getQuarterReportData(
     listQuarterBalanceRows(quarter.id),
   ]);
   const revenue = sumRows(ledgerRows, ["raid_revenue", "member_dues"]);
-  const expenses = sumRows(ledgerRows, [
-    "provider_expense",
-    "ragequit",
-    "rip_expense",
-    "subcontractor_payout",
-  ]);
+  const providerExpenses = sumRows(ledgerRows, ["provider_expense"]);
+  const ragequits = sumRows(ledgerRows, ["ragequit"]);
+  const ripExpenses = sumRows(ledgerRows, ["rip_expense"]);
+  const subcontractorPayouts = sumRows(ledgerRows, ["subcontractor_payout"]);
+  const expenses =
+    providerExpenses + ragequits + ripExpenses + subcontractorPayouts;
   const spoilsReceived = sumRows(ledgerRows, ["raid_spoils"]);
-  const subcontractorPayouts = sumRaidLinkedSubcontractorPayouts(ledgerRows);
+  const raidLinkedSubcontractorPayouts =
+    sumRaidLinkedSubcontractorPayouts(ledgerRows);
 
   return {
     balances: summarizeQuarterBalanceRows(balanceRows),
+    expenseBreakdown: {
+      providerExpenses,
+      ragequits,
+      ripExpenses,
+      subcontractorPayouts,
+    },
     ledgerRows,
     metrics: {
       expenses,
       net: revenue - expenses,
+      raidLinkedSubcontractorPayouts,
       revenue,
       spoilsReceived,
-      subcontractorPayouts,
     },
     providerExpenses: summarizeLinkedRows({
       category: "provider_expense",
@@ -144,6 +213,7 @@ export async function getQuarterReportData(
       getLabel: (row) => row.counterparty,
       rows: ledgerRows,
     }),
+    raidEconomics: getQuarterRaidEconomicsRows(ledgerRows),
     ripExpenses: summarizeLinkedRows({
       category: "rip_expense",
       fallbackLabel: "Unlinked RIP",

@@ -1,10 +1,18 @@
 "use client";
 
 import { LockKeyhole, X } from "lucide-react";
-import { useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 
-import { updateQuarterStatus } from "@/app/admin/quarters/actions";
+import {
+  type QuarterStatusFormState,
+  updateQuarterStatusWithState,
+} from "@/app/admin/quarters/actions";
 import { Button } from "@/components/ui/button";
+
+const INITIAL_STATE: QuarterStatusFormState = {
+  error: null,
+  saved: false,
+};
 
 export function PublishQuarterConfirmation({
   disabled,
@@ -16,6 +24,20 @@ export function PublishQuarterConfirmation({
   quarterLabel: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState(
+    updateQuarterStatusWithState,
+    INITIAL_STATE,
+  );
+
+  useEffect(() => {
+    if (!state.saved) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => setOpen(false), 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [state.saved]);
 
   return (
     <>
@@ -85,15 +107,23 @@ export function PublishQuarterConfirmation({
               >
                 Cancel
               </Button>
-              <form action={updateQuarterStatus}>
+              <form action={action} className="contents">
                 <input type="hidden" name="id" value={quarterId} />
                 <input type="hidden" name="status" value="published" />
-                <Button type="submit" variant="default">
+                <Button type="submit" variant="default" disabled={pending}>
                   <LockKeyhole data-icon="inline-start" />
-                  Publish Quarter
+                  {pending ? "Publishing..." : "Publish Quarter"}
                 </Button>
               </form>
             </div>
+            {state.error ? (
+              <p
+                className="mt-4 rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+                aria-live="polite"
+              >
+                {state.error}
+              </p>
+            ) : null}
           </div>
         </div>
       ) : null}

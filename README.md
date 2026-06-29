@@ -26,9 +26,27 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+For a local HTTPS proxy or remote development tunnel, set the public app URL
+and allowed dev origins in your ignored local environment file:
+
+```env
+NEXT_PUBLIC_APP_URL=https://your-dev-origin.example
+NEXT_ALLOWED_DEV_ORIGINS=your-dev-origin.example
+```
+
+Then run the proxy-friendly dev server:
+
+```bash
+pnpm dev:proxy
+```
+
+Point your local proxy at [http://127.0.0.1:3001](http://127.0.0.1:3001).
+Keep machine-specific proxy hostnames and URLs out of committed source.
+
 ## Scripts
 
 - `pnpm dev`: start the local Next.js dev server.
+- `pnpm dev:proxy`: start the local Next.js dev server on `127.0.0.1:3001` for a local HTTPS proxy or remote development tunnel.
 - `pnpm build`: create a production build.
 - `pnpm start`: run the production build.
 - `pnpm lint`: run ESLint.
