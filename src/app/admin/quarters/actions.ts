@@ -21,6 +21,11 @@ import { getQuarterSyncStatus, isQuarterSyncFresh } from "@/lib/quarter-sync";
 const QUARTERS_PATH = "/admin/quarters";
 const REPORTS_PATH = "/reports";
 
+export type QuarterStatusFormState = {
+  error: string | null;
+  saved: boolean;
+};
+
 function getString(formData: FormData, key: string) {
   const value = formData.get(key);
 
@@ -243,4 +248,23 @@ export async function updateQuarterStatus(formData: FormData) {
   revalidatePath(`/admin/quarters/${id}/transactions`);
   revalidatePath(REPORTS_PATH);
   revalidatePath(`/reports/quarters/${id}`);
+}
+
+export async function updateQuarterStatusWithState(
+  _previousState: QuarterStatusFormState,
+  formData: FormData,
+): Promise<QuarterStatusFormState> {
+  try {
+    await updateQuarterStatus(formData);
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Quarter status could not be updated.",
+      saved: false,
+    };
+  }
+
+  return { error: null, saved: true };
 }

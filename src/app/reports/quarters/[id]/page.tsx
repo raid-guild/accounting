@@ -7,6 +7,8 @@ import Link from "next/link";
 
 import { AppHeader } from "@/components/app-header";
 import { CopyableAddress } from "@/components/copyable-address";
+import { ReportAssistant } from "@/components/reports/report-assistant";
+import { ReportCharts } from "@/components/reports/report-charts";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
 import { isQuarterExportReady } from "@/lib/quarter-export-readiness";
 import { getQuarterReportData } from "@/lib/quarter-report";
@@ -376,6 +378,16 @@ export default async function QuarterReportPage({
             />
           </div>
         </section>
+
+        <ReportCharts report={report} />
+
+        {quarter.status === "published" ? (
+          <ReportAssistant
+            key={`${quarter.id}:${session.address ?? "member"}`}
+            quarterId={quarter.id}
+            walletAddress={session.address}
+          />
+        ) : null}
 
         <BalanceTable balances={report.balances} />
 
