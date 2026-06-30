@@ -143,6 +143,17 @@ export const reportAssistantRateLimits = pgTable(
   ],
 );
 
+export const machineApiRateLimits = pgTable(
+  "machine_api_rate_limits",
+  {
+    key: text("key").primaryKey(),
+    count: integer("count").default(0).notNull(),
+    resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+    ...timestamps,
+  },
+  (table) => [index("machine_api_rate_limits_reset_at_idx").on(table.resetAt)],
+);
+
 export const appUsers = pgTable(
   "app_users",
   {
@@ -201,6 +212,33 @@ export const quarters = pgTable(
   (table) => [
     uniqueIndex("quarters_year_quarter_unique").on(table.year, table.quarter),
     index("quarters_status_idx").on(table.status),
+  ],
+);
+
+export const machineApiRequestNonces = pgTable(
+  "machine_api_request_nonces",
+  {
+    nonce: text("nonce").primaryKey(),
+    agentAddress: text("agent_address").notNull(),
+    delegatorAddress: text("delegator_address").notNull(),
+    quarterId: uuid("quarter_id").references(() => quarters.id, {
+      onDelete: "set null",
+    }),
+    reportSlice: text("report_slice").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("machine_api_request_nonces_agent_idx").on(
+      sql`lower(${table.agentAddress})`,
+    ),
+    index("machine_api_request_nonces_delegator_idx").on(
+      sql`lower(${table.delegatorAddress})`,
+    ),
+    index("machine_api_request_nonces_expires_at_idx").on(table.expiresAt),
   ],
 );
 

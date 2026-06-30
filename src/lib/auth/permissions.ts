@@ -3,6 +3,7 @@ import "server-only";
 import { and, isNull, sql } from "drizzle-orm";
 import {
   createPublicClient,
+  defineChain,
   getAddress,
   http,
   isAddress,
@@ -44,20 +45,56 @@ const HATS_ABI = [
   },
 ] as const;
 
-function getGnosisClient() {
-  const rpcUrl = process.env.GNOSIS_RPC_URL;
-
-  if (!rpcUrl) {
-    throw new Error("GNOSIS_RPC_URL is required for permission checks");
-  }
-
+function getEvmReadClient({
+  chainId,
+  rpcUrl,
+}: {
+  chainId: number;
+  rpcUrl: string;
+}) {
   return createPublicClient({
-    chain: gnosis,
+    chain: defineChain({
+      id: chainId,
+      name: `Chain ${chainId}`,
+      nativeCurrency: { decimals: 18, name: "Ether", symbol: "ETH" },
+      rpcUrls: {
+        default: {
+          http: [rpcUrl],
+        },
+      },
+    }),
     transport: http(rpcUrl),
   });
 }
 
-async function hasDaoShares(address: `0x${string}`) {
+function getGnosisClient() {
+  const rpcUrl = process.env.DAO_SHARE_RPC_URL ?? process.env.GNOSIS_RPC_URL;
+
+  if (!rpcUrl) {
+    throw new Error(
+      "DAO_SHARE_RPC_URL or GNOSIS_RPC_URL is required for permission checks",
+    );
+  }
+
+  const configuredChainId = process.env.DAO_SHARE_CHAIN_ID;
+
+  if (!configuredChainId) {
+    return createPublicClient({
+      chain: gnosis,
+      transport: http(rpcUrl),
+    });
+  }
+
+  const chainId = Number(configuredChainId);
+
+  if (!Number.isInteger(chainId) || chainId <= 0) {
+    throw new Error("DAO_SHARE_CHAIN_ID must be a positive integer");
+  }
+
+  return getEvmReadClient({ chainId, rpcUrl });
+}
+
+export async function hasDaoShares(address: `0x${string}`) {
   const shareTokenAddress = process.env.DAO_SHARE_TOKEN_ADDRESS;
 
   if (!shareTokenAddress || !isAddress(shareTokenAddress)) {
