@@ -43,7 +43,8 @@ function getMachineApiErrorResponse(error: unknown) {
   }
 
   if (error instanceof Error) {
-    return errorResponse(error.message, 500);
+    console.error("Machine API request failed", error);
+    return errorResponse("Machine API request failed.", 500);
   }
 
   return errorResponse("Machine API request failed.", 500);

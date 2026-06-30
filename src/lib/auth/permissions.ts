@@ -68,7 +68,9 @@ function getEvmReadClient({
 }
 
 function getGnosisClient() {
-  const rpcUrl = process.env.DAO_SHARE_RPC_URL ?? process.env.GNOSIS_RPC_URL;
+  const daoShareRpcUrl = process.env.DAO_SHARE_RPC_URL;
+  const configuredChainId = process.env.DAO_SHARE_CHAIN_ID;
+  const rpcUrl = daoShareRpcUrl ?? process.env.GNOSIS_RPC_URL;
 
   if (!rpcUrl) {
     throw new Error(
@@ -76,7 +78,9 @@ function getGnosisClient() {
     );
   }
 
-  const configuredChainId = process.env.DAO_SHARE_CHAIN_ID;
+  if (daoShareRpcUrl && !configuredChainId) {
+    throw new Error("DAO_SHARE_CHAIN_ID is required when DAO_SHARE_RPC_URL is set");
+  }
 
   if (!configuredChainId) {
     return createPublicClient({

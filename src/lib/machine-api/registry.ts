@@ -57,8 +57,9 @@ export async function getRegistryDelegator(agent: `0x${string}`) {
     args: [agent],
     functionName: "delegatorOf",
   });
+  const normalizedDelegator = getAddress(delegator);
 
-  return getAddress(delegator) === ZERO_ADDRESS ? null : getAddress(delegator);
+  return normalizedDelegator === ZERO_ADDRESS ? null : normalizedDelegator;
 }
 
 export { DELEGATION_REGISTRY_ABI };

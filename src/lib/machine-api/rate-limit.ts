@@ -20,12 +20,14 @@ export async function checkMachineApiRateLimit({
   maxRequests: number;
   windowMs: number;
 }) {
-  const resetAt = new Date(Date.now() + windowMs);
   const result = await getDb().execute<{
     count: number;
   }>(sql`
+    with next_reset as (
+      select now() + (${windowMs} * interval '1 millisecond') as value
+    )
     insert into machine_api_rate_limits (key, count, reset_at)
-    values (${key}, 1, ${resetAt})
+    values (${key}, 1, (select value from next_reset))
     on conflict (key) do update
     set
       count = case
@@ -33,7 +35,8 @@ export async function checkMachineApiRateLimit({
         else machine_api_rate_limits.count + 1
       end,
       reset_at = case
-        when machine_api_rate_limits.reset_at <= now() then ${resetAt}
+        when machine_api_rate_limits.reset_at <= now()
+          then (select value from next_reset)
         else machine_api_rate_limits.reset_at
       end,
       updated_at = now()

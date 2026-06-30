@@ -27,6 +27,10 @@ export async function consumeMachineApiNonce({
   reportSlice: string;
 }) {
   const result = await getDb().execute<{ nonce: string }>(sql`
+    with cleanup as (
+      delete from machine_api_request_nonces
+      where expires_at < now()
+    )
     insert into machine_api_request_nonces (
       nonce,
       agent_address,

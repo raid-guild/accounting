@@ -4,6 +4,10 @@ import { HTTPFacilitatorClient, x402ResourceServer } from "@x402/core/server";
 import { registerExactEvmScheme } from "@x402/evm/exact/server";
 import { getAddress, isAddress } from "viem";
 
+type AccountingX402Server = ReturnType<typeof buildAccountingX402Server>;
+
+let cachedServer: AccountingX402Server | null = null;
+
 export function getAccountingX402Config() {
   const payTo = process.env.X402_ACCOUNTING_PAY_TO_ADDRESS;
 
@@ -29,6 +33,7 @@ export function getAccountingX402Config() {
   }
 
   return {
+    chainId,
     description:
       process.env.X402_ACCOUNTING_DESCRIPTION ??
       "Access published RaidGuild accounting report data",
@@ -42,21 +47,18 @@ export function getAccountingX402Config() {
 }
 
 export function getPublicAccountingX402Config() {
-  const chainIdValue = process.env.X402_ACCOUNTING_CHAIN_ID ?? "84532";
-  const chainId = Number(chainIdValue);
-  const payTo = process.env.X402_ACCOUNTING_PAY_TO_ADDRESS;
+  const config = getAccountingX402Config();
 
   return {
-    chainId: Number.isInteger(chainId) && chainId > 0 ? chainId : 84532,
-    facilitatorUrl:
-      process.env.X402_FACILITATOR_URL ?? "https://x402.org/facilitator",
-    network: `eip155:${Number.isInteger(chainId) && chainId > 0 ? chainId : 84532}`,
-    payTo: payTo && isAddress(payTo) ? getAddress(payTo) : null,
-    price: process.env.X402_ACCOUNTING_REPORT_PRICE ?? "0.01",
+    chainId: config.chainId,
+    facilitatorUrl: config.facilitatorUrl,
+    network: config.network,
+    payTo: config.payTo,
+    price: config.price,
   };
 }
 
-export function createAccountingX402Server() {
+function buildAccountingX402Server() {
   const config = getAccountingX402Config();
   const facilitatorClient = new HTTPFacilitatorClient({
     url: config.facilitatorUrl,
@@ -66,4 +68,10 @@ export function createAccountingX402Server() {
   registerExactEvmScheme(server, { networks: [config.network] });
 
   return { config, server };
+}
+
+export function createAccountingX402Server() {
+  cachedServer ??= buildAccountingX402Server();
+
+  return cachedServer;
 }

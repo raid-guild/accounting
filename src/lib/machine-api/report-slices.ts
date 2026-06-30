@@ -35,6 +35,20 @@ export function isMachineReportSlice(
   );
 }
 
+function toNumber(value: string | null | undefined) {
+  if (!value) {
+    return 0;
+  }
+
+  const number = Number(value);
+
+  return Number.isFinite(number) ? number : 0;
+}
+
+function sumUsd(rows: QuarterReportData["ledgerRows"]) {
+  return rows.reduce((total, row) => total + toNumber(row.usdAmount), 0);
+}
+
 export function getMachineReportSlice({
   quarter,
   report,
@@ -83,12 +97,33 @@ export function getMachineReportSlice({
     };
   }
 
-  if (reportSlice === "client-revenue" || reportSlice === "raid-revenue") {
+  if (reportSlice === "client-revenue") {
+    const rows = report.ledgerRows.filter(
+      (row) => row.category === "member_dues",
+    );
+
     return {
       ...base,
       data: {
+        metric: "memberDuesRevenue",
+        rows,
+        totalUsd: sumUsd(rows),
+      },
+    };
+  }
+
+  if (reportSlice === "raid-revenue") {
+    const rows = report.ledgerRows.filter(
+      (row) => row.category === "raid_revenue",
+    );
+
+    return {
+      ...base,
+      data: {
+        ledgerRows: rows,
+        metric: "raidRevenue",
         rows: report.topRaids,
-        totalUsd: report.metrics.revenue,
+        totalUsd: sumUsd(rows),
       },
     };
   }

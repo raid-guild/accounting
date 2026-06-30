@@ -2,36 +2,69 @@ import { NextResponse } from "next/server";
 
 import { ACCOUNTING_DATA_REQUEST_TYPES } from "@/lib/machine-api/auth";
 import { getPublicAccountingX402Config } from "@/lib/machine-api/x402";
+import {
+  DELEGATION_REGISTRY_ABI,
+  getDelegationRegistryConfig,
+} from "@/lib/machine-api/registry";
 import { MACHINE_REPORT_SLICES } from "@/lib/machine-api/report-slices";
 
+type AgentsCapability = {
+  auth: {
+    delegation: {
+      registry: ReturnType<typeof getRegistryDiscovery>;
+      type: "evm-contract";
+    };
+    payment: {
+      facilitatorUrl: string;
+      network: string;
+      payTo: `0x${string}`;
+      price: string;
+      protocol: "x402";
+      scheme: "exact";
+    };
+    signature: {
+      domain: {
+        chainId: number;
+        name: string;
+        verifyingContract: `0x${string}`;
+        version: string;
+      };
+      primaryType: "AccountingDataRequest";
+      types: typeof ACCOUNTING_DATA_REQUEST_TYPES;
+    };
+  };
+  endpointTemplate: string;
+  id: string;
+  methods: ["POST"];
+  privacy: {
+    excludes: string[];
+    visibility: string;
+  };
+  provenance: string[];
+  reportSlices: typeof MACHINE_REPORT_SLICES;
+};
+
 function getRegistryDiscovery() {
-  const chainId = Number(process.env.RG_DELEGATION_REGISTRY_CHAIN_ID ?? 84532);
-  const address = process.env.RG_DELEGATION_REGISTRY_ADDRESS;
+  const config = getDelegationRegistryConfig();
 
   return {
-    address: address || null,
-    chainId: Number.isInteger(chainId) && chainId > 0 ? chainId : 84532,
+    address: config.address,
+    chainId: config.chainId,
     lookup: {
-      abi: [
-        {
-          inputs: [{ name: "agent", type: "address" }],
-          name: "delegatorOf",
-          outputs: [{ name: "", type: "address" }],
-          stateMutability: "view",
-          type: "function",
-        },
-      ],
+      abi: DELEGATION_REGISTRY_ABI,
       method: "delegatorOf(address)",
     },
   };
 }
 
 export function GET() {
-  const x402 = getPublicAccountingX402Config();
-  const registry = getRegistryDiscovery();
+  let capabilities: AgentsCapability[] = [];
 
-  return NextResponse.json({
-    capabilities: [
+  try {
+    const x402 = getPublicAccountingX402Config();
+    const registry = getRegistryDiscovery();
+
+    capabilities = [
       {
         auth: {
           delegation: {
@@ -80,7 +113,13 @@ export function GET() {
         ],
         reportSlices: MACHINE_REPORT_SLICES,
       },
-    ],
+    ];
+  } catch {
+    capabilities = [];
+  }
+
+  return NextResponse.json({
+    capabilities,
     demo: true,
     name: "RaidGuild Accounting",
     schema: "https://raidguild.org/schemas/agents-discovery-demo-v1",

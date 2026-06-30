@@ -85,6 +85,19 @@ function parseExpiry(value: unknown) {
   };
 }
 
+function parseSignature(value: unknown) {
+  const signature = requireString(value, "signature");
+
+  if (!/^0x[0-9a-fA-F]{130}$/.test(signature)) {
+    throw new MachineApiAuthError(
+      "signature must be a 65-byte hex EVM signature.",
+      400,
+    );
+  }
+
+  return signature as `0x${string}`;
+}
+
 export async function verifyMachineApiRequest({
   auth,
   method,
@@ -106,7 +119,7 @@ export async function verifyMachineApiRequest({
   const agent = normalizeAddress(auth.agent, "agent");
   const delegator = normalizeAddress(auth.delegator, "delegator");
   const nonce = requireString(auth.nonce, "nonce");
-  const signature = requireString(auth.signature, "signature");
+  const signature = parseSignature(auth.signature);
   const expiresAt = parseExpiry(auth.expiresAt);
 
   const validSignature = await verifyTypedData({
@@ -129,8 +142,10 @@ export async function verifyMachineApiRequest({
       resource,
     },
     primaryType: "AccountingDataRequest",
-    signature: signature as `0x${string}`,
+    signature,
     types: ACCOUNTING_DATA_REQUEST_TYPES,
+  }).catch(() => {
+    throw new MachineApiAuthError("Invalid agent signature.");
   });
 
   if (!validSignature) {
