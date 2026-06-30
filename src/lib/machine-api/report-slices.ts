@@ -42,7 +42,11 @@ function toNumber(value: string | null | undefined) {
 
   const number = Number(value);
 
-  return Number.isFinite(number) ? number : 0;
+  if (!Number.isFinite(number)) {
+    throw new Error(`Invalid usdAmount: ${value}`);
+  }
+
+  return number;
 }
 
 function sumUsd(rows: QuarterReportData["ledgerRows"]) {
