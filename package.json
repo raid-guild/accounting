@@ -12,6 +12,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:reset:local": "node scripts/reset-local-db.mjs",
@@ -43,6 +45,7 @@
     "wagmi": "^3.6.16"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/pg": "^8.18.0",

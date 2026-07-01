@@ -454,8 +454,8 @@ function AccountRankingTable({
         </span>
       </div>
       {accounts.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
+        <div className="rounded-lg border border-border bg-card p-3 lg:p-0">
+          <table className="mobile-card-table-lg">
             <thead className="border-b border-border text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-3 py-3 font-medium">Account</th>
@@ -476,7 +476,7 @@ function AccountRankingTable({
                     key={account.id}
                     className="transition-colors hover:bg-muted/50"
                   >
-                    <td className="p-0">
+                    <td data-label="Account" data-full="true" className="p-0">
                       <Link
                         href={href}
                         scroll={false}
@@ -485,7 +485,7 @@ function AccountRankingTable({
                         {account.name}
                       </Link>
                     </td>
-                    <td className="p-0">
+                    <td data-align="right" data-label="Balance" className="p-0">
                       <Link
                         href={href}
                         scroll={false}
@@ -494,7 +494,7 @@ function AccountRankingTable({
                         {getAccountBalanceLabel({ linkedBalance })}
                       </Link>
                     </td>
-                    <td className="p-0">
+                    <td data-label="Type" className="p-0">
                       <Link
                         href={href}
                         scroll={false}
@@ -505,7 +505,7 @@ function AccountRankingTable({
                         )}
                       </Link>
                     </td>
-                    <td className="p-0">
+                    <td data-label="Chain" className="p-0">
                       <Link
                         href={href}
                         scroll={false}
@@ -514,7 +514,7 @@ function AccountRankingTable({
                         {account.chainName}
                       </Link>
                     </td>
-                    <td className="p-0">
+                    <td data-label="Address" className="p-0">
                       <Link
                         href={href}
                         scroll={false}
@@ -523,7 +523,7 @@ function AccountRankingTable({
                         {formatAddress(account.address)}
                       </Link>
                     </td>
-                    <td className="p-0">
+                    <td data-label="Status" className="p-0">
                       <Link
                         href={href}
                         scroll={false}

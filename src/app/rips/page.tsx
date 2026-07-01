@@ -239,8 +239,8 @@ function RipTable({ rips }: { rips: RipView[] }) {
           {rips.length} RIP{rips.length === 1 ? "" : "s"}
         </span>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-left text-sm">
+      <div className="md:overflow-x-auto">
+        <table className="mobile-card-table">
           <thead className="border-b border-border text-xs uppercase text-muted-foreground">
             <tr>
               <th className="px-3 py-3 font-medium">RIP</th>
@@ -258,47 +258,47 @@ function RipTable({ rips }: { rips: RipView[] }) {
 
               return (
                 <tr key={rip.id} className="transition-colors hover:bg-muted/50">
-                  <td className="p-0">
+                  <td data-label="RIP" data-full="true" className="p-0">
                     <Link
                       href={href}
                       scroll={false}
-                      className="block px-3 py-3 font-medium"
+                      className="block font-medium md:px-3 md:py-3"
                     >
                       {rip.title}
                     </Link>
                   </td>
-                  <td className="p-0">
+                  <td data-label="Created" className="p-0">
                     <Link
                       href={href}
                       scroll={false}
-                      className="block px-3 py-3 text-muted-foreground"
+                      className="block text-muted-foreground md:px-3 md:py-3"
                     >
                       {formatTimestamp(rip.createdAt)}
                     </Link>
                   </td>
-                  <td className="p-0">
+                  <td data-align="right" data-label="Linked Spend" className="p-0">
                     <Link
                       href={href}
                       scroll={false}
-                      className="block px-3 py-3 text-right"
+                      className="block md:px-3 md:py-3 md:text-right"
                     >
                       {formatCurrency(rip.totalUsd)}
                     </Link>
                   </td>
-                  <td className="p-0">
+                  <td data-align="right" data-label="Entries" className="p-0">
                     <Link
                       href={href}
                       scroll={false}
-                      className="block px-3 py-3 text-right text-muted-foreground"
+                      className="block text-muted-foreground md:px-3 md:py-3 md:text-right"
                     >
                       {rip.entryCount}
                     </Link>
                   </td>
-                  <td className="p-0">
+                  <td data-align="right" data-label="Edit" className="p-0">
                     <Link
                       href={href}
                       scroll={false}
-                      className="flex justify-end px-3 py-3"
+                      className="flex justify-end md:px-3 md:py-3"
                     >
                       <span className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium transition-all hover:bg-muted">
                         <Pencil className="size-3.5" aria-hidden="true" />

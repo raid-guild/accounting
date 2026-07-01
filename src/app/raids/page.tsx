@@ -433,22 +433,34 @@ function AccountingSectionHeader({
 function TableLinkCell({
   children,
   className = "",
+  full = false,
   href,
+  label,
+  numeric = false,
 }: {
   children: ReactNode;
   className?: string;
+  full?: boolean;
   href?: string | null;
+  label: string;
+  numeric?: boolean;
 }) {
+  const dataProps = {
+    "data-align": numeric ? "right" : undefined,
+    "data-full": full ? "true" : undefined,
+    "data-label": label,
+  };
+
   if (!href) {
     return (
-      <td className="p-0">
+      <td {...dataProps} className="p-0">
         <div className={`block px-3 py-3 ${className}`}>{children}</div>
       </td>
     );
   }
 
   return (
-    <td className="p-0">
+    <td {...dataProps} className="p-0">
       <Link
         href={href}
         scroll={false}
@@ -474,8 +486,8 @@ function TopClientsTable({
         title="Top Clients By Revenue"
       />
       {clients.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-sm">
+        <div className="rounded-lg border border-border bg-card p-3 md:p-0">
+          <table className="mobile-card-table-lg">
             <thead className="border-b border-border text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-3 py-3 font-medium">Client</th>
@@ -504,28 +516,30 @@ function TopClientsTable({
                     key={client.clientId}
                     className="transition-colors hover:bg-muted/50"
                   >
-                    <TableLinkCell href={href} className="font-medium">
+                    <TableLinkCell href={href} label="Client" className="font-medium">
                       {client.clientName}
                     </TableLinkCell>
                     <TableLinkCell
                       href={href}
+                      label="Revenue"
+                      numeric
                       className="text-right font-medium"
                     >
                       {formatAccountingCurrency(client.revenueCents)}
                     </TableLinkCell>
-                    <TableLinkCell href={href} className="text-right">
+                    <TableLinkCell href={href} label="Raids" numeric className="text-right">
                       {client.raidCount}
                     </TableLinkCell>
-                    <TableLinkCell href={href} className="text-right">
+                    <TableLinkCell href={href} label="Expected Spoils" numeric className="text-right">
                       {formatAccountingCurrency(client.expectedSpoilsCents)}
                     </TableLinkCell>
-                    <TableLinkCell href={href} className="text-right">
+                    <TableLinkCell href={href} label="Spoils Received" numeric className="text-right">
                       {formatAccountingCurrency(client.spoilsReceivedCents)}
                     </TableLinkCell>
-                    <TableLinkCell href={href} className="text-right">
+                    <TableLinkCell href={href} label="Team Pool" numeric className="text-right">
                       {formatAccountingCurrency(client.expectedTeamPoolCents)}
                     </TableLinkCell>
-                    <TableLinkCell href={href} className="text-right">
+                    <TableLinkCell href={href} label="Payouts" numeric className="text-right">
                       {formatAccountingCurrency(
                         client.subcontractorPayoutCents,
                       )}
@@ -559,8 +573,8 @@ function RaidAccountingTable({
         title="Raid Accounting"
       />
       {summaries.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1180px] text-left text-sm">
+        <div className="rounded-lg border border-border bg-card p-3 md:p-0">
+          <table className="mobile-card-table-lg">
             <thead className="border-b border-border text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-3 py-3 font-medium">Client</th>
@@ -595,10 +609,10 @@ function RaidAccountingTable({
                     key={summary.raidId}
                     className="transition-colors hover:bg-muted/50"
                   >
-                    <TableLinkCell href={href} className="font-medium">
+                    <TableLinkCell href={href} label="Client" className="font-medium">
                       {summary.clientName}
                     </TableLinkCell>
-                    <TableLinkCell href={href}>
+                    <TableLinkCell href={href} label="Raid" full>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium">{summary.raidName}</span>
                         {summary.isShipped ? (
@@ -610,34 +624,36 @@ function RaidAccountingTable({
                     </TableLinkCell>
                     <TableLinkCell
                       href={href}
+                      label="Revenue"
+                      numeric
                       className="text-right font-medium"
                     >
                       {formatAccountingCurrency(summary.revenueCents)}
                     </TableLinkCell>
-                    <TableLinkCell href={href} className="text-right">
+                    <TableLinkCell href={href} label="Expected Spoils" numeric className="text-right">
                       {formatAccountingCurrency(summary.expectedSpoilsCents)}
                     </TableLinkCell>
-                    <TableLinkCell href={href} className="text-right">
+                    <TableLinkCell href={href} label="Spoils Received" numeric className="text-right">
                       {formatAccountingCurrency(summary.spoilsReceivedCents)}
                     </TableLinkCell>
-                    <TableLinkCell href={href} className="text-right">
+                    <TableLinkCell href={href} label="Spoils Due" numeric className="text-right">
                       {formatAccountingCurrency(summary.remainingSpoilsCents)}
                     </TableLinkCell>
-                    <TableLinkCell href={href}>
+                    <TableLinkCell href={href} label="Spoils Status">
                       <SpoilsStatusBadge status={summary.spoilsStatus} />
                     </TableLinkCell>
-                    <TableLinkCell href={href} className="text-right">
+                    <TableLinkCell href={href} label="Team Pool" numeric className="text-right">
                       {formatAccountingCurrency(summary.expectedTeamPoolCents)}
                     </TableLinkCell>
-                    <TableLinkCell href={href} className="text-right">
+                    <TableLinkCell href={href} label="Payouts" numeric className="text-right">
                       {formatAccountingCurrency(
                         summary.subcontractorPayoutCents,
                       )}
                     </TableLinkCell>
-                    <TableLinkCell href={href} className="text-right">
+                    <TableLinkCell href={href} label="Remaining" numeric className="text-right">
                       {formatAccountingCurrency(summary.remainingPoolCents)}
                     </TableLinkCell>
-                    <TableLinkCell href={href}>
+                    <TableLinkCell href={href} label="Team Status">
                       <TeamPayoutStatusBadge status={summary.status} />
                     </TableLinkCell>
                   </tr>
@@ -669,8 +685,8 @@ function SubcontractorAccountingTable({
         title="Subcontractor Accounting"
       />
       {summaries.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-left text-sm">
+        <div className="rounded-lg border border-border bg-card p-3 md:p-0">
+          <table className="mobile-card-table-lg">
             <thead className="border-b border-border text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-3 py-3 font-medium">Subcontractor</th>
@@ -690,21 +706,23 @@ function SubcontractorAccountingTable({
                     key={summary.subcontractorId}
                     className="transition-colors hover:bg-muted/50"
                   >
-                    <TableLinkCell href={href} className="font-medium">
+                    <TableLinkCell href={href} label="Subcontractor" className="font-medium">
                       {summary.subcontractorName}
                     </TableLinkCell>
                     <TableLinkCell
                       href={href}
+                      label="Payouts"
+                      numeric
                       className="text-right font-medium"
                     >
                       {formatAccountingCurrency(
                         summary.subcontractorPayoutCents,
                       )}
                     </TableLinkCell>
-                    <TableLinkCell href={href} className="text-right">
+                    <TableLinkCell href={href} label="Raids" numeric className="text-right">
                       {summary.raidCount}
                     </TableLinkCell>
-                    <TableLinkCell href={href}>
+                    <TableLinkCell href={href} label="Status">
                       {summary.isArchived ? (
                         <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
                           Archived

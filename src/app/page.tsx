@@ -38,11 +38,10 @@ function PublicHome({ session }: { session: SessionState }) {
             <Image
               src="/raidguild-full-logo.svg"
               alt="RaidGuild"
-              width={420}
-              height={110}
+              width={256}
+              height={67}
               priority
-              className="h-auto w-64 max-w-full"
-              style={{ height: "auto" }}
+              className="max-w-full"
             />
             <p className="mt-10 type-label text-scroll-300">
               Accounting Dashboard

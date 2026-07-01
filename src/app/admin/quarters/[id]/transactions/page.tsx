@@ -248,26 +248,26 @@ function QuarterBalancesPanel({
         </span>
       </div>
       <div className="mt-4 grid gap-3">
-        <div className="grid gap-3 rounded-md border border-primary/20 bg-primary/5 px-3 py-3 text-sm md:grid-cols-[minmax(180px,1fr)_repeat(3,minmax(110px,auto))] md:items-center">
-          <div>
+        <div className="grid gap-3 rounded-md border border-primary/20 bg-primary/5 px-3 py-3 text-sm lg:grid-cols-[minmax(180px,1fr)_repeat(3,minmax(110px,auto))] lg:items-center">
+          <div className="min-w-0 w-full max-w-full">
             <p className="font-semibold">Total</p>
             <p className="mt-1 text-xs font-medium text-muted-foreground">
               {balances.length} account{balances.length === 1 ? "" : "s"}
             </p>
           </div>
-          <div className="md:text-right">
+          <div className="lg:text-right">
             <p className="type-label-sm text-muted-foreground">Opening</p>
             <p className="mt-1 font-semibold">
               {formatCurrencyNumber(totalBalance.openingUsd)}
             </p>
           </div>
-          <div className="md:text-right">
+          <div className="lg:text-right">
             <p className="type-label-sm text-muted-foreground">Closing</p>
             <p className="mt-1 font-semibold">
               {formatCurrencyNumber(totalBalance.closingUsd)}
             </p>
           </div>
-          <div className="md:text-right">
+          <div className="lg:text-right">
             <p className="type-label-sm text-muted-foreground">Net Change</p>
             <p className="mt-1 font-semibold">
               {formatCurrencyNumber(totalBalance.netChangeUsd)}
@@ -286,7 +286,7 @@ function QuarterBalancesPanel({
               key={`${balance.chainId}:${balance.accountAddress}`}
               className="rounded-md border border-border bg-background"
             >
-              <summary className="grid cursor-pointer gap-3 px-3 py-3 text-sm md:grid-cols-[minmax(180px,1fr)_repeat(3,minmax(110px,auto))] md:items-center">
+              <summary className="grid cursor-pointer gap-3 px-3 py-3 text-sm lg:grid-cols-[minmax(180px,1fr)_repeat(3,minmax(110px,auto))] lg:items-center">
                 <div>
                   <p className="font-medium">{balance.accountName}</p>
                   <CopyableAddress
@@ -294,19 +294,19 @@ function QuarterBalancesPanel({
                     className="mt-1 text-xs text-muted-foreground"
                   />
                 </div>
-                <div className="md:text-right">
+                <div className="lg:text-right">
                   <p className="type-label-sm text-muted-foreground">Opening</p>
                   <p className="mt-1 font-medium">
                     {formatCurrencyNumber(balance.openingUsd)}
                   </p>
                 </div>
-                <div className="md:text-right">
+                <div className="lg:text-right">
                   <p className="type-label-sm text-muted-foreground">Closing</p>
                   <p className="mt-1 font-medium">
                     {formatCurrencyNumber(balance.closingUsd)}
                   </p>
                 </div>
-                <div className="md:text-right">
+                <div className="lg:text-right">
                   <p className="type-label-sm text-muted-foreground">
                     Net Change
                   </p>
@@ -315,8 +315,8 @@ function QuarterBalancesPanel({
                   </p>
                 </div>
               </summary>
-              <div className="overflow-x-auto border-t border-border">
-                <table className="w-full min-w-[640px] text-left text-xs">
+              <div className="border-t border-border p-3 lg:p-0">
+                <table className="mobile-card-table-lg text-xs">
                   <thead className="border-b border-border text-muted-foreground uppercase">
                     <tr>
                       <th className="px-3 py-2 font-medium">Asset</th>
@@ -347,19 +347,19 @@ function QuarterBalancesPanel({
 
                       return (
                         <tr key={symbol}>
-                          <td className="px-3 py-2 font-medium">{symbol}</td>
-                          <td className="px-3 py-2 text-right">
+                          <td data-label="Asset" className="px-3 py-2 font-medium">{symbol}</td>
+                          <td data-align="right" data-label="Opening Balance" className="px-3 py-2 text-right">
                             {opening ? formatTokenAmount(opening.balance) : "-"}
                           </td>
-                          <td className="px-3 py-2 text-right">
+                          <td data-align="right" data-label="Closing Balance" className="px-3 py-2 text-right">
                             {closing ? formatTokenAmount(closing.balance) : "-"}
                           </td>
-                          <td className="px-3 py-2 text-right">
+                          <td data-align="right" data-label="Opening USD" className="px-3 py-2 text-right">
                             {opening
                               ? formatCurrencyNumber(Number(opening.usdValue))
                               : "-"}
                           </td>
-                          <td className="px-3 py-2 text-right">
+                          <td data-align="right" data-label="Closing USD" className="px-3 py-2 text-right">
                             {closing
                               ? formatCurrencyNumber(Number(closing.usdValue))
                               : "-"}
@@ -472,8 +472,8 @@ function BalanceValidationPanel({
       ) : null}
 
       {topVariances.length > 0 ? (
-        <div className="mt-5 overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[720px] text-left text-xs">
+        <div className="mt-5 rounded-md border border-border bg-card p-3 lg:p-0">
+          <table className="mobile-card-table-lg text-xs">
             <thead className="border-b border-border text-muted-foreground uppercase">
               <tr>
                 <th className="px-3 py-2 font-medium">Account</th>
@@ -490,25 +490,25 @@ function BalanceValidationPanel({
                 <tr
                   key={`${variance.chainId}:${variance.accountAddress}:${variance.assetSymbol}`}
                 >
-                  <td className="px-3 py-2">
+                  <td data-label="Account" data-full="true" className="px-3 py-2">
                     <p className="font-medium">{variance.accountName}</p>
                     <CopyableAddress
                       address={variance.accountAddress}
                       className="mt-1 text-muted-foreground"
                     />
                   </td>
-                  <td className="px-3 py-2 font-medium">
+                  <td data-label="Asset" className="px-3 py-2 font-medium">
                     {variance.assetSymbol}
                   </td>
-                  <td className="px-3 py-2 text-right">{variance.opening}</td>
-                  <td className="px-3 py-2 text-right">{variance.movement}</td>
-                  <td className="px-3 py-2 text-right">
+                  <td data-align="right" data-label="Opening" className="px-3 py-2 text-right">{variance.opening}</td>
+                  <td data-align="right" data-label="Movement" className="px-3 py-2 text-right">{variance.movement}</td>
+                  <td data-align="right" data-label="Expected" className="px-3 py-2 text-right">
                     {variance.expectedClosing}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td data-align="right" data-label="Actual" className="px-3 py-2 text-right">
                     {variance.actualClosing}
                   </td>
-                  <td className="px-3 py-2 text-right font-semibold">
+                  <td data-align="right" data-label="Difference" className="px-3 py-2 text-right font-semibold">
                     {variance.difference}
                   </td>
                 </tr>
@@ -1008,10 +1008,10 @@ function TransferCard({
     return (
       <article
         id={`transfer-${transfer.transferId}`}
-        className="relative scroll-mt-6 rounded-lg border border-emerald-600/20 bg-card px-4 py-3 shadow-sm"
+        className="relative scroll-mt-6 rounded-lg border border-emerald-600/20 bg-card px-3 py-3 shadow-sm sm:px-4"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1 overflow-wrap-anywhere">
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
                 {position} / {total}
@@ -1089,15 +1089,15 @@ function TransferCard({
               {isSwap ? <SwapDetailLine detail={swapDetail} /> : null}
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
             {transactionExplorerUrl ? (
               <a
                 href={transactionExplorerUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                className="inline-flex min-w-0 items-center gap-1 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
               >
-                {formatHash(transfer.txHash)}
+                <span className="truncate">{formatHash(transfer.txHash)}</span>
                 <ExternalLink className="size-3" aria-hidden="true" />
                 <span className="sr-only">Open transaction explorer</span>
               </a>
@@ -1134,7 +1134,7 @@ function TransferCard({
   return (
     <article
       id={`transfer-${transfer.transferId}`}
-      className="relative scroll-mt-6 rounded-lg border border-border bg-card p-5 shadow-sm"
+      className="relative scroll-mt-6 rounded-lg border border-border bg-card p-4 shadow-sm sm:p-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
@@ -1287,12 +1287,12 @@ function ManualLedgerEntryCard({
   return (
     <article
       id={`ledger-entry-${entry.id}`}
-      className={`relative rounded-lg border bg-card px-4 py-3 shadow-sm ${
+      className={`relative rounded-lg border bg-card px-3 py-3 shadow-sm sm:px-4 ${
         isClassified ? "border-emerald-600/20" : "border-primary/20"
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1 overflow-wrap-anywhere">
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground">
               {position} / {total}
@@ -1359,15 +1359,15 @@ function ManualLedgerEntryCard({
             {entry.notes ? <span>Notes: {entry.notes}</span> : null}
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
           {transactionExplorerUrl && explorerTxHash ? (
             <a
               href={transactionExplorerUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="inline-flex min-w-0 items-center gap-1 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
-              {formatHash(explorerTxHash)}
+              <span className="truncate">{formatHash(explorerTxHash)}</span>
               <ExternalLink className="size-3" aria-hidden="true" />
               <span className="sr-only">Open transaction explorer</span>
             </a>
@@ -1552,9 +1552,15 @@ export default async function QuarterTransactionsPage({
         syncStatus={toastSyncStatus}
       />
       <AppHeader initialSession={session} />
-      <section className="container-custom py-8 md:py-10">
-        <div className="mb-6 grid gap-5">
-          <div>
+      <section className="mx-auto box-border w-full max-w-7xl px-0 py-8 min-[360px]:px-3 sm:px-6 md:py-10 lg:px-8">
+        <div
+          className="mb-6 grid gap-5 [&>*]:max-w-full [&>*]:min-w-0"
+          style={{ width: "calc(100% - 0.25rem)" }}
+        >
+          <div
+            className="w-full max-w-full min-w-0"
+            style={{ maxWidth: "calc(100% - 0.25rem)" }}
+          >
             <Link
               href="/admin/quarters"
               className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -1562,16 +1568,16 @@ export default async function QuarterTransactionsPage({
               <ArrowLeft className="size-4" aria-hidden="true" />
               Quarters
             </Link>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
+            <div className="mt-4 flex w-full max-w-full min-w-0 flex-wrap items-center justify-between gap-4">
+              <div className="flex w-full min-w-0 items-start gap-3">
+                <div className="hidden size-10 items-center justify-center rounded-md bg-secondary text-secondary-foreground min-[360px]:flex">
                   <Tags className="size-5" aria-hidden="true" />
                 </div>
-                <div>
-                  <p className="type-label-sm text-muted-foreground">
+                <div className="w-0 min-w-0 flex-1 overflow-wrap-anywhere">
+                  <p className="max-w-full break-words type-label-sm text-muted-foreground">
                     {formatDate(quarter.startsOn)} - {formatDate(quarter.endsOn)}
                   </p>
-                  <h1 className="text-2xl font-semibold">
+                  <h1 className="max-w-full break-words text-2xl font-semibold leading-tight">
                     {quarter.label} Transaction Review
                   </h1>
                 </div>

@@ -81,8 +81,8 @@ function ProposalActivityTable({ rows }: { rows: ProposalActivityRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
-      <table className="w-full min-w-[1080px] text-left text-sm">
+    <div className="rounded-lg border border-border bg-card p-3 shadow-sm md:p-0">
+      <table className="mobile-card-table-lg">
         <thead className="border-b border-border text-xs uppercase text-muted-foreground">
           <tr>
             <th className="px-4 py-3 font-medium">Proposal</th>
@@ -97,13 +97,13 @@ function ProposalActivityTable({ rows }: { rows: ProposalActivityRow[] }) {
         <tbody className="divide-y divide-border">
           {rows.map((row) => (
             <tr key={row.transferId}>
-              <td className="max-w-[320px] px-4 py-4">
-                <p className="truncate font-medium">{row.title}</p>
+              <td data-label="Proposal" data-full="true">
+                <p className="min-w-0 truncate font-medium">{row.title}</p>
                 <p className="mt-1 font-mono text-xs text-muted-foreground">
                   {row.proposalNumber ?? row.proposalId}
                 </p>
               </td>
-              <td className="px-4 py-4">
+              <td data-label="Quarter">
                 <p className="font-medium">{row.quarterLabel ?? "-"}</p>
                 {row.quarterStatus ? (
                   <p className="mt-1 text-xs capitalize text-muted-foreground">
@@ -111,16 +111,16 @@ function ProposalActivityTable({ rows }: { rows: ProposalActivityRow[] }) {
                   </p>
                 ) : null}
               </td>
-              <td className="px-4 py-4 text-muted-foreground">
+              <td data-label="Executed" className="text-muted-foreground">
                 {formatTimestamp(row.executedAt)}
               </td>
-              <td className="px-4 py-4 text-right font-medium">
+              <td data-align="right" data-label="Amount" className="font-medium">
                 {formatAmount(row.assetAmount)} {row.assetSymbol}
               </td>
-              <td className="px-4 py-4 text-right font-medium">
+              <td data-align="right" data-label="USD" className="font-medium">
                 {formatCurrency(row.usdAmount)}
               </td>
-              <td className="px-4 py-4">
+              <td data-label="Classification">
                 <p className="font-medium">{row.category ?? "Unclassified"}</p>
                 {row.counterpartyName ? (
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -128,8 +128,8 @@ function ProposalActivityTable({ rows }: { rows: ProposalActivityRow[] }) {
                   </p>
                 ) : null}
               </td>
-              <td className="px-4 py-4">
-                <div className="flex flex-col items-start gap-1.5">
+              <td data-label="Links">
+                <div className="flex flex-col items-end gap-1.5 md:items-start">
                   <ProposalLink href={row.daohausUrl}>DAOhaus</ProposalLink>
                   {row.explorerUrl ? (
                     <ProposalLink href={row.explorerUrl}>

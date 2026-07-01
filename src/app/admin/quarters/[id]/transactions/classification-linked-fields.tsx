@@ -146,7 +146,7 @@ export function ClassificationLinkedFields({
                 setSelectedRipId("");
               }
             }}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
             required
           >
             <option value="">Choose category</option>
@@ -179,7 +179,7 @@ export function ClassificationLinkedFields({
             name={counterpartyDisabled ? undefined : "counterpartyEntityId"}
             defaultValue={defaultCounterpartyEntityId ?? ""}
             disabled={counterpartyDisabled}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
+            className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
           >
             <option value="">
               {counterpartyDisabled
@@ -224,7 +224,7 @@ export function ClassificationLinkedFields({
               }
             }}
             disabled={raidDisabled}
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
+            className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
           >
             <option value="">
               {selectedRipId
@@ -272,7 +272,7 @@ export function ClassificationLinkedFields({
             }
           }}
           disabled={ripDisabled}
-          className="h-9 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
+          className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
         >
           <option value="">
             {selectedRaidId
@@ -503,7 +503,7 @@ function QuickCreateFields({
               onChange={(event) =>
                 setValue("clientEntityId", event.target.value)
               }
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+              className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm"
               required
             >
               <option value="">Select client</option>
