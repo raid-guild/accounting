@@ -479,8 +479,8 @@ function ProviderRankingTable({
         </span>
       </div>
       {providers.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[680px] text-left text-sm">
+        <div className="rounded-lg border border-border bg-card p-3 md:p-0">
+          <table className="mobile-card-table">
             <thead className="border-b border-border text-xs uppercase text-muted-foreground">
               <tr>
                 <th className="px-3 py-3 font-medium">Provider</th>
@@ -501,7 +501,8 @@ function ProviderRankingTable({
                     key={provider.id}
                     className="transition-colors hover:bg-muted/50"
                   >
-                    <td className="p-0">
+                    <td data-label="Provider" data-full="true" className="p-0">
+                      <span className="sr-only">Provider: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -510,7 +511,8 @@ function ProviderRankingTable({
                         {provider.name}
                       </Link>
                     </td>
-                    <td className="p-0">
+                    <td data-align="right" data-label="Spend" className="p-0">
+                      <span className="sr-only">Spend: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -519,7 +521,8 @@ function ProviderRankingTable({
                         {formatCurrency(spend?.totalUsd ?? "0")}
                       </Link>
                     </td>
-                    <td className="p-0">
+                    <td data-align="right" data-label="Entries" className="p-0">
+                      <span className="sr-only">Entries: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -528,7 +531,8 @@ function ProviderRankingTable({
                         {spend?.entryCount ?? 0}
                       </Link>
                     </td>
-                    <td className="p-0">
+                    <td data-label="Website" className="p-0">
+                      <span className="sr-only">Website: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -537,7 +541,8 @@ function ProviderRankingTable({
                         {provider.website || "Not recorded"}
                       </Link>
                     </td>
-                    <td className="p-0">
+                    <td data-align="right" data-label="Addresses" className="p-0">
+                      <span className="sr-only">Addresses: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -546,7 +551,8 @@ function ProviderRankingTable({
                         {provider.addresses.length}
                       </Link>
                     </td>
-                    <td className="p-0">
+                    <td data-label="Status" className="p-0">
+                      <span className="sr-only">Status: </span>
                       <Link
                         href={href}
                         scroll={false}

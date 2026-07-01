@@ -255,8 +255,8 @@ function ClericAccessSection({
           <ClericRoleMessage value={query} />
 
           {clericRoles.length > 0 ? (
-            <div className="overflow-x-auto rounded-lg border border-border bg-background">
-              <table className="w-full min-w-[720px] text-left text-sm">
+            <div className="rounded-lg border border-border bg-background p-3 md:p-0">
+              <table className="mobile-card-table">
                 <thead className="border-b border-border text-xs uppercase text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-medium">Wallet</th>
@@ -271,13 +271,15 @@ function ClericAccessSection({
                 <tbody className="divide-y divide-border">
                   {clericRoles.map((role) => (
                     <tr key={role.id}>
-                      <td className="px-4 py-4">
+                      <td data-label="Wallet">
+                        <span className="sr-only">Wallet: </span>
                         <CopyableAddress
                           address={role.walletAddress}
-                          className="font-medium"
+                          className="justify-end font-medium md:justify-start"
                         />
                       </td>
-                      <td className="px-4 py-4">
+                      <td data-label="Status">
+                        <span className="sr-only">Status: </span>
                         <span
                           className={
                             role.revokedAt
@@ -288,15 +290,18 @@ function ClericAccessSection({
                           {role.revokedAt ? "Revoked" : "Active"}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-muted-foreground">
+                      <td data-label="Granted" className="text-muted-foreground">
+                        <span className="sr-only">Granted: </span>
                         {formatTimestamp(role.createdAt.toISOString())}
                       </td>
-                      <td className="px-4 py-4 text-muted-foreground">
+                      <td data-label="Revoked" className="text-muted-foreground">
+                        <span className="sr-only">Revoked: </span>
                         {role.revokedAt
                           ? formatTimestamp(role.revokedAt.toISOString())
                           : "-"}
                       </td>
-                      <td className="px-4 py-4 text-right">
+                      <td data-align="right" data-label="Actions">
+                        <span className="sr-only">Actions: </span>
                         {role.revokedAt ? null : (
                           <form action={revokeClericRole}>
                             <input
@@ -339,8 +344,8 @@ function MembershipActivityTable({ rows }: { rows: MembershipActivityRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-card shadow-sm">
-      <table className="w-full min-w-[1120px] text-left text-sm">
+    <div className="rounded-lg border border-border bg-card p-3 shadow-sm md:p-0">
+      <table className="mobile-card-table">
         <thead className="border-b border-border text-xs uppercase text-muted-foreground">
           <tr>
             <th className="px-4 py-3 font-medium">Activity</th>
@@ -356,23 +361,25 @@ function MembershipActivityTable({ rows }: { rows: MembershipActivityRow[] }) {
         <tbody className="divide-y divide-border">
           {rows.map((row) => (
             <tr key={`${row.type}:${row.txHash}:${row.memberAddress}`}>
-              <td className="max-w-[280px] px-4 py-4">
+              <td data-label="Activity" data-full="true">
+                <span className="sr-only">Activity: </span>
                 <ActivityType type={row.type} />
                 {row.proposalTitle ? (
-                  <p className="mt-2 truncate font-medium">
+                  <p className="mt-2 min-w-0 truncate font-medium">
                     {row.proposalTitle}
                   </p>
                 ) : null}
               </td>
-              <td className="px-4 py-4">
+              <td data-label="Member">
+                <span className="sr-only">Member: </span>
                 <CopyableAddress
                   address={row.memberAddress}
-                  className="font-medium"
+                  className="justify-end font-medium md:justify-start"
                 />
                 {row.recipientAddress &&
                 row.recipientAddress.toLowerCase() !==
                   row.memberAddress.toLowerCase() ? (
-                  <div className="mt-1 text-xs text-muted-foreground">
+                  <div className="mt-1 flex justify-end text-xs text-muted-foreground md:justify-start">
                     <CopyableAddress
                       address={row.recipientAddress}
                       label="To"
@@ -380,19 +387,23 @@ function MembershipActivityTable({ rows }: { rows: MembershipActivityRow[] }) {
                   </div>
                 ) : null}
               </td>
-              <td className="px-4 py-4 text-muted-foreground">
+              <td data-label="Executed" className="text-muted-foreground">
+                <span className="sr-only">Executed: </span>
                 {formatTimestamp(row.executedAt)}
               </td>
-              <td className="px-4 py-4 text-right font-medium">
+              <td data-align="right" data-label="Amount" className="font-medium">
+                <span className="sr-only">Amount: </span>
                 {formatAmount({
                   amount: row.assetAmount,
                   symbol: row.assetSymbol,
                 })}
               </td>
-              <td className="px-4 py-4 text-right font-medium">
+              <td data-align="right" data-label="USD" className="font-medium">
+                <span className="sr-only">USD: </span>
                 {formatCurrency(row.usdAmount)}
               </td>
-              <td className="px-4 py-4 text-right">
+              <td data-align="right" data-label="Shares">
+                <span className="sr-only">Shares: </span>
                 <p className="font-medium">{formatShares(row.shares)}</p>
                 {row.loot ? (
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -400,7 +411,8 @@ function MembershipActivityTable({ rows }: { rows: MembershipActivityRow[] }) {
                   </p>
                 ) : null}
               </td>
-              <td className="px-4 py-4">
+              <td data-label="Quarter">
+                <span className="sr-only">Quarter: </span>
                 <p className="font-medium">{row.quarterLabel ?? "-"}</p>
                 {row.quarterStatus ? (
                   <p className="mt-1 text-xs capitalize text-muted-foreground">
@@ -408,8 +420,9 @@ function MembershipActivityTable({ rows }: { rows: MembershipActivityRow[] }) {
                   </p>
                 ) : null}
               </td>
-              <td className="px-4 py-4">
-                <div className="flex flex-col items-start gap-1.5">
+              <td data-label="Links">
+                <span className="sr-only">Links: </span>
+                <div className="flex flex-col items-end gap-1.5 md:items-start">
                   {row.daohausUrl ? (
                     <ReportLink href={row.daohausUrl}>DAOhaus</ReportLink>
                   ) : null}

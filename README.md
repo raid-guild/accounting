@@ -50,10 +50,42 @@ Keep machine-specific proxy hostnames and URLs out of committed source.
 - `pnpm build`: create a production build.
 - `pnpm start`: run the production build.
 - `pnpm lint`: run ESLint.
+- `pnpm test:e2e`: run Playwright responsive smoke tests.
+- `pnpm test:e2e:install`: install the Playwright Chromium browser.
 - `pnpm db:generate`: generate Drizzle SQL migrations from the schema.
 - `pnpm db:migrate`: apply Drizzle migrations to `DATABASE_URL`.
 - `pnpm db:reset:local`: drop and recreate the local `public` schema, then run migrations.
 - `pnpm db:studio`: open Drizzle Studio for local database inspection.
+
+## End-to-End QA
+
+The Playwright suite checks public and gated dashboard routes across mobile,
+tablet, and desktop viewports. It uses the local database state that is already
+present. Detail-page checks skip with a clear message when the local database
+does not contain a matching quarter or report.
+
+On a fresh Ubuntu server, install browser system dependencies once:
+
+```bash
+pnpm exec playwright install-deps chromium
+```
+
+Then install the Chromium browser bundle:
+
+```bash
+pnpm test:e2e:install
+```
+
+Run the suite:
+
+```bash
+pnpm test:e2e
+```
+
+The tests start the Next.js dev server with `E2E_AUTH_ENABLED=true` and use a
+local-only mock session endpoint for member, cleric, and admin route coverage.
+That endpoint returns 404 unless `E2E_AUTH_ENABLED=true` and the app is not
+running in production.
 
 ## Stack
 

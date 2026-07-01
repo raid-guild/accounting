@@ -359,7 +359,7 @@ export function WalletConnect({ initialSession }: WalletConnectProps) {
         </button>
 
         {isProfileMenuOpen ? (
-          <div className="absolute right-0 top-12 z-30 grid w-72 gap-1 rounded-lg border border-scroll-300/25 bg-moloch-800 p-1 text-scroll-100 shadow-xl shadow-black/35">
+          <div className="absolute left-0 top-12 z-30 grid w-[calc(100vw-1.5rem)] max-w-72 gap-1 rounded-lg border border-scroll-300/25 bg-moloch-800 p-1 text-scroll-100 shadow-xl shadow-black/35 sm:right-0 sm:left-auto sm:w-72">
             <div className="px-3 py-2">
               <p className="font-mono text-sm font-medium">
                 {formatAddress(session.address)}

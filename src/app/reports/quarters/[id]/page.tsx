@@ -123,8 +123,8 @@ function RankedTable({
         </span>
       </div>
       {rows.length > 0 ? (
-        <div className="mt-4 overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[420px] text-left text-sm md:min-w-0">
+        <div className="mt-4 rounded-md border border-border bg-card p-3 md:p-0">
+          <table className="mobile-card-table">
             <thead className="border-b border-border bg-muted text-xs text-muted-foreground uppercase">
               <tr>
                 <th className="px-3 py-2 font-medium">Name</th>
@@ -134,21 +134,27 @@ function RankedTable({
             </thead>
             <tbody className="divide-y divide-border">
               <tr className="bg-primary/5">
-                <td className="px-3 py-3 font-semibold">Total</td>
-                <td className="px-3 py-3 text-right font-semibold">
+                <td data-label="Name" className="px-3 py-3 font-semibold">
+                  <span className="sr-only">Name: </span>Total</td>
+                <td data-align="right" data-label="Entries" className="px-3 py-3 text-right font-semibold">
+                  <span className="sr-only">Entries: </span>
                   {totals.entries}
                 </td>
-                <td className="px-3 py-3 text-right font-semibold">
+                <td data-align="right" data-label="Total" className="px-3 py-3 text-right font-semibold">
+                  <span className="sr-only">Total: </span>
                   {formatCurrency(totals.totalUsd)}
                 </td>
               </tr>
               {rows.map((row) => (
                 <tr key={row.label}>
-                  <td className="px-3 py-3 font-medium break-words">
+                  <td data-label="Name" className="px-3 py-3 font-medium break-words">
+                    <span className="sr-only">Name: </span>
                     {row.label}
                   </td>
-                  <td className="px-3 py-3 text-right">{row.entries}</td>
-                  <td className="px-3 py-3 text-right font-semibold">
+                  <td data-align="right" data-label="Entries" className="px-3 py-3 text-right">
+                    <span className="sr-only">Entries: </span>{row.entries}</td>
+                  <td data-align="right" data-label="Total" className="px-3 py-3 text-right font-semibold">
+                    <span className="sr-only">Total: </span>
                     {formatCurrency(row.totalUsd)}
                   </td>
                 </tr>
@@ -191,8 +197,8 @@ function BalanceTable({
         </span>
       </div>
       {balances.length > 0 ? (
-        <div className="mt-4 overflow-x-auto rounded-md border border-border">
-          <table className="w-full min-w-[720px] text-left text-sm">
+        <div className="mt-4 rounded-md border border-border bg-card p-3 md:p-0">
+          <table className="mobile-card-table">
             <thead className="border-b border-border bg-muted text-xs text-muted-foreground uppercase">
               <tr>
                 <th className="px-3 py-2 font-medium">Account</th>
@@ -205,33 +211,41 @@ function BalanceTable({
             </thead>
             <tbody className="divide-y divide-border">
               <tr className="bg-primary/5">
-                <td className="px-3 py-3 font-semibold">Total</td>
-                <td className="px-3 py-3 text-right font-semibold">
+                <td data-label="Account" className="px-3 py-3 font-semibold">
+                  <span className="sr-only">Account: </span>Total</td>
+                <td data-align="right" data-label="Opening" className="px-3 py-3 text-right font-semibold">
+                  <span className="sr-only">Opening: </span>
                   {formatCurrency(total.openingUsd)}
                 </td>
-                <td className="px-3 py-3 text-right font-semibold">
+                <td data-align="right" data-label="Closing" className="px-3 py-3 text-right font-semibold">
+                  <span className="sr-only">Closing: </span>
                   {formatCurrency(total.closingUsd)}
                 </td>
-                <td className="px-3 py-3 text-right font-semibold">
+                <td data-align="right" data-label="Net Change" className="px-3 py-3 text-right font-semibold">
+                  <span className="sr-only">Net Change: </span>
                   {formatCurrency(total.netChangeUsd)}
                 </td>
               </tr>
               {balances.map((balance) => (
                 <tr key={`${balance.chainId}:${balance.accountAddress}`}>
-                  <td className="px-3 py-3">
+                  <td data-label="Account" data-full="true" className="px-3 py-3">
+                    <span className="sr-only">Account: </span>
                     <p className="font-medium">{balance.accountName}</p>
                     <CopyableAddress
                       address={balance.accountAddress}
                       className="mt-1 text-xs text-muted-foreground"
                     />
                   </td>
-                  <td className="px-3 py-3 text-right">
+                  <td data-align="right" data-label="Opening" className="px-3 py-3 text-right">
+                    <span className="sr-only">Opening: </span>
                     {formatCurrency(balance.openingUsd)}
                   </td>
-                  <td className="px-3 py-3 text-right">
+                  <td data-align="right" data-label="Closing" className="px-3 py-3 text-right">
+                    <span className="sr-only">Closing: </span>
                     {formatCurrency(balance.closingUsd)}
                   </td>
-                  <td className="px-3 py-3 text-right font-medium">
+                  <td data-align="right" data-label="Net Change" className="px-3 py-3 text-right font-medium">
+                    <span className="sr-only">Net Change: </span>
                     {formatCurrency(balance.netChangeUsd)}
                   </td>
                 </tr>

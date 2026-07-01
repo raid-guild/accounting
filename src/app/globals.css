@@ -142,10 +142,18 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+
+    box-sizing: border-box;
+  }
+  *::before,
+  *::after {
+    box-sizing: border-box;
   }
   body {
     @apply bg-background text-foreground;
+
     font-family: var(--font-ui);
+    margin: 0;
   }
   html {
     @apply font-sans;
@@ -175,6 +183,26 @@
     }
   }
 
+  @keyframes drawer-backdrop-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes drawer-panel-in {
+    from {
+      opacity: 0.92;
+      transform: translateX(1rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
   .toast-enter {
     animation: toast-in 180ms ease-out both;
   }
@@ -183,8 +211,16 @@
     animation: toast-out 180ms ease-in both;
   }
 
+  .drawer-backdrop-enter {
+    animation: drawer-backdrop-in 160ms ease-out both;
+  }
+
+  .drawer-panel-enter {
+    animation: drawer-panel-in 180ms ease-out both;
+  }
+
   .container-custom {
-    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+    @apply mx-auto box-border w-full max-w-7xl px-3 sm:px-6 lg:px-8;
   }
 
   .type-label {
@@ -193,5 +229,124 @@
 
   .type-label-sm {
     @apply text-[0.7rem] font-semibold tracking-normal;
+  }
+
+  .mobile-table-scroll {
+    @apply -mx-3 overflow-x-auto px-3 sm:mx-0 sm:px-0;
+
+    scrollbar-width: thin;
+  }
+
+  .overflow-wrap-anywhere {
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-card-table {
+    @apply w-full text-left text-sm;
+  }
+
+  .mobile-card-table thead {
+    @apply sr-only md:not-sr-only md:table-header-group;
+  }
+
+  .mobile-card-table tbody {
+    @apply grid gap-3 md:table-row-group;
+  }
+
+  .mobile-card-table tr {
+    @apply grid gap-2 rounded-md border border-border bg-background p-3 md:table-row md:rounded-none md:border-0 md:bg-transparent md:p-0;
+  }
+
+  .mobile-card-table tbody tr {
+    @apply md:border-b md:border-border;
+  }
+
+  .mobile-card-table tbody tr:last-child {
+    @apply md:border-b-0;
+  }
+
+  .mobile-card-table td,
+  .mobile-card-table th {
+    @apply md:px-4 md:py-3;
+  }
+
+  .mobile-card-table td {
+    @apply grid min-w-0 grid-cols-[7.5rem_minmax(0,1fr)] gap-3 py-0 text-right md:table-cell md:text-left;
+
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-card-table td::before {
+    content: attr(data-label) / "";
+    @apply text-left text-xs font-semibold text-muted-foreground uppercase md:hidden;
+  }
+
+  .mobile-card-table td[data-align="right"] {
+    @apply md:text-right;
+  }
+
+  .mobile-card-table td[data-full="true"] {
+    @apply grid-cols-1 text-left;
+  }
+
+  .mobile-card-table td[data-full="true"]::before {
+    @apply sr-only;
+  }
+
+  .mobile-card-table-lg {
+    @apply w-full text-left text-sm;
+  }
+
+  .mobile-card-table-lg thead {
+    @apply sr-only lg:not-sr-only lg:table-header-group;
+  }
+
+  .mobile-card-table-lg tbody {
+    @apply grid gap-3 lg:table-row-group;
+  }
+
+  .mobile-card-table-lg tr {
+    @apply grid gap-2 rounded-md border border-border bg-background p-3 lg:table-row lg:rounded-none lg:border-0 lg:bg-transparent lg:p-0;
+  }
+
+  .mobile-card-table-lg tbody tr {
+    @apply lg:border-b lg:border-border;
+  }
+
+  .mobile-card-table-lg tbody tr:last-child {
+    @apply lg:border-b-0;
+  }
+
+  .mobile-card-table-lg td,
+  .mobile-card-table-lg th {
+    @apply lg:px-4 lg:py-3;
+  }
+
+  .mobile-card-table-lg td {
+    @apply grid min-w-0 grid-cols-[7.5rem_minmax(0,1fr)] gap-3 py-0 text-right lg:table-cell lg:text-left;
+
+    overflow-wrap: anywhere;
+  }
+
+  .transaction-review-mobile-shell {
+    width: calc(100% - 0.25rem);
+    max-width: calc(100% - 0.25rem);
+  }
+
+  .mobile-card-table-lg td::before {
+    content: attr(data-label) / "";
+    @apply text-left text-xs font-semibold text-muted-foreground uppercase lg:hidden;
+  }
+
+  .mobile-card-table-lg td[data-align="right"] {
+    @apply lg:text-right;
+  }
+
+  .mobile-card-table-lg td[data-full="true"] {
+    @apply grid-cols-1 text-left;
+  }
+
+  .mobile-card-table-lg td[data-full="true"]::before {
+    @apply sr-only;
   }
 }

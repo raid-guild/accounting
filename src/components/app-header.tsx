@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Menu, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -39,6 +39,12 @@ const accountingLinks: NavLink[] = [
 const daoLinks: NavLink[] = [
   { href: "/proposals", label: "Proposals" },
   { href: "/membership", label: "Membership" },
+];
+
+const primaryLinks: NavLink[] = [
+  { href: "/", label: "Dashboard" },
+  { href: "/reports", label: "Reports" },
+  { href: "/admin/quarters", label: "Quarters" },
 ];
 
 function isActivePath(pathname: string, href: string) {
@@ -128,9 +134,63 @@ function NavGroup({
   );
 }
 
+function MobileNavSection({
+  links,
+  onNavigate,
+  title,
+}: {
+  links: NavLink[];
+  onNavigate: () => void;
+  title: string;
+}) {
+  const pathname = usePathname();
+
+  return (
+    <section>
+      <h2 className="type-label-sm text-scroll-300">{title}</h2>
+      <div className="mt-2 grid gap-1">
+        {links.map((link) => {
+          const active = isActivePath(pathname, link.href);
+
+          return (
+            <Link
+              key={link.href}
+              href={link.href}
+              onClick={onNavigate}
+              className={cn(
+                "flex h-11 items-center rounded-lg px-3 text-sm font-medium transition-all",
+                active
+                  ? "bg-scroll-100 text-moloch-800 shadow-sm"
+                  : "text-scroll-100 hover:bg-scroll-100/10",
+              )}
+            >
+              {link.label}
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function AppHeader({ initialSession }: AppHeaderProps) {
+  const canAccess = Boolean(initialSession.permissions?.canAccess);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const drawerRef = useRef<HTMLDivElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+
+  function openMobileMenu() {
+    restoreFocusRef.current = menuButtonRef.current;
+    setMobileMenuOpen(true);
+  }
+
+  function closeMobileMenu() {
+    setMobileMenuOpen(false);
+  }
 
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {
@@ -150,57 +210,199 @@ export function AppHeader({ initialSession }: AppHeaderProps) {
     };
   }, []);
 
-  return (
-    <header className="border-b border-moloch-800 bg-moloch-800 text-scroll-100">
-      <div className="container-custom grid min-h-18 gap-3 py-3 xl:grid-cols-[auto_1fr] xl:items-center">
-        <Link
-          href="/"
-          className="flex min-w-0 items-center gap-3 rounded-md outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-scroll-300"
-          aria-label="RaidGuild Accounting dashboard"
-        >
-          <Image
-            src="/raidguild-full-logo.svg"
-            alt="RaidGuild"
-            width={120}
-            height={32}
-            className="h-8 w-auto shrink-0"
-            style={{ width: "auto" }}
-          />
-          <div className="min-w-0">
-            <p className="type-label-sm text-scroll-200">RaidGuild</p>
-            <p className="text-base font-semibold leading-none">Accounting</p>
-          </div>
-        </Link>
+  useEffect(() => {
+    if (!mobileMenuOpen) {
+      restoreFocusRef.current?.focus();
+      restoreFocusRef.current = null;
 
-        <div className="flex min-w-0 flex-wrap items-center gap-3 xl:justify-end">
-          {initialSession.permissions?.canAccess ? (
-            <nav
-              ref={navRef}
-              className="flex min-w-0 flex-wrap items-center gap-1 rounded-lg border border-scroll-300/20 bg-moloch-900/35 p-1 shadow-inner shadow-black/10"
-              aria-label="Accounting sections"
-            >
-              <NavItem href="/">Dashboard</NavItem>
-              <NavItem href="/reports">Reports</NavItem>
-              <NavItem href="/admin/quarters">Quarters</NavItem>
-              <NavGroup
-                isOpen={openGroup === "accounting"}
-                label="Accounting"
-                links={accountingLinks}
-                onOpenChange={(open) =>
-                  setOpenGroup(open ? "accounting" : null)
-                }
+      return undefined;
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeMobileMenu();
+
+        return;
+      }
+
+      if (event.key !== "Tab" || !drawerRef.current) {
+        return;
+      }
+
+      const focusableElements = Array.from(
+        drawerRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.hasAttribute("disabled"));
+
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        closeButtonRef.current?.focus();
+
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    window.requestAnimationFrame(() => closeButtonRef.current?.focus());
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [mobileMenuOpen]);
+
+  return (
+    <>
+      <header
+        className={cn(
+          "border-b border-moloch-800 bg-moloch-800 text-scroll-100",
+          mobileMenuOpen && "pointer-events-none sm:pointer-events-auto",
+        )}
+      >
+        <div className="container-custom relative grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 py-3 xl:grid-cols-[auto_1fr] xl:items-center">
+          <Link
+            href="/"
+            className="flex w-fit min-w-0 items-center gap-3 rounded-md pr-14 outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-scroll-300 sm:pr-0"
+            aria-label="RaidGuild Accounting dashboard"
+          >
+            <span className="relative block h-8 w-[120px] shrink-0">
+              <Image
+                src="/raidguild-full-logo.svg"
+                alt="RaidGuild"
+                fill
+                priority
+                sizes="120px"
+                className="object-contain"
               />
-              <NavGroup
-                isOpen={openGroup === "dao"}
-                label="DAO"
+            </span>
+            <div className="min-w-0">
+              <p className="type-label-sm text-scroll-200">RaidGuild</p>
+              <p className="text-base font-semibold leading-none">Accounting</p>
+            </div>
+          </Link>
+
+          {canAccess ? (
+            <button
+              ref={menuButtonRef}
+              type="button"
+              aria-controls="mobile-accounting-menu"
+              aria-expanded={mobileMenuOpen}
+              aria-label="Menu"
+              onClick={openMobileMenu}
+              className="absolute right-3 top-3 inline-flex size-10 cursor-pointer items-center justify-center rounded-lg border border-scroll-300/25 bg-moloch-900/35 text-scroll-100 transition-all hover:bg-scroll-100/10 focus-visible:ring-2 focus-visible:ring-scroll-300 sm:hidden"
+            >
+              <Menu className="size-4" aria-hidden="true" />
+              <span className="sr-only">Menu</span>
+            </button>
+          ) : null}
+
+          <div className="col-span-2 grid min-w-0 justify-items-start gap-3 sm:col-span-1 sm:justify-items-end xl:flex xl:items-center xl:justify-end">
+            {canAccess ? (
+              <>
+                <nav
+                  ref={navRef}
+                  className="hidden min-w-0 flex-wrap items-center gap-1 rounded-lg border border-scroll-300/20 bg-moloch-900/35 p-1 shadow-inner shadow-black/10 sm:flex"
+                  aria-label="Accounting sections"
+                >
+                  {primaryLinks.map((link) => (
+                    <NavItem key={link.href} href={link.href}>
+                      {link.label}
+                    </NavItem>
+                  ))}
+                  <NavGroup
+                    isOpen={openGroup === "accounting"}
+                    label="Accounting"
+                    links={accountingLinks}
+                    onOpenChange={(open) =>
+                      setOpenGroup(open ? "accounting" : null)
+                    }
+                  />
+                  <NavGroup
+                    isOpen={openGroup === "dao"}
+                    label="DAO"
+                    links={daoLinks}
+                    onOpenChange={(open) => setOpenGroup(open ? "dao" : null)}
+                  />
+                </nav>
+              </>
+            ) : null}
+            <div className="col-span-2 min-w-0 justify-self-start sm:justify-self-end xl:col-span-1 xl:justify-self-auto">
+              <WalletConnect initialSession={initialSession} />
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {canAccess && mobileMenuOpen ? (
+        <div
+          ref={drawerRef}
+          className="fixed inset-0 z-50 sm:hidden"
+          onClick={closeMobileMenu}
+          role="presentation"
+        >
+          <div
+            aria-hidden="true"
+            className="drawer-backdrop-enter pointer-events-none absolute inset-0 bg-moloch-800/70 backdrop-blur-sm"
+          />
+          <aside
+            id="mobile-accounting-menu"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Accounting sections"
+            className="drawer-panel-enter absolute inset-y-0 right-0 grid w-[min(21rem,calc(100vw-2rem))] grid-rows-[auto_1fr] overflow-y-auto border-l border-scroll-300/20 bg-moloch-800 p-4 text-scroll-100 shadow-2xl shadow-black/40"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="type-label-sm text-scroll-300">RaidGuild</p>
+                <p className="text-lg font-semibold">Accounting</p>
+              </div>
+              <div className="size-10" aria-hidden="true" />
+            </div>
+
+            <nav
+              aria-label="Accounting sections"
+              className="mt-8 grid content-start gap-7"
+            >
+              <MobileNavSection
+                links={primaryLinks}
+                onNavigate={closeMobileMenu}
+                title="Main"
+              />
+              <MobileNavSection
+                links={accountingLinks}
+                onNavigate={closeMobileMenu}
+                title="Accounting"
+              />
+              <MobileNavSection
                 links={daoLinks}
-                onOpenChange={(open) => setOpenGroup(open ? "dao" : null)}
+                onNavigate={closeMobileMenu}
+                title="DAO"
               />
             </nav>
-          ) : null}
-          <WalletConnect initialSession={initialSession} />
+          </aside>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            aria-label="Close menu"
+            onClick={closeMobileMenu}
+            className="drawer-panel-enter pointer-events-auto fixed right-4 top-4 z-[1000] inline-flex size-10 cursor-pointer items-center justify-center rounded-lg border border-scroll-300/25 bg-moloch-900/80 text-scroll-100 shadow-xl shadow-black/30 transition-all hover:bg-scroll-100/10 focus-visible:ring-2 focus-visible:ring-scroll-300"
+          >
+            <X className="size-4" aria-hidden="true" />
+          </button>
         </div>
-      </div>
-    </header>
+      ) : null}
+    </>
   );
 }

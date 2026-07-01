@@ -117,17 +117,17 @@ export default async function ReportsPage() {
                       : "Ready for publication preview"}
                   </p>
 
-                  <div className="mt-5 flex flex-wrap gap-2">
+                  <div className="mt-5 grid gap-2 sm:flex sm:flex-wrap">
                     <Link
                       href={`/reports/quarters/${quarter.id}`}
-                      className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
+                      className="inline-flex h-10 w-full shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground sm:h-8 sm:w-auto sm:px-2.5"
                     >
                       <Eye data-icon="inline-start" />
                       View Report
                     </Link>
                     <Link
                       href={`/reports/quarters/${quarter.id}/export.xlsx`}
-                      className="inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
+                      className="inline-flex h-10 w-full shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 text-sm font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground sm:h-8 sm:w-auto sm:px-2.5"
                     >
                       <Download data-icon="inline-start" />
                       Export XLSX
