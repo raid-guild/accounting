@@ -81,7 +81,7 @@ function ProposalActivityTable({ rows }: { rows: ProposalActivityRow[] }) {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-3 shadow-sm md:p-0">
+    <div className="rounded-lg border border-border bg-card p-3 shadow-sm lg:p-0">
       <table className="mobile-card-table-lg">
         <thead className="border-b border-border text-xs uppercase text-muted-foreground">
           <tr>

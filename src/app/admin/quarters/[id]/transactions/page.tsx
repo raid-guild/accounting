@@ -33,6 +33,7 @@ import { SyncTransactionsForm } from "@/app/admin/quarters/[id]/transactions/syn
 import { TransactionReviewToast } from "@/app/admin/quarters/[id]/transactions/transaction-review-toast";
 import { UsdAmountField } from "@/app/admin/quarters/[id]/transactions/usd-amount-field";
 import { getAuthSession, serializeSession } from "@/lib/auth/session";
+import { cn } from "@/lib/utils";
 import {
   getQuarterClassificationSummary,
   listQuarters,
@@ -89,6 +90,49 @@ type SearchParams = Promise<{
 
 function formatHash(hash: string) {
   return `${hash.slice(0, 10)}...${hash.slice(-8)}`;
+}
+
+function TransactionExplorerLink({
+  hash,
+  url,
+  variant = "button",
+}: {
+  hash: string;
+  url: string | null;
+  variant?: "button" | "inline";
+}) {
+  const isInline = variant === "inline";
+
+  if (!url) {
+    return (
+      <span
+        className={cn(
+          "font-mono",
+          isInline ? "" : "text-xs text-muted-foreground",
+        )}
+      >
+        {formatHash(hash)}
+      </span>
+    );
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      className={cn(
+        "inline-flex min-w-0 items-center gap-1 transition-colors",
+        isInline
+          ? "font-mono text-primary hover:text-primary/80 hover:underline"
+          : "rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground",
+      )}
+    >
+      <span className="truncate">{formatHash(hash)}</span>
+      <ExternalLink className="size-3" aria-hidden="true" />
+      <span className="sr-only">Open transaction explorer</span>
+    </a>
+  );
 }
 
 function getTransactionExplorerUrl({
@@ -1090,22 +1134,10 @@ function TransferCard({
             </div>
           </div>
           <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
-            {transactionExplorerUrl ? (
-              <a
-                href={transactionExplorerUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-w-0 items-center gap-1 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                <span className="truncate">{formatHash(transfer.txHash)}</span>
-                <ExternalLink className="size-3" aria-hidden="true" />
-                <span className="sr-only">Open transaction explorer</span>
-              </a>
-            ) : (
-              <span className="font-mono text-xs text-muted-foreground">
-                {formatHash(transfer.txHash)}
-              </span>
-            )}
+            <TransactionExplorerLink
+              hash={transfer.txHash}
+              url={transactionExplorerUrl}
+            />
           </div>
         </div>
         <details className="group mt-3 border-t border-border pt-3">
@@ -1198,20 +1230,11 @@ function TransferCard({
         <div>
           <dt className="type-label-sm text-muted-foreground">Tx Hash</dt>
           <dd className="mt-1">
-            {transactionExplorerUrl ? (
-              <a
-                href={transactionExplorerUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex min-w-0 items-center gap-1 font-mono text-primary transition-colors hover:text-primary/80 hover:underline"
-              >
-                <span className="truncate">{formatHash(transfer.txHash)}</span>
-                <ExternalLink className="size-3" aria-hidden="true" />
-                <span className="sr-only">Open transaction explorer</span>
-              </a>
-            ) : (
-              <span className="font-mono">{formatHash(transfer.txHash)}</span>
-            )}
+            <TransactionExplorerLink
+              hash={transfer.txHash}
+              url={transactionExplorerUrl}
+              variant="inline"
+            />
           </dd>
         </div>
         <div>
@@ -1361,16 +1384,10 @@ function ManualLedgerEntryCard({
         </div>
         <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
           {transactionExplorerUrl && explorerTxHash ? (
-            <a
-              href={transactionExplorerUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex min-w-0 items-center gap-1 rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <span className="truncate">{formatHash(explorerTxHash)}</span>
-              <ExternalLink className="size-3" aria-hidden="true" />
-              <span className="sr-only">Open transaction explorer</span>
-            </a>
+            <TransactionExplorerLink
+              hash={explorerTxHash}
+              url={transactionExplorerUrl}
+            />
           ) : null}
           {quarter.status === "draft" &&
           entry.source === "manual" &&
@@ -1553,14 +1570,8 @@ export default async function QuarterTransactionsPage({
       />
       <AppHeader initialSession={session} />
       <section className="mx-auto box-border w-full max-w-7xl px-0 py-8 min-[360px]:px-3 sm:px-6 md:py-10 lg:px-8">
-        <div
-          className="mb-6 grid gap-5 [&>*]:max-w-full [&>*]:min-w-0"
-          style={{ width: "calc(100% - 0.25rem)" }}
-        >
-          <div
-            className="w-full max-w-full min-w-0"
-            style={{ maxWidth: "calc(100% - 0.25rem)" }}
-          >
+        <div className="transaction-review-mobile-shell mb-6 grid gap-5 [&>*]:max-w-full [&>*]:min-w-0">
+          <div className="w-full max-w-full min-w-0">
             <Link
               href="/admin/quarters"
               className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"

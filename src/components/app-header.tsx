@@ -175,9 +175,22 @@ function MobileNavSection({
 
 export function AppHeader({ initialSession }: AppHeaderProps) {
   const canAccess = Boolean(initialSession.permissions?.canAccess);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const drawerRef = useRef<HTMLDivElement | null>(null);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const navRef = useRef<HTMLElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
+
+  function openMobileMenu() {
+    restoreFocusRef.current = menuButtonRef.current;
+    setMobileMenuOpen(true);
+  }
+
+  function closeMobileMenu() {
+    setMobileMenuOpen(false);
+  }
 
   useEffect(() => {
     function onPointerDown(event: PointerEvent) {
@@ -199,16 +212,50 @@ export function AppHeader({ initialSession }: AppHeaderProps) {
 
   useEffect(() => {
     if (!mobileMenuOpen) {
-      return;
+      restoreFocusRef.current?.focus();
+      restoreFocusRef.current = null;
+
+      return undefined;
     }
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setMobileMenuOpen(false);
+        closeMobileMenu();
+
+        return;
+      }
+
+      if (event.key !== "Tab" || !drawerRef.current) {
+        return;
+      }
+
+      const focusableElements = Array.from(
+        drawerRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.hasAttribute("disabled"));
+
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        closeButtonRef.current?.focus();
+
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
       }
     }
 
     document.addEventListener("keydown", onKeyDown);
+    window.requestAnimationFrame(() => closeButtonRef.current?.focus());
 
     return () => {
       document.removeEventListener("keydown", onKeyDown);
@@ -247,11 +294,12 @@ export function AppHeader({ initialSession }: AppHeaderProps) {
 
           {canAccess ? (
             <button
+              ref={menuButtonRef}
               type="button"
               aria-controls="mobile-accounting-menu"
               aria-expanded={mobileMenuOpen}
               aria-label="Menu"
-              onClick={() => setMobileMenuOpen(true)}
+              onClick={openMobileMenu}
               className="absolute right-3 top-3 inline-flex size-10 cursor-pointer items-center justify-center rounded-lg border border-scroll-300/25 bg-moloch-900/35 text-scroll-100 transition-all hover:bg-scroll-100/10 focus-visible:ring-2 focus-visible:ring-scroll-300 sm:hidden"
             >
               <Menu className="size-4" aria-hidden="true" />
@@ -298,8 +346,9 @@ export function AppHeader({ initialSession }: AppHeaderProps) {
 
       {canAccess && mobileMenuOpen ? (
         <div
+          ref={drawerRef}
           className="fixed inset-0 z-50 sm:hidden"
-          onClick={() => setMobileMenuOpen(false)}
+          onClick={closeMobileMenu}
           role="presentation"
         >
           <div
@@ -308,6 +357,9 @@ export function AppHeader({ initialSession }: AppHeaderProps) {
           />
           <aside
             id="mobile-accounting-menu"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Accounting sections"
             className="drawer-panel-enter absolute inset-y-0 right-0 grid w-[min(21rem,calc(100vw-2rem))] grid-rows-[auto_1fr] overflow-y-auto border-l border-scroll-300/20 bg-moloch-800 p-4 text-scroll-100 shadow-2xl shadow-black/40"
             onClick={(event) => event.stopPropagation()}
           >
@@ -325,27 +377,27 @@ export function AppHeader({ initialSession }: AppHeaderProps) {
             >
               <MobileNavSection
                 links={primaryLinks}
-                onNavigate={() => setMobileMenuOpen(false)}
+                onNavigate={closeMobileMenu}
                 title="Main"
               />
               <MobileNavSection
                 links={accountingLinks}
-                onNavigate={() => setMobileMenuOpen(false)}
+                onNavigate={closeMobileMenu}
                 title="Accounting"
               />
               <MobileNavSection
                 links={daoLinks}
-                onNavigate={() => setMobileMenuOpen(false)}
+                onNavigate={closeMobileMenu}
                 title="DAO"
               />
             </nav>
           </aside>
           <button
+            ref={closeButtonRef}
             type="button"
             aria-label="Close menu"
-            onClick={() => setMobileMenuOpen(false)}
-            className="drawer-panel-enter fixed right-4 top-4 z-[60] inline-flex size-10 cursor-pointer items-center justify-center rounded-lg border border-scroll-300/25 bg-moloch-900/80 text-scroll-100 shadow-xl shadow-black/30 transition-all hover:bg-scroll-100/10 focus-visible:ring-2 focus-visible:ring-scroll-300"
-            style={{ pointerEvents: "auto", zIndex: 1000 }}
+            onClick={closeMobileMenu}
+            className="drawer-panel-enter pointer-events-auto fixed right-4 top-4 z-[1000] inline-flex size-10 cursor-pointer items-center justify-center rounded-lg border border-scroll-300/25 bg-moloch-900/80 text-scroll-100 shadow-xl shadow-black/30 transition-all hover:bg-scroll-100/10 focus-visible:ring-2 focus-visible:ring-scroll-300"
           >
             <X className="size-4" aria-hidden="true" />
           </button>

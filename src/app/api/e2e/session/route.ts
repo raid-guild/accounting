@@ -9,10 +9,17 @@ type E2ESessionRequest = {
 
 const E2E_WALLET_ADDRESS = "0x0000000000000000000000000000000000000e2e";
 
-function isE2EAuthEnabled() {
+function isLocalRequest(request: Request) {
+  const { hostname } = new URL(request.url);
+
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+function isE2EAuthEnabled(request: Request) {
   return (
     process.env.NODE_ENV !== "production" &&
-    process.env.E2E_AUTH_ENABLED === "true"
+    process.env.E2E_AUTH_ENABLED === "true" &&
+    isLocalRequest(request)
   );
 }
 
@@ -50,7 +57,7 @@ function parseRole(value: unknown): AuthRole | null {
 }
 
 export async function POST(request: Request) {
-  if (!isE2EAuthEnabled()) {
+  if (!isE2EAuthEnabled(request)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -76,8 +83,8 @@ export async function POST(request: Request) {
   return NextResponse.json(serializeSession(session));
 }
 
-export async function DELETE() {
-  if (!isE2EAuthEnabled()) {
+export async function DELETE(request: Request) {
+  if (!isE2EAuthEnabled(request)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
