@@ -98,12 +98,14 @@ function ProposalActivityTable({ rows }: { rows: ProposalActivityRow[] }) {
           {rows.map((row) => (
             <tr key={row.transferId}>
               <td data-label="Proposal" data-full="true">
+                <span className="sr-only">Proposal: </span>
                 <p className="min-w-0 truncate font-medium">{row.title}</p>
                 <p className="mt-1 font-mono text-xs text-muted-foreground">
                   {row.proposalNumber ?? row.proposalId}
                 </p>
               </td>
               <td data-label="Quarter">
+                <span className="sr-only">Quarter: </span>
                 <p className="font-medium">{row.quarterLabel ?? "-"}</p>
                 {row.quarterStatus ? (
                   <p className="mt-1 text-xs capitalize text-muted-foreground">
@@ -112,15 +114,19 @@ function ProposalActivityTable({ rows }: { rows: ProposalActivityRow[] }) {
                 ) : null}
               </td>
               <td data-label="Executed" className="text-muted-foreground">
+                <span className="sr-only">Executed: </span>
                 {formatTimestamp(row.executedAt)}
               </td>
               <td data-align="right" data-label="Amount" className="font-medium">
+                <span className="sr-only">Amount: </span>
                 {formatAmount(row.assetAmount)} {row.assetSymbol}
               </td>
               <td data-align="right" data-label="USD" className="font-medium">
+                <span className="sr-only">USD: </span>
                 {formatCurrency(row.usdAmount)}
               </td>
               <td data-label="Classification">
+                <span className="sr-only">Classification: </span>
                 <p className="font-medium">{row.category ?? "Unclassified"}</p>
                 {row.counterpartyName ? (
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -129,6 +135,7 @@ function ProposalActivityTable({ rows }: { rows: ProposalActivityRow[] }) {
                 ) : null}
               </td>
               <td data-label="Links">
+                <span className="sr-only">Links: </span>
                 <div className="flex flex-col items-end gap-1.5 md:items-start">
                   <ProposalLink href={row.daohausUrl}>DAOhaus</ProposalLink>
                   {row.explorerUrl ? (

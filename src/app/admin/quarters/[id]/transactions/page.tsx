@@ -391,19 +391,24 @@ function QuarterBalancesPanel({
 
                       return (
                         <tr key={symbol}>
-                          <td data-label="Asset" className="px-3 py-2 font-medium">{symbol}</td>
+                          <td data-label="Asset" className="px-3 py-2 font-medium">
+                            <span className="sr-only">Asset: </span>{symbol}</td>
                           <td data-align="right" data-label="Opening Balance" className="px-3 py-2 text-right">
+                            <span className="sr-only">Opening Balance: </span>
                             {opening ? formatTokenAmount(opening.balance) : "-"}
                           </td>
                           <td data-align="right" data-label="Closing Balance" className="px-3 py-2 text-right">
+                            <span className="sr-only">Closing Balance: </span>
                             {closing ? formatTokenAmount(closing.balance) : "-"}
                           </td>
                           <td data-align="right" data-label="Opening USD" className="px-3 py-2 text-right">
+                            <span className="sr-only">Opening USD: </span>
                             {opening
                               ? formatCurrencyNumber(Number(opening.usdValue))
                               : "-"}
                           </td>
                           <td data-align="right" data-label="Closing USD" className="px-3 py-2 text-right">
+                            <span className="sr-only">Closing USD: </span>
                             {closing
                               ? formatCurrencyNumber(Number(closing.usdValue))
                               : "-"}
@@ -535,6 +540,7 @@ function BalanceValidationPanel({
                   key={`${variance.chainId}:${variance.accountAddress}:${variance.assetSymbol}`}
                 >
                   <td data-label="Account" data-full="true" className="px-3 py-2">
+                    <span className="sr-only">Account: </span>
                     <p className="font-medium">{variance.accountName}</p>
                     <CopyableAddress
                       address={variance.accountAddress}
@@ -542,17 +548,23 @@ function BalanceValidationPanel({
                     />
                   </td>
                   <td data-label="Asset" className="px-3 py-2 font-medium">
+                    <span className="sr-only">Asset: </span>
                     {variance.assetSymbol}
                   </td>
-                  <td data-align="right" data-label="Opening" className="px-3 py-2 text-right">{variance.opening}</td>
-                  <td data-align="right" data-label="Movement" className="px-3 py-2 text-right">{variance.movement}</td>
+                  <td data-align="right" data-label="Opening" className="px-3 py-2 text-right">
+                    <span className="sr-only">Opening: </span>{variance.opening}</td>
+                  <td data-align="right" data-label="Movement" className="px-3 py-2 text-right">
+                    <span className="sr-only">Movement: </span>{variance.movement}</td>
                   <td data-align="right" data-label="Expected" className="px-3 py-2 text-right">
+                    <span className="sr-only">Expected: </span>
                     {variance.expectedClosing}
                   </td>
                   <td data-align="right" data-label="Actual" className="px-3 py-2 text-right">
+                    <span className="sr-only">Actual: </span>
                     {variance.actualClosing}
                   </td>
                   <td data-align="right" data-label="Difference" className="px-3 py-2 text-right font-semibold">
+                    <span className="sr-only">Difference: </span>
                     {variance.difference}
                   </td>
                 </tr>

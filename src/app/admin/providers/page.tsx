@@ -502,6 +502,7 @@ function ProviderRankingTable({
                     className="transition-colors hover:bg-muted/50"
                   >
                     <td data-label="Provider" data-full="true" className="p-0">
+                      <span className="sr-only">Provider: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -511,6 +512,7 @@ function ProviderRankingTable({
                       </Link>
                     </td>
                     <td data-align="right" data-label="Spend" className="p-0">
+                      <span className="sr-only">Spend: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -520,6 +522,7 @@ function ProviderRankingTable({
                       </Link>
                     </td>
                     <td data-align="right" data-label="Entries" className="p-0">
+                      <span className="sr-only">Entries: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -529,6 +532,7 @@ function ProviderRankingTable({
                       </Link>
                     </td>
                     <td data-label="Website" className="p-0">
+                      <span className="sr-only">Website: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -538,6 +542,7 @@ function ProviderRankingTable({
                       </Link>
                     </td>
                     <td data-align="right" data-label="Addresses" className="p-0">
+                      <span className="sr-only">Addresses: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -547,6 +552,7 @@ function ProviderRankingTable({
                       </Link>
                     </td>
                     <td data-label="Status" className="p-0">
+                      <span className="sr-only">Status: </span>
                       <Link
                         href={href}
                         scroll={false}

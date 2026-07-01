@@ -477,6 +477,7 @@ function AccountRankingTable({
                     className="transition-colors hover:bg-muted/50"
                   >
                     <td data-label="Account" data-full="true" className="p-0">
+                      <span className="sr-only">Account: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -486,6 +487,7 @@ function AccountRankingTable({
                       </Link>
                     </td>
                     <td data-align="right" data-label="Balance" className="p-0">
+                      <span className="sr-only">Balance: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -495,6 +497,7 @@ function AccountRankingTable({
                       </Link>
                     </td>
                     <td data-label="Type" className="p-0">
+                      <span className="sr-only">Type: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -506,6 +509,7 @@ function AccountRankingTable({
                       </Link>
                     </td>
                     <td data-label="Chain" className="p-0">
+                      <span className="sr-only">Chain: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -515,6 +519,7 @@ function AccountRankingTable({
                       </Link>
                     </td>
                     <td data-label="Address" className="p-0">
+                      <span className="sr-only">Address: </span>
                       <Link
                         href={href}
                         scroll={false}
@@ -524,6 +529,7 @@ function AccountRankingTable({
                       </Link>
                     </td>
                     <td data-label="Status" className="p-0">
+                      <span className="sr-only">Status: </span>
                       <Link
                         href={href}
                         scroll={false}

@@ -259,6 +259,7 @@ function RipTable({ rips }: { rips: RipView[] }) {
               return (
                 <tr key={rip.id} className="transition-colors hover:bg-muted/50">
                   <td data-label="RIP" data-full="true" className="p-0">
+                    <span className="sr-only">RIP: </span>
                     <Link
                       href={href}
                       scroll={false}
@@ -268,6 +269,7 @@ function RipTable({ rips }: { rips: RipView[] }) {
                     </Link>
                   </td>
                   <td data-label="Created" className="p-0">
+                    <span className="sr-only">Created: </span>
                     <Link
                       href={href}
                       scroll={false}
@@ -277,6 +279,7 @@ function RipTable({ rips }: { rips: RipView[] }) {
                     </Link>
                   </td>
                   <td data-align="right" data-label="Linked Spend" className="p-0">
+                    <span className="sr-only">Linked Spend: </span>
                     <Link
                       href={href}
                       scroll={false}
@@ -286,6 +289,7 @@ function RipTable({ rips }: { rips: RipView[] }) {
                     </Link>
                   </td>
                   <td data-align="right" data-label="Entries" className="p-0">
+                    <span className="sr-only">Entries: </span>
                     <Link
                       href={href}
                       scroll={false}
@@ -295,6 +299,7 @@ function RipTable({ rips }: { rips: RipView[] }) {
                     </Link>
                   </td>
                   <td data-align="right" data-label="Edit" className="p-0">
+                    <span className="sr-only">Edit: </span>
                     <Link
                       href={href}
                       scroll={false}

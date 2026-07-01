@@ -272,12 +272,14 @@ function ClericAccessSection({
                   {clericRoles.map((role) => (
                     <tr key={role.id}>
                       <td data-label="Wallet">
+                        <span className="sr-only">Wallet: </span>
                         <CopyableAddress
                           address={role.walletAddress}
                           className="justify-end font-medium md:justify-start"
                         />
                       </td>
                       <td data-label="Status">
+                        <span className="sr-only">Status: </span>
                         <span
                           className={
                             role.revokedAt
@@ -289,14 +291,17 @@ function ClericAccessSection({
                         </span>
                       </td>
                       <td data-label="Granted" className="text-muted-foreground">
+                        <span className="sr-only">Granted: </span>
                         {formatTimestamp(role.createdAt.toISOString())}
                       </td>
                       <td data-label="Revoked" className="text-muted-foreground">
+                        <span className="sr-only">Revoked: </span>
                         {role.revokedAt
                           ? formatTimestamp(role.revokedAt.toISOString())
                           : "-"}
                       </td>
                       <td data-align="right" data-label="Actions">
+                        <span className="sr-only">Actions: </span>
                         {role.revokedAt ? null : (
                           <form action={revokeClericRole}>
                             <input
@@ -357,6 +362,7 @@ function MembershipActivityTable({ rows }: { rows: MembershipActivityRow[] }) {
           {rows.map((row) => (
             <tr key={`${row.type}:${row.txHash}:${row.memberAddress}`}>
               <td data-label="Activity" data-full="true">
+                <span className="sr-only">Activity: </span>
                 <ActivityType type={row.type} />
                 {row.proposalTitle ? (
                   <p className="mt-2 min-w-0 truncate font-medium">
@@ -365,6 +371,7 @@ function MembershipActivityTable({ rows }: { rows: MembershipActivityRow[] }) {
                 ) : null}
               </td>
               <td data-label="Member">
+                <span className="sr-only">Member: </span>
                 <CopyableAddress
                   address={row.memberAddress}
                   className="justify-end font-medium md:justify-start"
@@ -381,18 +388,22 @@ function MembershipActivityTable({ rows }: { rows: MembershipActivityRow[] }) {
                 ) : null}
               </td>
               <td data-label="Executed" className="text-muted-foreground">
+                <span className="sr-only">Executed: </span>
                 {formatTimestamp(row.executedAt)}
               </td>
               <td data-align="right" data-label="Amount" className="font-medium">
+                <span className="sr-only">Amount: </span>
                 {formatAmount({
                   amount: row.assetAmount,
                   symbol: row.assetSymbol,
                 })}
               </td>
               <td data-align="right" data-label="USD" className="font-medium">
+                <span className="sr-only">USD: </span>
                 {formatCurrency(row.usdAmount)}
               </td>
               <td data-align="right" data-label="Shares">
+                <span className="sr-only">Shares: </span>
                 <p className="font-medium">{formatShares(row.shares)}</p>
                 {row.loot ? (
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -401,6 +412,7 @@ function MembershipActivityTable({ rows }: { rows: MembershipActivityRow[] }) {
                 ) : null}
               </td>
               <td data-label="Quarter">
+                <span className="sr-only">Quarter: </span>
                 <p className="font-medium">{row.quarterLabel ?? "-"}</p>
                 {row.quarterStatus ? (
                   <p className="mt-1 text-xs capitalize text-muted-foreground">
@@ -409,6 +421,7 @@ function MembershipActivityTable({ rows }: { rows: MembershipActivityRow[] }) {
                 ) : null}
               </td>
               <td data-label="Links">
+                <span className="sr-only">Links: </span>
                 <div className="flex flex-col items-end gap-1.5 md:items-start">
                   {row.daohausUrl ? (
                     <ReportLink href={row.daohausUrl}>DAOhaus</ReportLink>

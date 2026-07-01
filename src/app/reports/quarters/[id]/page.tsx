@@ -134,21 +134,27 @@ function RankedTable({
             </thead>
             <tbody className="divide-y divide-border">
               <tr className="bg-primary/5">
-                <td data-label="Name" className="px-3 py-3 font-semibold">Total</td>
+                <td data-label="Name" className="px-3 py-3 font-semibold">
+                  <span className="sr-only">Name: </span>Total</td>
                 <td data-align="right" data-label="Entries" className="px-3 py-3 text-right font-semibold">
+                  <span className="sr-only">Entries: </span>
                   {totals.entries}
                 </td>
                 <td data-align="right" data-label="Total" className="px-3 py-3 text-right font-semibold">
+                  <span className="sr-only">Total: </span>
                   {formatCurrency(totals.totalUsd)}
                 </td>
               </tr>
               {rows.map((row) => (
                 <tr key={row.label}>
                   <td data-label="Name" className="px-3 py-3 font-medium break-words">
+                    <span className="sr-only">Name: </span>
                     {row.label}
                   </td>
-                  <td data-align="right" data-label="Entries" className="px-3 py-3 text-right">{row.entries}</td>
+                  <td data-align="right" data-label="Entries" className="px-3 py-3 text-right">
+                    <span className="sr-only">Entries: </span>{row.entries}</td>
                   <td data-align="right" data-label="Total" className="px-3 py-3 text-right font-semibold">
+                    <span className="sr-only">Total: </span>
                     {formatCurrency(row.totalUsd)}
                   </td>
                 </tr>
@@ -205,20 +211,25 @@ function BalanceTable({
             </thead>
             <tbody className="divide-y divide-border">
               <tr className="bg-primary/5">
-                <td data-label="Account" className="px-3 py-3 font-semibold">Total</td>
+                <td data-label="Account" className="px-3 py-3 font-semibold">
+                  <span className="sr-only">Account: </span>Total</td>
                 <td data-align="right" data-label="Opening" className="px-3 py-3 text-right font-semibold">
+                  <span className="sr-only">Opening: </span>
                   {formatCurrency(total.openingUsd)}
                 </td>
                 <td data-align="right" data-label="Closing" className="px-3 py-3 text-right font-semibold">
+                  <span className="sr-only">Closing: </span>
                   {formatCurrency(total.closingUsd)}
                 </td>
                 <td data-align="right" data-label="Net Change" className="px-3 py-3 text-right font-semibold">
+                  <span className="sr-only">Net Change: </span>
                   {formatCurrency(total.netChangeUsd)}
                 </td>
               </tr>
               {balances.map((balance) => (
                 <tr key={`${balance.chainId}:${balance.accountAddress}`}>
                   <td data-label="Account" data-full="true" className="px-3 py-3">
+                    <span className="sr-only">Account: </span>
                     <p className="font-medium">{balance.accountName}</p>
                     <CopyableAddress
                       address={balance.accountAddress}
@@ -226,12 +237,15 @@ function BalanceTable({
                     />
                   </td>
                   <td data-align="right" data-label="Opening" className="px-3 py-3 text-right">
+                    <span className="sr-only">Opening: </span>
                     {formatCurrency(balance.openingUsd)}
                   </td>
                   <td data-align="right" data-label="Closing" className="px-3 py-3 text-right">
+                    <span className="sr-only">Closing: </span>
                     {formatCurrency(balance.closingUsd)}
                   </td>
                   <td data-align="right" data-label="Net Change" className="px-3 py-3 text-right font-medium">
+                    <span className="sr-only">Net Change: </span>
                     {formatCurrency(balance.netChangeUsd)}
                   </td>
                 </tr>
